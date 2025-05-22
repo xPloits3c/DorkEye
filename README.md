@@ -62,12 +62,12 @@ Flag Description Mandatory
 
 ## 📌 Project Structure
 
-> `dork-eye/`
-> `├── dork-eye.py`
-> `├── requirements.txt`
-> `├── README.md`
-> `├── dorks.txt # (optional)`
-> `└── results.txt # (generated output)`
+- `dork-eye/`
+- `├── dork-eye.py`
+- `├── requirements.txt`
+- `├── README.md`
+- `├── dorks.txt # (optional)`
+- `└── results.txt # (generated output)`
 
 ## 🔒 Best Practice
 - Use in test environments or with written permission
