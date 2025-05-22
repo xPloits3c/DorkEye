@@ -62,24 +62,24 @@ Flag Description Mandatory
 
 ## 📌 Project Structure
 
-dork-eye/
+`dork-eye/
 ├── dork-eye.py
 ├── requirements.txt
 ├── README.md
 ├── dorks.txt # (optional)
-└── results.txt # (generated output)
+└── results.txt # (generated output)`
 
 ## 🔒 Best Practice
-• Use in test environments or with written permission
-• Integrate with vulnerability scanners (e.g. Nikto, Nuclei)
-• Automate with cronjob for periodic OSINT tests
+- Use in test environments or with written permission
+- Integrate with vulnerability scanners (e.g. Nikto, Nuclei)
+- Automate with cronjob for periodic OSINT tests
 
 ## 🧩 Future Ideas
-• CSV / JSON export
-• Active scanner of found URLs
-• Support for Bing / Brave / Qwant
-• Advanced filters by file type or domain
-• Interactive GUI or TUI with textual
+- CSV / JSON export
+- Active scanner of found URLs
+- Support for Bing / Brave / Qwant
+- Advanced filters by file type or domain
+- Interactive GUI or TUI with textual
 
 ---
 
