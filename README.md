@@ -11,7 +11,8 @@
 
 ## 🧠 What is Dork-Eye?
 
-`Dork-Eye` is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques. It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
+`Dork-Eye` is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques.
+It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
 
 ## ✨ Features
 
@@ -26,14 +27,13 @@
 
 ## ⚙️ Requirements
 
-- Python 3.8 or higher
+- Python 3+
 - Install modules:
 ```bash
-pip install -r requirements.txt
+ pip install -r requirements.txt
 ```
 - Modules:
-rich
-duckduckgo-search
+ `rich` and `duckduckgo-search`
 
 🚀 How to use
 
@@ -48,13 +48,12 @@ python3 dorkeye.py -d dorks.txt -o results -c 50
 Options
 
 Flag Description Mandatory
-  -d / --dork Single dork or .txt file with dork Yes
-  -o / --output Output file name (without extension) No
-  -c / --count Number of results per dork (default 50) No
+  `-d` / --dork Single dork or .txt file with dork Yes
+  `-o` / --output Output file name
+  `-c` / --count Number of results per dork 
 
 📂 Output Example
-
-File results.txt:
+ File `results.txt`:
 
 1. https://example.com/admin/login.php
 2. https://vulnerable.site/index.php?id=1
@@ -84,8 +83,8 @@ dork-eye/
 
 🧑‍💻 Author
 
-xPloits3c
-Contact: whitehat.report (fictitious, you can edit it)
+- xPloits3c
+Contact: whitehat.report@onionmail.org
 
 📜 License
 
