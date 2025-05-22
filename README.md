@@ -1,4 +1,3 @@
-Here is an advanced, well-organized and visually clear README for your Dork-Eye dorking script. It is intended for GitHub, with professional structure, style and badges:
 
 # Dork-Eye — Advanced Dorking Tool 
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg) 
