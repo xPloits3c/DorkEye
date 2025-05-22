@@ -62,12 +62,12 @@ Flag Description Mandatory
 
 ## 📌 Project Structure
 
-- `dork-eye/`
-- `├── dork-eye.py`
-- `├── requirements.txt`
-- `├── README.md`
-- `├── dorks.txt # (optional)`
-- `└── results.txt # (generated output)`
+> `dork-eye/`
+> `├── dork-eye.py`
+> `├── requirements.txt`
+> `├── README.md`
+> `├── dorks.txt # (optional)`
+> `└── results.txt # (generated output)`
 
 ## 🔒 Best Practice
 - Use in test environments or with written permission
@@ -99,6 +99,6 @@ Contact: whitehat.report@onionmail.org
 Distributed under MIT License
 
 ## ⭐ Support the project
-Do you like this tool? Leave a ⭐ on GitHub and contribute!
+Do you like this tool? Leave a ⭐
 
 ---
