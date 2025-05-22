@@ -5,14 +5,13 @@
 ![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg) 
 ![DuckDuckGo](https://img.shields.io/badge/search-DuckDuckGo-orange.svg)
 
-
 ---
 
 ## 🧠 What is Dork-Eye?
 
-• `Dork-Eye` is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques.
-• It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
-• Search Engine
+> `Dork-Eye` is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques.
+-  It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
+> Search Engine
 -  Using DuckDuckGo (via DDGS()) allows to bypass limitations imposed by Google, making the tool more resilient and anonymous.
 
 ## ✨ Features
