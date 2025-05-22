@@ -13,16 +13,6 @@
 
 `Dork-Eye` is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques. It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
 
----
-
-## ⚠️ Legal Disclaimer
-
-> **This tool is intended for educational, research and authorized testing purposes only.**
-
-Use of it unethically or against local laws may constitute a crime. The author **disclaims all liability** for improper use.
-
----
-
 ## ✨ Features
 
 - Search via **DuckDuckGo** (no CAPTCHA block)
