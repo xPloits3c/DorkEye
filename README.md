@@ -37,31 +37,30 @@ Use of it unethically or against local laws may constitute a crime. The author *
 ## ⚙️ Requirements
 
 - Python 3.8 or higher
-- Required modules:
+- Install modules:
 ```bash
 pip install -r requirements.txt
-
-requirements.txt
-
+```
+- Modules:
 rich
 duckduckgo-search
 
 🚀 How to use
 
-Single dork search
-
+•  Single dork search
+```
 python3 dork-eye.py -d "inurl:admin login" -o admin_panels -c 100
-
-Dork file search
-
+```
+•  Dork file search
+```
 python3 dork-eye.py -d dorks.txt -o results -c 50
-
+```
 Options
 
 Flag Description Mandatory
--d / --dork Single dork or .txt file with dork Yes
--o / --output Output file name (without extension) No
--c / --count Number of results per dork (default 50) No
+  -d / --dork Single dork or .txt file with dork Yes
+  -o / --output Output file name (without extension) No
+  -c / --count Number of results per dork (default 50) No
 
 📂 Output Example
 
@@ -96,7 +95,7 @@ dork-eye/
 🧑‍💻 Author
 
 xPloits3c
-Contact: anon@protonmail.com (fictitious, you can edit it)
+Contact: whitehat.report (fictitious, you can edit it)
 
 📜 License
 
@@ -107,5 +106,3 @@ Distributed under MIT License
 Do you like this tool? Leave a ⭐ on GitHub and contribute!
 
 ---
-
-Let me know if you want me to also generate the `requirements.txt` file, the MIT LICENSE
