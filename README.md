@@ -5,7 +5,7 @@
 ![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg) 
 ![DuckDuckGo](https://img.shields.io/badge/search-DuckDuckGo-orange.svg)
 
-> **Version 1.0 — by xPloits3c**
+> **V1.0**
 
 ---
 
