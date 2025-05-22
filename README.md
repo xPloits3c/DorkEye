@@ -5,14 +5,15 @@
 ![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg) 
 ![DuckDuckGo](https://img.shields.io/badge/search-DuckDuckGo-orange.svg)
 
-> **V1.0**
 
 ---
 
 ## 🧠 What is Dork-Eye?
 
-`Dork-Eye` is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques.
-It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
+• `Dork-Eye` is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques.
+• It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
+• Search Engine
+-  Using DuckDuckGo (via DDGS()) allows to bypass limitations imposed by Google, making the tool more resilient and anonymous.
 
 ## ✨ Features
 
@@ -35,7 +36,7 @@ It can identify indexed directories, restricted files, admin panels and other pu
 - Modules:
  `rich` and `duckduckgo-search`
 
-🚀 How to use
+## 🚀 How to use
 
 •  Single dork search
 ```
@@ -52,7 +53,7 @@ Flag Description Mandatory
   `-o` / --output Output file name
   `-c` / --count Number of results per dork 
 
-📂 Output Example
+## 📂 Output Example
  File `results.txt`:
 
 1. https://example.com/admin/login.php
@@ -60,7 +61,7 @@ Flag Description Mandatory
 3. https://ftp.example.org/files/
 ...
 
-📌 Project Structure
+## 📌 Project Structure
 
 dork-eye/
 ├── dork-eye.py
@@ -69,12 +70,12 @@ dork-eye/
 ├── dorks.txt # (optional)
 └── results.txt # (generated output)
 
-🔒 Best Practice
+## 🔒 Best Practice
 • Use in test environments or with written permission
 • Integrate with vulnerability scanners (e.g. Nikto, Nuclei)
 • Automate with cronjob for periodic OSINT tests
 
-🧩 Future Ideas
+## 🧩 Future Ideas
 • CSV / JSON export
 • Active scanner of found URLs
 • Support for Bing / Brave / Qwant
@@ -90,15 +91,15 @@ dork-eye/
 
 ---
 
-🧑‍💻 Author
+## 🧑‍💻 Author
 
 - xPloits3c
 Contact: whitehat.report@onionmail.org
 
-📜 License
+## 📜 License
 Distributed under MIT License
 
-⭐ Support the project
+## ⭐ Support the project
 Do you like this tool? Leave a ⭐ on GitHub and contribute!
 
 ---
