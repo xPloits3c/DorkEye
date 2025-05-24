@@ -112,5 +112,6 @@ Distributed under MIT License
 ## ⭐ Support the project
 Do you like this tool? Leave a ⭐
 
-You might be interested in: **MetaByte** for cleaning and extracted urls with parameters.
+## ! You might be interested in: **MetaByte** for cleaning and extracted urls with parameters.
+ https://github.com/xPloits3c/MetaByte
 ---
