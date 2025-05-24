@@ -1,3 +1,4 @@
+![image](https://github.com/user-attachments/assets/989dc234-2c32-4280-9165-42ebd87b53bc)
 
 # Dork-Eye — Advanced Dorking Tool 
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg) 
@@ -13,6 +14,8 @@
 -  It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
 > Search Engine
 -  Using DuckDuckGo (via DDGS()) allows to bypass limitations imposed by Google, making the tool more resilient and anonymous.
+
+![image](https://github.com/user-attachments/assets/fcfced00-9c36-4f55-b1a7-34b7fa76096a)
 
 ## ✨ Features
 
@@ -52,6 +55,8 @@ Flag Description Mandatory
   `-o` / --output Output file name
   `-c` / --count Number of results per dork 
 
+![image](https://github.com/user-attachments/assets/7df8b28a-c02e-40cf-a85f-96ca395bccb2)
+
 ## 📂 Output Example
  File `results.txt`:
 
@@ -90,6 +95,7 @@ Flag Description Mandatory
 
 ---
 
+
 ## 🧑‍💻 Author
 
 - xPloits3c
@@ -101,4 +107,5 @@ Distributed under MIT License
 ## ⭐ Support the project
 Do you like this tool? Leave a ⭐
 
+You might be interested in: **MetaByte** for cleaning and extracted urls with parameters.
 ---
