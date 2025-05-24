@@ -1,2 +1,2 @@
-rich>=13.3.5
-duckduckgo-search>=1.7.6
+rich==13.3.5
+duckduckgo-search==8.0.2
