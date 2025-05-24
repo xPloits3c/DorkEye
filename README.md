@@ -27,7 +27,7 @@
 
 ## ⚙️ Requirements
 
-- Python 3+
+- Python 3.9
 - Install modules:
 ```bash
  pip install -r requirements.txt
