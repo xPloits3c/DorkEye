@@ -115,8 +115,10 @@ Distributed under MIT License
 ## ⭐ Support the project
 Do you like this tool? Leave a ⭐
 
-[![Visit MetaByte](https://img.shields.io/badge/Visita-MetaByte-blue?style=for-the-badge)](https://github.com/xPloits3c/MetaByte)
-
-
 ## **MetaByte** for cleaning and extracted urls with parameters.
+<p><a href="https://github.com/xPloits3c/MetaByte" target="_blank">
+  <button style="padding:10px 15px; font-size:16px; background-color:#0366d6; color:white; border:none; border-radius:5px;">
+    Visita MetaByte su GitHub
+  </button>
+</a></p>
 ---
