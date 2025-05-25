@@ -32,7 +32,7 @@
 ```bash
  git clone https://github.com/xPloits3c/DorkEye.git
  cd DorkEye
- pip install requirements.txt
+ pip install -r requirements.txt
 ```
 ## ⚙️ Requirements
 
