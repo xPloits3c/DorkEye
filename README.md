@@ -5,6 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg) 
 ![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg) 
 ![DuckDuckGo](https://img.shields.io/badge/search-DuckDuckGo-orange.svg)
+
  ![Repo View Counter](https://profile-counter.glitch.me/DorkEye/count.svg)
 ---
 
