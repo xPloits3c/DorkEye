@@ -28,13 +28,15 @@
 
 ---
 
+## ⚙️ Install DorkEye 
+```bash
+ git clone https://github.com/xPloits3c/DorkEye.git
+ cd DorkEye
+ pip install requirements.txt
+```
 ## ⚙️ Requirements
 
 - Python 3.8+
-- Install modules:
-```bash
- pip install -r requirements.txt
-```
 - Modules:
  `rich` and `duckduckgo-search`
 
