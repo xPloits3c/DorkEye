@@ -14,6 +14,8 @@
 -  It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
 > Search Engine
 -  Using DuckDuckGo (via DDGS()) allows to bypass limitations imposed by Google, making the tool more resilient and anonymous.
+> Also
+-  It supports multiple dorks per command string allowing you to get better result in less time, also saves results without double links!
 
 ![image](https://github.com/user-attachments/assets/fcfced00-9c36-4f55-b1a7-34b7fa76096a)
 
