@@ -47,18 +47,18 @@ python3 dorkeye.py -d "inurl:admin login" -o admin_panels -c 100
 •  Multiple Dork search
 ```
 python3 dorkeye.py -d "site:.ru inurl:uploads/cv filetype:pdf" -o RusCV -c 100
-python3 dorkeye.py -d "site:.ru intext:email intext:password filetype:txt" -o RusEP -c 100
+python3 dorkeye.py -d "site:.ru inurl:data intext:password ext:txt" -o RusEP -c 100
 ```
 •  Dork file search
 ```
 python3 dorkeye.py -d dorks.txt -o results -c 50
 ```
-Options
++ Options
 
 Flag Description Mandatory
-  `-d` / --dork Single dork or .txt file with dork Yes
-  `-o` / --output Output file name
-  `-c` / --count Number of results per dork 
+ •  `-d` / --dork Single dork or .txt file with dork Yes
+ •  `-o` / --output Output file name
+ •  `-c` / --count Number of results per dork 
 
 ![image](https://github.com/user-attachments/assets/7df8b28a-c02e-40cf-a85f-96ca395bccb2)
 
@@ -95,8 +95,8 @@ Flag Description Mandatory
 
 ## ⚠️ Legal Disclaimer
 
-> This tool is intended for educational, research and authorized testing purposes only.
-> Use of it unethically or against local laws may constitute a crime. The author disclaims all liability for improper use.
+•  This tool is intended for educational, research and authorized testing purposes only.
+•  Use of it unethically or against local laws may constitute a crime. The author disclaims all liability for improper use.
 
 ---
 
