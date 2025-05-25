@@ -75,8 +75,8 @@ Flag Description Mandatory
 
 ## 📌 Project Structure
 
-- `dork-eye/`
-- `├── dork-eye.py`
+- `DorkEye/`
+- `├── dorkeye.py`
 - `├── requirements.txt`
 - `├── README.md`
 - `├── dorks.txt # (optional)`
@@ -115,10 +115,10 @@ Distributed under MIT License
 ## ⭐ Support the project
 Do you like this tool? Leave a ⭐
 
-## **MetaByte** for cleaning and extracted urls with parameters.
+## **MetaByte** Clean and Save Unique: URL’s-Email-Phone-IP’s. 👇
 <p><a href="https://github.com/xPloits3c/MetaByte" target="_blank">
   <button style="padding:10px 15px; font-size:16px; background-color:#0366d6; color:white; border:none; border-radius:5px;">
-    Visita MetaByte su GitHub
+    Visit MetaByte on GitHub
   </button>
 </a></p>
 ---
