@@ -12,7 +12,7 @@ ASCII_LOGO = """
      +-+-+-+-+-+-+-+-+
      |D|o|r|k|-|E|y|e|
      +-+-+-+-+-+-+-+-+
-     \n[bold red]    ᵛ¹ˑ⁰_ᵇʸ_ˣᴾˡᵒⁱᵗˢ³ᶜ 🕷️[/bold red]
+     \n[bold red]    ᵛ¹ˑ⁰_ᵇʸ_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
 
      \n[bold red]Legal disclaimer:[/bold red] attacking targets without prior mutual consent is illegal.
      \n[bold yellow][!][/bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.
@@ -35,10 +35,10 @@ def write_output(filename, results):
 def begin_search(queries, count, output_file):
     all_results = []
     for query in queries:
-        console.print(f"\n[bold green]⚠️ Dorks:[/bold green] {query}")
+        console.print(f"\n[bold green][i] Dorks:[/bold green] {query}")
         results = []
         with Progress() as progress:
-            task = progress.add_task("[cyan]⏳ DuckDuckGo", total=count)
+            task = progress.add_task("[cyan][+] DuckDuckGo", total=count)
             with DDGS() as ddgs:
                 for r in ddgs.text(query, max_results=count):
                     url = r.get("href") or r.get("url")
@@ -66,8 +66,8 @@ def main():
     end = time.time()
 
 
-    console.print(f"\n[bold yellow]ℹ️ Completed in {round(end - start, 2)} seconds[/bold yellow]")
-    console.print(f"\n[bold violet]✅ Result saved successfully[/bold violet]")
+    console.print(f"\n[bold yellow][i] Completed in {round(end - start, 2)} seconds[/bold yellow]")
+    console.print(f"\n[bold yellow][i] Result saved successfully[/bold yellow]")
 
 if __name__ == "__main__":
     main()
