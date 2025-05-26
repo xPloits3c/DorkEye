@@ -4,7 +4,7 @@ import time
 import argparse
 from rich.console import Console
 from rich.progress import Progress
-from duckduckgo_search import DDGS  # nuova libreria
+from duckduckgo_search import DDGS
 
 console = Console()
 
