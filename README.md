@@ -86,7 +86,7 @@ Flag Description Mandatory
 
 ## 🔒 Best Practice
 - Use in test environments or with written permission
-- Integrate with vulnerability scanners (e.g. Nikto, Nuclei)
+- Integrate with vulnerability scanners (e.g. SQLMap, XSStrike, Nikto, Nuclei)
 - Automate with cronjob for periodic OSINT tests
 
 ## 🧩 Future Ideas
