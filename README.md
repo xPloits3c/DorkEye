@@ -56,7 +56,7 @@ python3 dorkeye.py -d "site:.ru intitle:psw ext:txt" -o RusEP -c 100
 •  Dork file search
 ```
 python3 dorkeye.py -d dorks.txt -o results -c 50
-python3 dorkeye.py -f dorkeye_dorks.txt -c 80 -o test
+python3 dorkeye.py -d dorkeye_dorks.txt -c 80 -o test
 ```
 •  Options
 
