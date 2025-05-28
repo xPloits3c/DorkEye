@@ -35,7 +35,7 @@ def write_output(filename, results):
 def begin_search(queries, count, output_file):
     all_results = []
     for query in queries:
-        console.print(f"\n[bold green][i] Dorks:[/bold green] {query}")
+        console.print(f"\n[bold green][I] Dorks:[/bold green] {query}")
         results = []
         with Progress() as progress:
             task = progress.add_task("[cyan][+] DuckDuckGo", total=count)
@@ -66,8 +66,8 @@ def main():
     end = time.time()
 
 
-    console.print(f"\n[bold yellow][i] Completed in {round(end - start, 2)} seconds[/bold yellow]")
-    console.print(f"\n[bold yellow][i] Result saved successfully[/bold yellow]")
+    console.print(f"\n[bold yellow][I] Completed in {round(end - start, 2)} seconds[/bold yellow]")
+    console.print(f"\n[bold yellow][I] Result saved successfully[/bold yellow]")
 
 if __name__ == "__main__":
     main()
