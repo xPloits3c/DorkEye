@@ -1,0 +1,29 @@
+# ===== SQL INJECTION DORKS =====
+inurl:index.php?id=
+inurl:news.php?id=
+inurl:page.php?cat=
+inurl:item.php?itemID=
+inurl:product.php?prodID=
+inurl:view.php?id=
+inurl:shop.php?pid=
+inurl:index.php?id=1'
+inurl:news.php?id=1'
+
+# ===== XSS DORKS =====
+inurl:search.php?q=
+inurl:index.php?q=
+inurl:s.php?q=
+inurl:query.php?search=
+inurl:search?q=site
+inurl:"/search?query="
+inurl:index.php?q=<script>alert(1)</script>
+inurl:search.php?q=<img src=x onerror=alert(1)>
+
+# ===== LFI DORKS =====
+inurl:index.php?page=
+inurl:page.php?file=
+inurl:home.php?include=
+inurl:content.php?path=
+inurl:load.php?file=
+inurl:index.php?page=../../../../etc/passwd
+inurl:page.php?file=../../../../../../windows/system.ini
