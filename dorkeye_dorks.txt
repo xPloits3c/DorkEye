@@ -20,5 +20,5 @@ inurl:page.php?file=
 inurl:home.php?include=
 inurl:content.php?path=
 inurl:load.php?file=
-inurl:index.php?page=../../../../etc/passwd
-inurl:page.php?file=../../../../../../windows/system.ini
+inurl:/index.php page=/etc/passwd 
+inurl:page.php?file=windows/system.ini
