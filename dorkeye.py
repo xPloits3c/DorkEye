@@ -35,7 +35,7 @@ def write_output(filename, results):
 
 def begin_search(queries, count, output_file):
     all_results = []
-    for query in queries:
+    for index, query in enumerate(queries, start=1):
         console.print(f"\n[bold green][*] Dorks:[/bold green] {query}")
         results = []
         with Progress() as progress:
@@ -51,10 +51,15 @@ def begin_search(queries, count, output_file):
         all_results.extend(results)
         if output_file:
             write_output(output_file, results)
-        delay = round(random.uniform(2, 4), 2)
+        delay = round(random.uniform(2, 8), 2)
         console.print(f"[yellow][~] Waiting {delay} seconds for the next dork...[/yellow]")
         time.sleep(delay)
-         
+
+        if index % 2 == 0:
+            long_delay = round(random.uniform(15, 30), 2)
+            console.print(f"[bold magenta][~] Long pause: {long_delay} seconds after 2 dorks[/bold magenta]")
+            time.sleep(long_delay)
+             
     return all_results
 
 def main():
