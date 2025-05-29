@@ -60,8 +60,6 @@ python3 dorkeye.py -d dorks.txt -o results -c 50
 python3 dorkeye.py -d dorkeye_dorks.txt -c 80 -o test
 ```
 •  Options
--  Flag Description Mandatory
-
  - `-d` / --dork Single dork or .txt file with dork Yes
  - `-o` / --output Output file name
  - `-c` / --count Number of results per dork 
@@ -86,7 +84,8 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 80 -o test
 - `├── dorks.txt # (optional)`
 - `└── results.txt # (generated output)`
 
-![image](https://github.com/user-attachments/assets/7df8b28a-c02e-40cf-a85f-96ca395bccb2)
+![image](https://github.com/user-attachments/assets/790f4edf-1ec7-4dcc-8735-2adbf4766eb5)
+
 
 ## 🔒 Best Practice
 - Use in test environments or with written permission
