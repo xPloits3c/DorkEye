@@ -57,7 +57,7 @@ def begin_search(queries, count, output_file):
 
         if index % 2 == 0:
             long_delay = round(random.uniform(15, 30), 2)
-            console.print(f"[bold magenta][~] Long pause: {long_delay} seconds after 2 dorks[/bold magenta]")
+            console.print(f"[bold magenta][~] Long pause: {long_delay} seconds, trying to bypass "403 Ratelimit"[/bold magenta]")
             time.sleep(long_delay)
              
     return all_results
