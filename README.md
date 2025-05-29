@@ -17,7 +17,8 @@
 > Why DorkEye?
 -  It supports multiple dorks per command string allowing you to get better result in less time, also saves results without double links, fast, secure!
 
-![image](https://github.com/user-attachments/assets/fcfced00-9c36-4f55-b1a7-34b7fa76096a)
+![image](https://github.com/user-attachments/assets/3afa37a8-7873-49ca-a563-ced820660dca)
+
 
 ## ✨ Features
 
@@ -59,14 +60,14 @@ python3 dorkeye.py -d dorks.txt -o results -c 50
 python3 dorkeye.py -d dorkeye_dorks.txt -c 80 -o test
 ```
 •  Options
-
-Flag Description Mandatory
+-  Flag Description Mandatory
 
  - `-d` / --dork Single dork or .txt file with dork Yes
  - `-o` / --output Output file name
  - `-c` / --count Number of results per dork 
 
-![image](https://github.com/user-attachments/assets/7df8b28a-c02e-40cf-a85f-96ca395bccb2)
+![image](https://github.com/user-attachments/assets/3773f7d4-60a4-4a70-90c6-5b44b5281d3f)
+
 
 ## 📂 Output Example
  File `results.txt`:
@@ -84,6 +85,8 @@ Flag Description Mandatory
 - `├── README.md`
 - `├── dorks.txt # (optional)`
 - `└── results.txt # (generated output)`
+
+![image](https://github.com/user-attachments/assets/7df8b28a-c02e-40cf-a85f-96ca395bccb2)
 
 ## 🔒 Best Practice
 - Use in test environments or with written permission
