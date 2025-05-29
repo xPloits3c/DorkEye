@@ -52,7 +52,7 @@ def begin_search(queries, count, output_file):
         if output_file:
             write_output(output_file, results)
         delay = round(random.uniform(2, 4), 2)
-        console.print(f"[yellow][~] I'm waiting {delay} seconds for the next dork...[/yellow]")
+        console.print(f"[yellow][~] Waiting {delay} seconds for the next dork...[/yellow]")
         time.sleep(delay)
          
     return all_results
