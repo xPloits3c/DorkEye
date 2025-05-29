@@ -103,8 +103,9 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 80 -o test
 
 ## ⚠️ Legal Disclaimer
 
-- This tool is intended for educational, research and authorized testing purposes only.
--  Use of it unethically or against local laws may constitute a crime. The author disclaims all liability for improper use.
+-  This tool is intended for educational, research and authorized testing purposes only.
+-  Use of it unethically or against local laws may constitute a crime.
+-  The author disclaims all liability for improper use.
 
 ---
 
@@ -112,7 +113,7 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 80 -o test
 ## 🧑‍💻 Author
 
 - xPloits3c
-Contact: whitehat.report@onionmail.org
+- Contact: whitehat.report@onionmail.org
 
 ## 📜 License
 Distributed under MIT License
