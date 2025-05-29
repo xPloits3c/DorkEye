@@ -26,8 +26,6 @@
 - Single input or from **dork file**
 - Save results to **.txt file**
 - **Advanced visualization** with `rich`
-- Simple and powerful **CLI interface**
-- Completely written in **Python 3**
 
 ---
 
