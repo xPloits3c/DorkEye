@@ -1,3 +1,4 @@
-site:.com  inurl:.php?id=
+site:.com inurl:.php?id=
 site:.ru inurl:russian_cv filetype:pdf
 site:github.com inurl:DorkEye
+intitle:password/email filetype:doc
