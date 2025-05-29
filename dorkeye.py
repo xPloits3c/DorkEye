@@ -13,7 +13,7 @@ ASCII_LOGO = """
      +-+-+-+-+-+-+-+-+
      |D|o|r|k|-|E|y|e|
      +-+-+-+-+-+-+-+-+
-     \n[bold red]   ᵛ¹ˑ⁰_ᵇʸ_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
+     \n[bold red]     ᵛ¹ˑ⁰_ᵇʸ_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
 
      \n[bold red]Legal disclaimer:[/bold red] attacking targets without prior mutual consent is illegal.
      \n[bold yellow][!][/bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.
