@@ -1,6 +1,6 @@
 ![image](https://github.com/user-attachments/assets/989dc234-2c32-4280-9165-42ebd87b53bc)
 
-# DorkEye — Advanced Dorking Tool 
+# DorkEye | Advanced Dorking Tool 
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg) 
 ![License](https://img.shields.io/badge/license-MIT-green.svg) 
 ![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg) 
