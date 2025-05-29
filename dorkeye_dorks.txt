@@ -1,4 +1,4 @@
-inurl:index.php?id=
+inurl:.php?id=
 inurl:news.php?id=
 inurl:page.php?cat=
 inurl:item.php?itemID=
