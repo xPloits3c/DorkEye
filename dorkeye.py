@@ -72,7 +72,7 @@ def main():
 
 
     console.print(f"\n[bold yellow][*] Completed in {round(end - start, 2)} seconds[/bold yellow]")
-    console.print(f"\n[bold yellow][*] Result saved successfully[/bold yellow]")
+    console.print(f"\n[bold yellow][✓] Result saved successfully[/bold yellow]")
 
 if __name__ == "__main__":
     main()
