@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import time
+import random
 import argparse
 from rich.console import Console
 from rich.progress import Progress
@@ -12,7 +13,7 @@ ASCII_LOGO = """
      +-+-+-+-+-+-+-+-+
      |D|o|r|k|-|E|y|e|
      +-+-+-+-+-+-+-+-+
-     \n[bold red]  ᵛ¹ˑ⁰_ᵇʸ_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
+     \n[bold red]   ᵛ¹ˑ⁰_ᵇʸ_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
 
      \n[bold red]Legal disclaimer:[/bold red] attacking targets without prior mutual consent is illegal.
      \n[bold yellow][!][/bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.
@@ -35,7 +36,7 @@ def write_output(filename, results):
 def begin_search(queries, count, output_file):
     all_results = []
     for query in queries:
-        console.print(f"\n[bold green][I] Dorks:[/bold green] {query}")
+        console.print(f"\n[bold green][*] Dorks:[/bold green] {query}")
         results = []
         with Progress() as progress:
             task = progress.add_task("[cyan][+] DuckDuckGo", total=count)
@@ -50,6 +51,10 @@ def begin_search(queries, count, output_file):
         all_results.extend(results)
         if output_file:
             write_output(output_file, results)
+        delay = round(random.uniform(2, 4), 2)
+        console.print(f"[yellow][~] Attendo {delay} secondi prima della prossima dork...[/yellow]")
+        time.sleep(delay)
+         
     return all_results
 
 def main():
@@ -66,8 +71,8 @@ def main():
     end = time.time()
 
 
-    console.print(f"\n[bold yellow][I] Completed in {round(end - start, 2)} seconds[/bold yellow]")
-    console.print(f"\n[bold yellow][I] Result saved successfully[/bold yellow]")
+    console.print(f"\n[bold yellow][*] Completed in {round(end - start, 2)} seconds[/bold yellow]")
+    console.print(f"\n[bold yellow][*] Result saved successfully[/bold yellow]")
 
 if __name__ == "__main__":
     main()
