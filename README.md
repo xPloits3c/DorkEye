@@ -70,6 +70,7 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 1. https://example.com/admin/login.php
 2. https://vulnerable.site/index.php?id=1
 3. https://ftp.example.org/files/
+![image](https://github.com/user-attachments/assets/790f4edf-1ec7-4dcc-8735-2adbf4766eb5)
 ...
 
 ## 📌 Project Structure
@@ -80,9 +81,6 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 - `├── README.md`
 - `├── dorks.txt # (optional)`
 - `└── results.txt # (generated output)`
-
-![image](https://github.com/user-attachments/assets/790f4edf-1ec7-4dcc-8735-2adbf4766eb5)
-
 
 ## 🔒 Best Practice
 - Use in test environments or with written permission
