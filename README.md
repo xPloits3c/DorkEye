@@ -8,8 +8,8 @@
 
 ---
 ![Repo View Counter](https://profile-counter.glitch.me/DorkEye/count.svg)
-## 🧠 What is Dork-Eye?
 
+## 🧠 What is Dork-Eye?
 > Is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques.
 -  It can identify indexed directories, restricted files, admin panels and other public vulnerabilities, all in an **anonymous and legal** way, avoiding CAPTCHAs and blocks typical of mainstream engines.
 > Search Engine
