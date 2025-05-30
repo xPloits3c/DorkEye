@@ -49,7 +49,7 @@ python3 dorkeye.py -d "inurl:admin login" -o admin_panels -c 100
 ```
 •  Multiple Dork search
 ```
-python3 dorkeye.py -d "site:.ru inurl:datacv filetype:pdf" -o RusCV -c 100
+python3 dorkeye.py -d "site:.ru inurl:russian_cv filetype:pdf" -o RusCV -c 100
 python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 ```
 •  Options
