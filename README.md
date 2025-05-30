@@ -38,9 +38,8 @@
 ```
 ## ⚙️ Requirements
 
-- Python 3.9+
-> Important: Make sure you have the latest version of python installed.
-> If not installed, you can do it with:
+- Python 3.9+ > "Make sure you have the latest version of python installed."
+-  If not installed, you can do it with:
        `sudo apt update`
        `sudo apt install python3`
 - Modules:
