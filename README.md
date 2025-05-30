@@ -102,7 +102,7 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 -   Your IP may still be blocked by Anti-bot/scraping which limits the number of consecutive requests from a single IP.
     - What we recommend:
 -   Use a VPN, and avoid consecutive repetitive dorks to appear more HUMAN.
--   DorkEye has already integrated options to bypass any AntiScraping block, without using the support of public proxies where some may already be banned.
+-   DorkEye has already integrated options to bypass 403 Ratelimit, without using the support of public proxies where some may already be banned.
 
 ## ⚠️ Legal Disclaimer
 
