@@ -17,7 +17,8 @@
 > Why DorkEye?
 -  It supports multiple dorks per command string allowing you to get better result in less time, also saves results without double links, fast, secure!
 
-![image](https://github.com/user-attachments/assets/3afa37a8-7873-49ca-a563-ced820660dca)
+![dev2t](https://github.com/user-attachments/assets/3eb09d93-232c-4dd2-9882-6fb7b17e2785)
+
 
 
 ## ✨ Features
