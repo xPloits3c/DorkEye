@@ -51,12 +51,12 @@ def begin_search(queries, count, output_file):
         all_results.extend(results)
         if output_file:
             write_output(output_file, results)
-        delay = round(random.uniform(2, 8), 2)
+        delay = round(random.uniform(16, 27), 2)
         console.print(f"[yellow][~] Waiting {delay} seconds for the next dork...[/yellow]")
         time.sleep(delay)
 
         if index % 2 == 0:
-            long_delay = round(random.uniform(15, 30), 2)
+            long_delay = round(random.uniform(26, 48), 2)
             console.print(f"[bold magenta][~] Long pause: {long_delay} seconds, trying to bypass 403 Ratelimit[/bold magenta]")
             time.sleep(long_delay)
              
