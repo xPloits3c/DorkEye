@@ -31,7 +31,7 @@ def process_input(input_data):
     return [input_data]
 
 def write_output(filename, results):
-    with open(f"{filename}.txt", "a") as f:
+    with open(f"{filename}.csv", "a") as f:
         for i, url in enumerate(results, 1):
             f.write(f"{i}. {url}\n")
 
