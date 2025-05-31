@@ -10,13 +10,15 @@ from duckduckgo_search import DDGS
 console = Console()
 
 ASCII_LOGO = """
-     +-+-+-+-+-+-+-+-+
-     |D|o|r|k|-|E|y|e|
-     +-+-+-+-+-+-+-+-+
-     \n[bold red]     ᵛ¹ˑ⁰_ᵇʸ_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
-
-     \n[bold red]Legal disclaimer:[/bold red] attacking targets without prior mutual consent is illegal.
-     \n[bold yellow][!][/bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.
+     \n[bold yellow]  ___[/bold yellow][bold red]
+ [bold yellow]__H__[/bold yellow]  [bold white]    Advanced Dorking Tool [/bold white]
+ [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
+ [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
+ [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[/bold yellow]
+ [bold yellow] |_|[/bold yellow]  [bold red]  ᵛ²ˑ⁴_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
+ [bold yellow]  V[/bold yellow]
+    \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
+[bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
 """
 
 def print_logo():
@@ -52,12 +54,12 @@ def begin_search(queries, count, output_file):
         if output_file:
             write_output(output_file, results)
         delay = round(random.uniform(16, 27), 2)
-        console.print(f"[yellow][~] Waiting {delay} seconds for the next dork...[/yellow]")
+        console.print(f"[yellow][~] Waiting: {delay} seconds for the next dork...[/yellow]")
         time.sleep(delay)
 
         if index % 2 == 0:
             long_delay = round(random.uniform(26, 48), 2)
-            console.print(f"[bold magenta][~] Long pause: {long_delay} seconds, trying to bypass 403 Ratelimit[/bold magenta]")
+            console.print(f"[bold magenta][~] Waiting: {long_delay} seconds, bypass 403 Ratelimit[/bold magenta]")
             time.sleep(long_delay)
              
     return all_results
