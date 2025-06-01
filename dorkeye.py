@@ -50,6 +50,10 @@ def begin_search(queries, count, output_file):
                         progress.advance(task)
                         if len(results) >= count:
                             break
+                             
+        results = list(dict.fromkeys(results))
+        console.print(f"[bold blue][+] Found {len(results)} results for this dork[/bold blue]")
+         
         all_results.extend(results)
         if output_file:
             write_output(output_file, results)
@@ -58,7 +62,7 @@ def begin_search(queries, count, output_file):
         time.sleep(delay)
 
         if index % 2 == 0:
-            long_delay = round(random.uniform(26, 48), 2)
+            long_delay = round(random.uniform(50, 60), 2)
             console.print(f"[bold magenta][~] Waiting: {long_delay} seconds, bypass 403 Ratelimit[/bold magenta]")
             time.sleep(long_delay)
              
