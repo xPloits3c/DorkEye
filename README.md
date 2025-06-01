@@ -25,7 +25,7 @@
 
 - Search via **DuckDuckGo** (no CAPTCHA block)
 - Single input or from **dork file**
-- Save results to **.txt file**
+- Save results to **.csv file**
 - **Advanced visualization** with `rich`
 
 ---
