@@ -65,7 +65,7 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 
 
 ## 📂 Output Example
- File `results.txt`:
+ File `results.csv`:
 
 1. https://example.com/admin/login.php
 2. https://vulnerable.site/index.php?id=1
@@ -80,7 +80,7 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 - `├── requirements.txt`
 - `├── README.md`
 - `├── dorks.txt # (optional)`
-- `└── results.txt # (generated output)`
+- `└── results.csv # (generated output)`
 
 ## 🔒 Best Practice
 - Use in test environments or with written permission
@@ -88,9 +88,7 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 - Automate with cronjob for periodic OSINT tests
 
 ## 🧩 Future Ideas
-- CSV / JSON export
-- Active scanner of found URLs
-- Support for Bing / Brave / Qwant
+- Active scanner on file output
 - Advanced filters by file type or domain
 - Interactive GUI or TUI with textual
 
