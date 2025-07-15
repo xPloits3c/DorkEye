@@ -57,7 +57,7 @@ python3 dorkeye.py -d "site:.ru inurl:russian_cv filetype:pdf" -o RusCV -c 100
 python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 ```
 •  Options
- - `-d` / --dork Single dork or .txt file with dork Yes
+ - `-d` / --dork Single dork or .txt file with dork
  - `-o` / --output Output file name
  - `-c` / --count Number of results per dork 
 
@@ -112,9 +112,8 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 Distributed under MIT License
 
 ## ⭐ Support the project
-Do you like this tool? Leave a ⭐
+Hit a ⭐
 
-## **MetaByte** Clean and Save Unique: URL’s-Email-Phone-IP’s. 👇
 <p><a href="https://github.com/xPloits3c/MetaByte" target="_blank">
   <button style="padding:10px 15px; font-size:16px; background-color:#0366d6; color:white; border:none; border-radius:5px;">
     Visit MetaByte on GitHub
