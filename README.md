@@ -114,9 +114,6 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 ## 📜 License
 Distributed under MIT License
 
-## ⭐ Support the project
-Hit a ⭐
-
 <p><a href="https://github.com/xPloits3c/MetaByte" target="_blank">
   <button style="padding:10px 15px; font-size:16px; background-color:#0366d6; color:white; border:none; border-radius:5px;">
     Visit MetaByte on GitHub
