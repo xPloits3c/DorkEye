@@ -7,7 +7,7 @@
 ![DuckDuckGo](https://img.shields.io/badge/search-DuckDuckGo-orange.svg)
 
 ---
-![Repo View Counter](https://profile-counter.glitch.me/DorkEye/count.svg)
+![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=blue)
 
 ## 🧠 What is Dork-Eye?
 - Is an automated **dorking** tool that uses **DuckDuckGo** to find web resources exposed via OSINT techniques.
