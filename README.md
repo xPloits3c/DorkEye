@@ -6,6 +6,10 @@
 ![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg) 
 ![DuckDuckGo](https://img.shields.io/badge/search-DuckDuckGo-orange.svg)
 ![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=blue)
+![Stars](https://img.shields.io/github/stars/xPloits3c/DorkEye?style=flat)
+![Forks](https://img.shields.io/github/forks/xPloits3c/DorkEye)
+![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye)
+![Last Commit](https://img.shields.io/github/last-commit/xPloits3c/DorkEye)
 ---
 
 ## 🧠 What is Dork-Eye?
