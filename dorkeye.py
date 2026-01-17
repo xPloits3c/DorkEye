@@ -5,7 +5,7 @@ import random
 import argparse
 from rich.console import Console
 from rich.progress import Progress
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 console = Console()
 
