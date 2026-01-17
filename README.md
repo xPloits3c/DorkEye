@@ -52,11 +52,11 @@
 
 •  Single Dork search
 ```
-python3 dorkeye.py -d "inurl:admin login" -o admin_panels -c 100
+python3 dorkeye.py -d "inurl:admin login" -o admin -c 100
 ```
 •  Multiple Dork search
 ```
-python3 dorkeye.py -d "site:.ru inurl:russian_cv filetype:pdf" -o RusCV -c 100
+python3 dorkeye.py -d "site:.com inurl:cv filetype:pdf" -o leakCV -c 100
 python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 ```
 •  Options
@@ -68,11 +68,12 @@ python3 dorkeye.py -d dorkeye_dorks.txt -c 60 -o dorkResults
 
 
 ## 📂 Output Example
- File `results.csv`:
+ File `leakCV.csv`:
 
-1. https://example.com/admin/login.php
-2. https://vulnerable.site/index.php?id=1
-3. https://ftp.example.org/files/
+cat leakCV.csv
+ 1. https://example.com/admin/login.php
+ 2. https://vulnerable.site/index.php?id=1
+ 3. https://ftp.example.org/files/
 
 ![image](https://github.com/user-attachments/assets/790f4edf-1ec7-4dcc-8735-2adbf4766eb5)
 
