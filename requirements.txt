@@ -1,2 +1,11 @@
-rich==13.3.5
-duckduckgo-search==8.0.2
+# DorkEye v3.0 - Requirements
+# Install with: pip install -r requirements.txt
+
+requests>=2.31.0
+PyYAML>=6.0.1
+rich>=13.7.0
+ddgs>=0.1.0
+urllib3>=2.0.0
+certifi>=2023.7.22
+charset-normalizer>=3.3.0
+idna>=3.4
