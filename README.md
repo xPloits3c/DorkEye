@@ -53,6 +53,10 @@ Feature	Description
 -  📦 Installation
 
 # Quick Install
+
+![photo_1_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9d0a2393-cd7b-49fc-a078-5e8bb85b7a7e)
+
+
 -  See INSTALL.md for detailed platform-specific instructions.
 
 # Clone the repository
@@ -64,7 +68,11 @@ Feature	Description
 -     ./setup.sh
 -     python3 -m venv venv
 -     source venv/bin/activate
-- WHEN DONE ...
+
+![photo_2_2026-01-18_20-13-17](https://github.com/user-attachments/assets/737f1bc0-a81c-45a0-a3d2-6a74f6c8c666)
+
+
+- Exit Programm ...
 -     deactivate
 - IF YOU WANT TO DELETED
 -     cd
@@ -79,6 +87,10 @@ Feature	Description
 -     pip install -r requirements.txt
 
 # 🚀 Basic Usage
+
+![photo_4_2026-01-18_20-13-17](https://github.com/user-attachments/assets/3f534668-ffb3-4bb5-8005-33e49882ff21)
+
+
 ## Simple search ##
 -     python3 dorkeye.py -d "site:example.com filetype:pdf" -o results
 
@@ -86,22 +98,22 @@ Feature	Description
 -     python3 dorkeye.py -d dorks.txt -c 100 -o output
 
 ## With file analysis
--     python3 dorkeye.py -d "inurl:admin" --analyze -o admin_pages
+-     python3 dorkeye.py -d "inurl:admin" -o admin_pages
 
 ## Advanced Usage ##
 # SQL Injection Test + Stealth
 -     python dorkeye.py -d dorks.txt --stealth --sqli -o results
 -     python dorkeye.py -d "site:example.com .php?id=" --sqli -o results
 -     python dorkeye.py -d dorks.txt --sqli --stealth -c 100 -o scan
-- 
+
 # Only PDF and Excel files
 -     python3 dorkeye.py -d "filetype:pdf OR filetype:xls" --whitelist .pdf .xls .xlsx -o documents
 
 # Exclude images
-python3 dorkeye.py -d "site:.com" --blacklist .jpg .png .gif .svg -o no_images
+-     python3 dorkeye.py -d "site:.com" --blacklist .jpg .png .gif .svg -o no_images
 
 # Custom configuration
--  python3 dorkeye.py -d dorks.txt --config custom_config.yaml -o results
+-     python3 dorkeye.py -d dorks.txt --config custom_config.yaml -o results
 
 # Fast mode (no file analysis)
 -     python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
@@ -130,6 +142,8 @@ python3 dorkeye.py -d "site:.com" --blacklist .jpg .png .gif .svg -o no_images
 2. JSON File (results.json)
 -  Complete data export including:
 
+![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
+
 All results with full metadata
 -  Search statistics
 -  Execution details
@@ -144,13 +158,16 @@ All results with full metadata
 -  Professional presentation
 -  Example Output Structure:
 
+![photo_6_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9429b079-b865-4c48-9f76-b4aa2b232676)
+![photo_3_2026-01-18_20-13-17](https://github.com/user-attachments/assets/fc83cc7f-4753-4050-978a-f3f50cced578)
+
 results/
 -  ├── results.csv      # Spreadsheet-friendly data
 -  ├── results.json     # Machine-readable format
 -  └── results.html     # Visual report
 
 🗂️ File Categories
--  DorkEye automatically categorizes findings into 7 types:
+-  DorkEye automatically categorizes findings into 8 types:
 
 Category	Extensions	Use Case
 -  📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
