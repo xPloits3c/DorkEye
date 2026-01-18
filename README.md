@@ -296,7 +296,6 @@ DorkEye/
 - Common Issues
 - Issue: ModuleNotFoundError: No module named 'ddgs'
 
-bash
 # Solution: Install correct package
 -     pip install ddgs
 - Issue: No results returned (0 results)
@@ -307,7 +306,6 @@ bash
 -     python3 dorkeye.py -d "python" -c 5 -o test
 - Issue: Virtual environment not activating
 
-bash
 # Recreate environment
 -     rm -rf dorkeye_env
 -     python3 -m venv dorkeye_env
@@ -353,7 +351,8 @@ Additional search engines
 UI/UX improvements
 Documentation translations
 Bug fixes and optimizations
-⚠️ Legal Disclaimer
+
+- ⚠️ Legal Disclaimer
 READ CAREFULLY BEFORE USE
 
 This tool is provided for educational, research, and authorized security testing purposes only.
@@ -399,8 +398,8 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 <div align="center">
-🌟 If you found DorkEye useful, please star the repository! 🌟
-Made with ❤️ by xPloits3c
+- 🌟 If you found DorkEye useful, please star the repository! 🌟
+ - Made with ❤️ for you.
 
 
 </div>
