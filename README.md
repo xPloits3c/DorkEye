@@ -91,6 +91,24 @@ Feature	Description
 
 ![photo_4_2026-01-18_20-13-17](https://github.com/user-attachments/assets/3f534668-ffb3-4bb5-8005-33e49882ff21)
 
+# Basic search
+-     python3 dorkeye.py -d "inurl:admin" -o results
+
+# Advanced search with SQLi testing
+-     python3 dorkeye.py -d "site:example.com .php?id=" --sqli -o scan
+
+# Stealth mode for sensitive targets
+-     python3 dorkeye.py -d dorks.txt --stealth --sqli -c 100 -o stealth_scan
+
+# Filter specific file types
+-     python3 dorkeye.py -d "site:target.com" --whitelist .pdf .doc .xls -o documents
+
+# Fast search without file analysis
+-     python3 dorkeye.py -d dorks.txt --no-analyze -c 50 -o quick_scan
+
+# Generate config file
+-     python3 dorkeye.py --create-config
+
 
 ## Simple search ##
 -     python3 dorkeye.py -d "site:example.com filetype:pdf" -o results
@@ -123,6 +141,8 @@ Feature	Description
 -     -d, --dork	Single dork or file with dorks	-d "inurl:admin"
 -     -o, --output	Output filename (no extension)	-o results
 -     -c, --count	Results per dork (default: 50)	-c 100
+-     --sqli Enable SQL Injection testing
+-     --stealth Enable stealth mode (slower, safer)
 -     --config	Configuration file (YAML/JSON)	--config config.yaml
 -     --blacklist	Extensions to exclude	--blacklist .jpg .png
 -     --whitelist	Only include these extensions	--whitelist .pdf .doc
