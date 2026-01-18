@@ -130,6 +130,9 @@ Feature	Description
 -     --create-config	Generate sample config file	--create-config
 -     --help	Show help message	--help
 
+<img width="1273" height="401" alt="dehelp" src="https://github.com/user-attachments/assets/9a241a6c-8e61-4188-87b7-3238ce79c8d2" />
+
+
 📂 Output Formats
 -  DorkEye v3.0 generates three comprehensive output files:
 
