@@ -29,7 +29,7 @@ Why DuckDuckGo?
 -  ✅ Access a clean, unfiltered index of web resources
 -  ✅ Dorking, analyze, extract metadata, test sqli vulnerability.
 
-What's New in v3.0? 🎉
+What's New in v3.1? 🎉
 -  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, configs, etc.)
 -  🧠 SQL Param Vuln - --Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
 -  🚫 Blacklist/Whitelist System - Filter results by file extensions
