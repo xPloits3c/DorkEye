@@ -160,12 +160,12 @@ All results with full metadata
 -  Color-coded categories
 -  Accessibility indicators
 -  Professional presentation
--  Example Output Structure:
 
 ![photo_6_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9429b079-b865-4c48-9f76-b4aa2b232676)
 ![photo_3_2026-01-18_20-13-17](https://github.com/user-attachments/assets/fc83cc7f-4753-4050-978a-f3f50cced578)
 
-results/
+-  Example Output Structure:
+-  results/
 -  ├── results.csv      # Spreadsheet-friendly data
 -  ├── results.json     # Machine-readable format
 -  └── results.html     # Visual report
