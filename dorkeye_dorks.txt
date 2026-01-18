@@ -1,3 +1,0 @@
-site:.com inurl:.php?id=
-site:.com inurl:cv filetype:pdf
-site:.com inurl:cv intitle:email filetype:doc
