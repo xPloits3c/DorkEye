@@ -11,6 +11,8 @@
 ![Forks](https://img.shields.io/github/forks/xPloits3c/DorkEye)
 ![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye)
 ![Last Commit](https://img.shields.io/github/last-commit/xPloits3c/DorkEye)
+[![Join Telegram](https://img.shields.io/badge/Join%20Telegram-2CA5E0?style=flat&logo=telegram&logoColor=white)](https://t.me/DorkEye)
+
 ---
 
 
