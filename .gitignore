@@ -1,0 +1,88 @@
+
+# DorkEye .gitignore
+
+# Virtual Environments
+dorkeye_env/
+venv/
+env/
+ENV/
+.venv/
+
+# Auto-generated scripts (created by setup.sh/setup.bat)
+run_dorkeye.sh
+run_dorkeye.bat
+test_installation.sh
+test_installation.bat
+
+# Output files
+*.csv
+*.json
+*.html
+results/
+output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Config files (user-specific)
+dorkeye_config.yaml
+custom_config.yaml
+custom_config.json
+my_dorks.txt
+private_dorks.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Logs
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+*~
+
+# Documentation builds
+docs/_build/
+site/
