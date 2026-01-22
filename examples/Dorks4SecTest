@@ -252,8 +252,6 @@ site:yourdomain.com inurl:”.asp?id=”
 # LFI/RFI indicators
 
 site:yourdomain.com inurl:“page=http”
-
-x̷P̷l̷o̷i̷t̷s̷3̷c̷, [18/01/2026 10:54]
 site:yourdomain.com inurl:“file=../../”
 
 # ============================================
