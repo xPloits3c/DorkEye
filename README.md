@@ -79,7 +79,7 @@ Why DuckDuckGo?
 # Exit Virtual environment:
 -     deactivate
 # Remove Virtual environment:
--     cd dorkeye
+-     cd DorkEye
 -     rm -rf venv
 
 # 🚀 Basic Usage
