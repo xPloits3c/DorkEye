@@ -84,6 +84,7 @@ Why DuckDuckGo?
 
 # 🚀 Basic Usage
 
+<img width="1273" height="401" alt="dehelp" src="https://github.com/user-attachments/assets/9a241a6c-8e61-4188-87b7-3238ce79c8d2" />
 ![photo_4_2026-01-18_20-13-17](https://github.com/user-attachments/assets/3f534668-ffb3-4bb5-8005-33e49882ff21)
 
 # Basic search
