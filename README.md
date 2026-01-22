@@ -15,7 +15,7 @@
 ---
 
 
-🧠 What is DorkEye?
+## 🧠 What is DorkEye?
 - DorkEye is an advanced automated dorking tool that leverages DuckDuckGo to discover exposed web resources through OSINT (Open Source Intelligence) techniques.
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, and other publicly accessible resources—all in an anonymous, efficient, and legal manner.
 
@@ -28,7 +28,7 @@ Why DuckDuckGo?
 -  ✅ Access a clean, unfiltered index of web resources
 -  ✅ Dorking, analyze, extract metadata, test sqli vulnerability.
 
-What's New in v3.1? 🎉
+## What's New in v3.1? 🎉
 -  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, configs, etc.)
 -  🧠 SQL Param Vuln - --Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
 -  🚫 Blacklist/Whitelist System - Filter results by file extensions
@@ -41,7 +41,7 @@ What's New in v3.1? 🎉
 -  💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports
 -  ✨ Key Features
 
-Feature	Description
+## Feature	Description
 -  🔎 Smart Dorking	Execute single or multiple dorks from files
 -  🚫 Extension Filtering	Blacklist/whitelist specific file types
 -  📁 Auto-Categorization	7 file categories (documents, archives, databases, backups, configs, scripts, credentials)
@@ -55,38 +55,32 @@ Feature	Description
 -  📦 Installation
 
 # Quick Install
+-  For full installation instructions on all platforms, follow the complete guide:
+📦 INSTALL.md
 
 ![photo_1_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9d0a2393-cd7b-49fc-a078-5e8bb85b7a7e)
-
-
--  See INSTALL.md for detailed platform-specific instructions.
-
-# Clone the repository
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
-
-# Linux/macOS - Automatic Setup
--     chmod +x setup.sh
--     ./setup.sh
--     python3 -m venv venv
--     source venv/bin/activate
-
 ![photo_2_2026-01-18_20-13-17](https://github.com/user-attachments/assets/737f1bc0-a81c-45a0-a3d2-6a74f6c8c666)
 
-
-- Exit Programm ...
--     deactivate
-- IF YOU WANT TO DELETED
--     cd
--     rm -rf venv
-
-# Windows - Automatic Setup
--     setup.bat
-
-# Manual Installation (all platforms)
+# Install:
+-     git clone https://github.com/xPloits3c/DorkEye.git
+-     cd DorkEye
+-     sudo apt update
+-     sudo apt install -y python3 python3-pip python3-venv git
+-     git clone https://github.com/xPloits3c/DorkEye.git
+-     cd DorkEye
 -     python3 -m venv dorkeye_env
--     source dorkeye_env/bin/activate  # On Windows: dorkeye_env\\Scripts\\activate
--     pip install -r requirements.txt
+-     sudo chmod +x setup.sh
+-     ./setup.sh
+
+# Test:
+-     source dorkeye_env/bin/activate
+-     python dorkeye.py --help
+
+# Exit Virtual environment:
+-     deactivate
+# Remove Virtual environment:
+-     cd dorkeye
+-     rm -rf venv
 
 # 🚀 Basic Usage
 
