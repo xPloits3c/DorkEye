@@ -38,16 +38,16 @@ LINUX INSTALLATION
 
 Automatic Setup (Recommended)
 
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv git
-git clone https://github.com/xPloits3c/DorkEye.git
-cd DorkEye
-chmod +x setup.sh
-./setup.sh
+-     sudo apt update
+-     sudo apt install -y python3 python3-pip python3-venv git
+-     git clone https://github.com/xPloits3c/DorkEye.git
+-     cd DorkEye
+-     chmod +x setup.sh
+-     ./setup.sh
 
 Test:
-source dorkeye_env/bin/activate
-python3 dorkeye.py --help
+-     source dorkeye_env/bin/activate
+-     python3 dorkeye.py --help
 
 ---
 
@@ -58,9 +58,9 @@ Automatic Setup
 - Install Python (check "Add to PATH")
 - Install Git (optional)
 
-git clone https://github.com/xPloits3c/DorkEye.git
-cd DorkEye
-setup.bat
+-     git clone https://github.com/xPloits3c/DorkEye.git
+-     cd DorkEye
+-     setup.bat
 
 Run:
 run_dorkeye.bat -d "site:example.com" -o test
@@ -69,35 +69,35 @@ run_dorkeye.bat -d "site:example.com" -o test
 
 MACOS INSTALLATION
 
-brew install python3 git
-git clone https://github.com/xPloits3c/DorkEye.git
-cd DorkEye
-chmod +x setup.sh
-./setup.sh
+-     brew install python3 git
+-     git clone https://github.com/xPloits3c/DorkEye.git
+-     cd DorkEye
+-     chmod +x setup.sh
+-     ./setup.sh
 
 ---
 
 VERIFICATION
 
-python3 dorkeye.py --create-config
-python3 dorkeye.py -d "python programming" -c 5 -o test
+-     python3 dorkeye.py --create-config
+-     python3 dorkeye.py -d "python programming" -c 5 -o test
 
 ---
 
 UPDATING
 
-git pull origin main
-pip install --upgrade -r requirements.txt
+-     git pull origin main
+-     pip install --upgrade -r requirements.txt
 
 ---
 
 UNINSTALL
 
-rm -rf DorkEye  (Linux/macOS)
-rmdir /s /q DorkEye  (Windows)
+-     rm -rf DorkEye   (Linux/macOS)
+-     rmdir /s /q DorkEye  (Windows)
 
 ---
 
 Getting Help:
-https://github.com/xPloits3c/DorkEye/issues
-whitehat.report@onionmail.org
+-     https://github.com/xPloits3c/DorkEye/issues
+-     whitehat.report@onionmail.org
