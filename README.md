@@ -76,6 +76,7 @@ Why DuckDuckGo?
 -     python dorkeye.py --help
 
 # Exit Virtual environment:
+-     cd DorkEye
 -     deactivate
 # Remove Virtual environment:
 -     cd DorkEye
