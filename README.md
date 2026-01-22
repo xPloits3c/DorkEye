@@ -198,14 +198,6 @@ Category	Extensions	Use Case
 -  🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
 -  ⚙️ Configuration File
 
-Create custom configurations for reusable searches:
-- bash
-
-# Generate sample config
--      python3 dorkeye.py --create-config
--  Example dorkeye_config.yaml:
--  yaml
-
 # File extensions categorization
 extensions:
 -  documents: [".pdf", ".doc", ".docx", ".xls", ".xlsx"]
