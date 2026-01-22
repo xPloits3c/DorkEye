@@ -302,28 +302,6 @@ DorkEye/
 -    ├── *.csv              # CSV exports
 -    ├── *.json             # JSON exports
 -    └── *.html             # HTML reports
-
-🛠️ Troubleshooting
-- Common Issues
-- Issue: ModuleNotFoundError: No module named 'ddgs'
-
-# Solution: Install correct package
--     pip install ddgs
-- Issue: No results returned (0 results)
-
-bash
-# Check if you're rate-limited
-# Try with simpler dork
--     python3 dorkeye.py -d "python" -c 5 -o test
-- Issue: Virtual environment not activating
-
-# Recreate environment
--     rm -rf dorkeye_env
--     python3 -m venv dorkeye_env
--     source dorkeye_env/bin/activate
--     pip install -r requirements.txt
-- For more troubleshooting, see INSTALL.md
-
 - 🔄 Changelog v3.0.0 (Current)
 - ✨ Complete rewrite with enhanced functionality
 - 🎯 Added file analysis and categorization
@@ -347,26 +325,22 @@ bash
 -  API endpoint for automation
 -  Collaborative sharing platform
 -  Machine learning for dork optimization
-- 🤝 Contributing
-- Contributions are welcome! Please follow these steps:
+- 🤝 Contributions are welcome!
+Fork the repository:
+- Create a feature branch (git checkout -b feature/AmazingFeature)
+- Commit your changes (git commit -m 'Add AmazingFeature')
+- Push to the branch (git push origin feature/AmazingFeature)
+- Open a Pull Request
+- Contribution Ideas:
+-  New file categories
+-  Additional search engines
+-  UI/UX improvements
+-  Documentation translations
+-  Bug fixes and optimizations
 
-Fork the repository
-Create a feature branch (git checkout -b feature/AmazingFeature)
-Commit your changes (git commit -m 'Add AmazingFeature')
-Push to the branch (git push origin feature/AmazingFeature)
-Open a Pull Request
-Contribution Ideas:
-
-New file categories
-Additional search engines
-UI/UX improvements
-Documentation translations
-Bug fixes and optimizations
-
-- ⚠️ Legal Disclaimer
-READ CAREFULLY BEFORE USE
-
-This tool is provided for educational, research, and authorized security testing purposes only.
+## ⚠️ Legal Disclaimer
+- READ CAREFULLY BEFORE USE
+- This tool is provided for educational, research, and authorized security testing purposes only.
 
 - ⚖️ Unauthorized access to computer systems is illegal in most jurisdictions
 - 🔒 Always obtain written permission before testing
@@ -374,17 +348,17 @@ This tool is provided for educational, research, and authorized security testing
 - 🚫 The author disclaims all liability for misuse or damages
 - ✅ Use responsibly and ethically at all times
 - By using DorkEye, you agree to:
-
 - Use only on authorized targets or public information
 - Comply with all applicable laws and regulations
 - Not use for malicious, illegal, or unethical purposes
 - Take full responsibility for your actions
-- 📞 Contact & Support
+
+## 📞 Contact & Support
 - Author: xPloits3c
 - Email: whitehat.report@onionmail.org
 - GitHub: @xPloits3c
 
-Support the Project
+## Support the Project
 - ⭐ Star this repository
 - 🐛 Report bugs via Issues
 - 💡 Suggest features via Discussions
