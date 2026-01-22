@@ -61,7 +61,6 @@ Why DuckDuckGo?
 ![photo_1_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9d0a2393-cd7b-49fc-a078-5e8bb85b7a7e)
 ![photo_2_2026-01-18_20-13-17](https://github.com/user-attachments/assets/737f1bc0-a81c-45a0-a3d2-6a74f6c8c666)
 
-# Install:
 -     git clone https://github.com/xPloits3c/DorkEye.git
 -     cd DorkEye
 -     sudo apt update
