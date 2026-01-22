@@ -85,7 +85,7 @@ elif [ "$OS" == "macos" ]; then
 fi
 
 # Create virtual environment
-VENV_DIR="venv"
+VENV_DIR="dorkeye_env"
 
 if [ -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}[!] Virtual environment already exists. Removing...${NC}"
@@ -151,7 +151,7 @@ fi
 # Create activation helper script
 cat > activate_dorkeye.sh << 'EOF'
 #!/bin/bash
-source venv/bin/activate
+source dorkeye_env/bin/activate
 echo -e "\033[0;32m[✓] DorkEye virtual environment activated\033[0m"
 echo -e "\033[0;34m[*] Run: python dorkeye.py -h for help\033[0m"
 EOF
@@ -161,11 +161,13 @@ chmod +x activate_dorkeye.sh
 # Summary
 echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}[✓] Setup completed successfully!${NC}"
+echo -e "${RED}[*] The dork sees all!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
 echo -e "${BLUE}Next steps:${NC}"
-echo -e "${YELLOW}1. Activate the virtual environment:${NC}"
-echo -e "   ${GREEN}source venv/bin/activate${NC}"
+echo -e "${YELLOW}1. Create and activate the virtual environment manually:${NC}"
+echo -e "   ${GREEN}python3 -m venv dorkeye_env${NC}"
+echo -e "   ${GREEN}source dorkeye_env/bin/activate${NC}"
 echo -e "   ${YELLOW}or use:${NC} ${GREEN}source activate_dorkeye.sh${NC}\n"
 
 echo -e "${YELLOW}2. Run DorkEye:${NC}"
@@ -180,3 +182,5 @@ echo -e "${BLUE}[*] To deactivate: ${GREEN}deactivate${NC}\n"
 # Keep the virtual environment active for the user
 echo -e "${YELLOW}[*] Virtual environment is active in this session${NC}"
 echo -e "${YELLOW}[*] Open a new terminal or source activate_dorkeye.sh to use DorkEye${NC}\n"
+
+# S
