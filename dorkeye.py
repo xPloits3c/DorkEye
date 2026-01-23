@@ -74,7 +74,7 @@ DEFAULT_CONFIG = {
     "blacklist": [],
     "whitelist": [],
     "analyze_files": True,
-    "max_file_size_check": 10485760,
+    "max_file_size_check": 52428800,
     "sqli_detection": False,
     "stealth_mode": False,
     "user_agent_rotation": True
@@ -762,7 +762,7 @@ sqli_detection: false
 stealth_mode: false
 
 # Maximum file size to check (in bytes)
-max_file_size_check: 10485760  # 10MB
+max_file_size_check: 52428800  # 50MB
 
 # Rotate user agents
 user_agent_rotation: true
