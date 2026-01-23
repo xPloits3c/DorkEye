@@ -489,8 +489,12 @@ class DorkEyeEnhanced:
         """Save results in multiple formats"""
         if not self.output_file:
             return
-
-        base_name = self.output_file
+        
+        downloads_folder = os.path.dirname(os.path.abspath(__file__))
+        downloads_folder = os.path.join(downloads_folder, "Dump")
+        os.makedirs(downloads_folder, exist_ok=True)
+         
+        base_name = os.path.join(downloads_folder, self.output_file)
         self._save_csv(f"{base_name}.csv")
         self._save_json(f"{base_name}.json")
         self._save_html(f"{base_name}.html")
