@@ -58,8 +58,8 @@
 -  📦 For full installation instructions on all platforms, follow the complete guide:
     [![INSTALL GUIDE](https://img.shields.io/badge/READ%20THE-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/INSTALL.md)
   
-![photo_1_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9d0a2393-cd7b-49fc-a078-5e8bb85b7a7e)
-![photo_2_2026-01-18_20-13-17](https://github.com/user-attachments/assets/737f1bc0-a81c-45a0-a3d2-6a74f6c8c666)
+<img width="1918" height="1000" alt="install_dorkeye" src="https://github.com/user-attachments/assets/ff0c7db3-ff46-42d6-9f14-6044a0957639" />
+<img width="1918" height="972" alt="install_dorkeye0" src="https://github.com/user-attachments/assets/2d6e195f-2b83-40f6-91e4-4b3934cd365a" />
 
 -     sudo apt update
 -     sudo apt install -y python3 python3-pip python3-venv git
@@ -83,8 +83,7 @@
 -     rm -rf venv
 
 # 🚀 Basic Usage
-
-![photo_4_2026-01-18_20-13-17](https://github.com/user-attachments/assets/3f534668-ffb3-4bb5-8005-33e49882ff21)
+![result_dorkeye](https://github.com/user-attachments/assets/552a370e-3382-44d7-b1ca-fe5cb44d8500)
 
 # Basic search
 -     python3 dorkeye.py -d "inurl:admin" -o results
@@ -143,11 +142,9 @@
 -     --no-analyze	Skip file analysis (faster)	--no-analyze
 -     --create-config	Generate sample config file	--create-config
 -     --help	Show help message	--help
+<img width="1713" height="611" alt="help_dorkeye" src="https://github.com/user-attachments/assets/69bfea2f-08a6-400b-a501-e6e69cd3b521" />
 
-<img width="1273" height="401" alt="dehelp" src="https://github.com/user-attachments/assets/9a241a6c-8e61-4188-87b7-3238ce79c8d2" />
-
-
-📂 Output Formats
+# 📂 Output Formats
 -  DorkEye v3.0 generates three comprehensive output files:
 
 1. CSV File (results.csv)
