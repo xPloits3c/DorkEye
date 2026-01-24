@@ -231,9 +231,8 @@ Category	Extensions	Use Case
 
 # Multiple targets from file
 -     python3 dorkeye.py -d sqli_dorks.txt --stealth --sqli -c 200 -o dorks
-- 
-🔒 Best Practices
-Ethical Guidelines
+   
+- 🔒 Best Practices
 - ✅ Always obtain written permission before testing
 - ✅ Use only on authorized targets or public data
 - ✅ Respect robots.txt and site policies
