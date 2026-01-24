@@ -74,6 +74,7 @@
 -     cd DorkEye
 -     source dorkeye_env/bin/activate
 -     python dorkeye.py --help
+<img width="1713" height="611" alt="help_dorkeye" src="https://github.com/user-attachments/assets/69bfea2f-08a6-400b-a501-e6e69cd3b521" />
 
 # Exit Virtual environment:
 -     cd DorkEye
@@ -102,7 +103,6 @@
 
 # Generate config file
 -     python3 dorkeye.py --create-config
-
 
 ## Simple search ##
 -     python3 dorkeye.py -d "site:example.com filetype:pdf" -o results
@@ -142,7 +142,6 @@
 -     --no-analyze	Skip file analysis (faster)	--no-analyze
 -     --create-config	Generate sample config file	--create-config
 -     --help	Show help message	--help
-<img width="1713" height="611" alt="help_dorkeye" src="https://github.com/user-attachments/assets/69bfea2f-08a6-400b-a501-e6e69cd3b521" />
 
 # 📂 Output Formats
 -  DorkEye v3.0 generates three comprehensive output files:
