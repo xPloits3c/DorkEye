@@ -1,7 +1,7 @@
 ![537309991-f4f59199-d30f-4628-bb92-e6ccf43a6814](https://github.com/user-attachments/assets/ac547327-8c58-4792-bb0c-7f93798032d0)
 
 <div align="center">
-# DorkEye | Advanced OSINT Dorking Tool 🔍
+## DorkEye | Advanced OSINT Dorking Tool 🔍
 </div>
 
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg) 
