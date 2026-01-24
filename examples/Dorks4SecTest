@@ -178,6 +178,7 @@ site:yourdomain.com inurl:wp-config.php.bak
 site:yourdomain.com inurl:wp-includes
 site:yourdomain.com filetype:sql “wp_users”
 site:yourdomain.com inurl:wp-admin/install.php
+site:.com inurl:wp-includes/js/swfupload/
 
 # Joomla
 
@@ -219,6 +220,7 @@ site:yourdomain.com inurl:cat=
 site:yourdomain.com inurl:action=
 site:yourdomain.com inurl:redirect=
 site:yourdomain.com inurl:download=
+site:.com inurl:UNION ALL SELECT 1,2,
 
 # ============================================
 # ROBOTS.TXT & SITEMAP
