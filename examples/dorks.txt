@@ -1,3 +1,0 @@
-site:.com inurl:UNION ALL SELECT 1,2,
-site:.com inurl:wp-includes/js/swfupload/
-site:.com inurl:.php?id
