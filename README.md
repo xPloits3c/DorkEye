@@ -3,6 +3,7 @@
 <div align="center">
 # DorkEye | Advanced OSINT Dorking Tool 🔍
 </div>
+
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg) 
 ![License](https://img.shields.io/badge/license-MIT-green.svg) 
 ![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg) 
