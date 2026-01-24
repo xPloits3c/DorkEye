@@ -15,21 +15,20 @@
 
 ---
 
+## 🐧 Hello, i don't break system, i search for their secrets.
 
-## 🧠 What is DorkEye?
-- DorkEye is an advanced automated dorking tool that leverages DuckDuckGo to discover exposed web resources through OSINT (Open Source Intelligence) techniques.
+## What is DorkEye? 🧠
+- DorkEye is an advanced osint automated dorking tool that leverages DuckDuckGo to discover exposed web resources through OSINT (Open Source Intelligence) techniques.
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, and other publicly accessible resources—all in an anonymous, efficient, and legal manner.
 
-Why DuckDuckGo?
-- Using DuckDuckGo (via the ddgs library) allows DorkEye to:
-
+## Why DorkEye?
 -  ✅ Bypass CAPTCHA and rate-limiting typical of mainstream search engines
 -  ✅ Maintain anonymity and privacy during searches
 -  ✅ Avoid IP blocks and detection mechanisms
 -  ✅ Access a clean, unfiltered index of web resources
 -  ✅ Dorking, analyze, extract metadata, test sqli vulnerability.
 
-## What's New in v3.1? 🎉
+## What's New in v3.1? 
 -  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, configs, etc.)
 -  🧠 SQL Param Vuln - --Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
 -  🚫 Blacklist/Whitelist System - Filter results by file extensions
