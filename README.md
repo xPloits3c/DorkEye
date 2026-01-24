@@ -1,6 +1,8 @@
 ![537309991-f4f59199-d30f-4628-bb92-e6ccf43a6814](https://github.com/user-attachments/assets/ac547327-8c58-4792-bb0c-7f93798032d0)
 
+<div align="center">
 # DorkEye | Advanced OSINT Dorking Tool 🔍
+</div>
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg) 
 ![License](https://img.shields.io/badge/license-MIT-green.svg) 
 ![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg) 
@@ -66,10 +68,12 @@ Why DuckDuckGo?
 -     git clone https://github.com/xPloits3c/DorkEye.git
 -     cd DorkEye
 -     python3 -m venv dorkeye_env
+-     source dorkeye_env/bin/activate
 -     sudo chmod +x setup.sh
 -     ./setup.sh
 
 # Test:
+-     cd DorkEye
 -     source dorkeye_env/bin/activate
 -     python dorkeye.py --help
 
@@ -130,7 +134,6 @@ Why DuckDuckGo?
 # Fast mode (no file analysis)
 -     python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
 - Command-Line Options
-- Option	Description	Example
 -     -d, --dork	Single dork or file with dorks	-d "inurl:admin"
 -     -o, --output	Output filename (no extension)	-o results
 -     -c, --count	Results per dork (default: 50)	-c 100
@@ -151,20 +154,19 @@ Why DuckDuckGo?
 
 1. CSV File (results.csv)
 -  Structured data with columns:
-
 -  URL, Title, Snippet, Dork, Timestamp
 -  Extension, Category, File Size, Content Type
 -  Accessibility Status, HTTP Status Code
 
 2. JSON File (results.json)
--  Complete data export including:
-
-![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
-
-All results with full metadata
+- Complete data export including:
+- All results with full metadata
 -  Search statistics
 -  Execution details
 -  Category breakdowns
+  
+![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
+
 
 3. HTML Report (results.html)
 -  Interactive web-based report featuring:
@@ -196,30 +198,7 @@ Category	Extensions	Use Case
 -  🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
 -  ⚙️ Configuration File
 
-# File extensions categorization
-extensions:
--  documents: [".pdf", ".doc", ".docx", ".xls", ".xlsx"]
--  archives: [".zip", ".rar", ".tar", ".gz"]
--  databases: [".sql", ".db", ".sqlite"]
--  backups: [".bak", ".backup", ".old"]
-
-# Blacklist - skip these extensions
-blacklist: [".jpg", ".png", ".gif"]
-
-# Whitelist - only include these (empty = allow all)
--  whitelist: []
-
-# Enable file metadata analysis
--  analyze_files: true
-
-# Maximum file size to check (bytes)
--  max_file_size_check: 10485760  # 10MB
-
-# Custom user agent
--  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-
-📊 Example Dork File
--  Create a dorks.txt file with one dork per line:
+# Create a dorks.txt file with one dork per line:
 
 # Admin panels
 -     inurl:admin intitle:login
@@ -240,34 +219,25 @@ blacklist: [".jpg", ".png", ".gif"]
 -     filetype:conf intext:password
 -     filetype:ini "database"
 -     ext:xml inurl:config
-Comments (lines starting with #) are ignored.
 
-🎯 Use Cases
-1. Security Research
-bash
-# Find exposed admin panels
--     python3 dorkeye.py -d "inurl:admin OR inurl:login" -c 100 -o admin_panels
-# Search for database dumps
+#  Search for database dumps
 -     python3 dorkeye.py -d "filetype:sql" --whitelist .sql -o database_dumps
 
-2. OSINT Investigations
-bash
 # Gather leaked documents
 -     python3 dorkeye.py -d "site:.com filetype:pdf confidential" -o leaked_docs
+- 
 # Find exposed credentials
 -     python3 dorkeye.py -d "filetype:env OR filetype:git" -o credentials
 
-3. Compliance Auditing
-bash
 # Check for exposed backups
 -     python3 dorkeye.py -d "site:company.com filetype:bak OR filetype:backup" -o backups
+  
 # Find configuration files
 -     python3 dorkeye.py -d "site:company.com ext:conf OR ext:ini" -o configs
 
-4. Bug Bounty Hunting
-bash
 # Multiple targets from file
--     python3 dorkeye.py -d bug_bounty_dorks.txt -c 200 -o bounty_results
+-     python3 dorkeye.py -d sqli_dorks.txt --stealth --sqli -c 200 -o dorks
+- 
 🔒 Best Practices
 Ethical Guidelines
 - ✅ Always obtain written permission before testing
@@ -283,23 +253,26 @@ Operational Tips
 - 🎯 Combine with other OSINT tools (Maltego, theHarvester)
 - 💾 Keep dork libraries organized and categorized
 - 🔐 Integrate findings with vulnerability scanners (SQLMap, Nuclei, Nikto)
+
 - 📁 Project Structure
 DorkEye/
-- ├── dorkeye.py              # Main script
-- ├── requirements.txt        # Python dependencies
-- ├── setup.sh               # Linux/macOS setup script
-- ├── setup.bat              # Windows setup script
-- ├── run_dorkeye.sh         # Quick launcher (Linux/macOS)
-- ├── run_dorkeye.bat        # Quick launcher (Windows)
-- ├── README.md              # This file
-- ├── INSTALL.md             # Detailed installation guide
-- ├── dorkeye_config.yaml    # Sample configuration
-- ├── dorks.txt              # Example dorks (optional)
-- ├── dorkeye_env/           # Virtual environment (auto-created)
-- └── results/               # Output directory (auto-created)
--    ├── *.csv              # CSV exports
--    ├── *.json             # JSON exports
--    └── *.html             # HTML reports
+-  ├── dorkeye.py              # Main script
+-  ├── requirements.txt        # Python dependencies
+-  ├── setup.sh               # Linux/macOS setup script
+-  ├── setup.bat              # Windows setup script
+-  ├── run_dorkeye.sh         # Quick launcher (Linux/macOS)
+-  ├── run_dorkeye.bat        # Quick launcher (Windows)
+-  ├── INSTALL.md             # Detailed installation guide
+-  ├── README.md              # This file
+-  ├── INSTALL.md             # Detailed installation guide
+-  ├── dorkeye_config.yaml    # Sample configuration
+-  ├── dorks.txt              # Example dorks (optional)
+-  ├── dorkeye_env/           # Virtual environment
+-  └── Dump/           # Output directory (auto-created)
+-   ├── *.csv              # CSV exports
+-   ├── *.json             # JSON exports
+-   └── *.html             # HTML reports
+    
 - 🔄 Changelog v3.0.0 (Current)
 - ✨ Complete rewrite with enhanced functionality
 - 🎯 Added file analysis and categorization
@@ -365,11 +338,8 @@ Fork the repository:
 <p> <a href="https://github.com/xPloits3c/MetaByte" target="_blank"> <img src="https://img.shields.io/badge/MetaByte-Metadata_Extractor-blue?style=for-the-badge" alt="MetaByte"> </a> </p>
 - Check out MetaByte - Advanced metadata extraction tool
 
-📜 License
-- This project is licensed under the MIT License - see the LICENSE file for details.
-
-MIT License
-Copyright (c) 2026 xPloits3c
+📜 MIT License
+- Copyright (c) 2026 xPloits3c I.C.W.T
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -380,10 +350,7 @@ furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
+
 <div align="center">
-- 🌟 If you found DorkEye useful, please star the repository! 🌟
- - Made with ❤️ for you.
-
-
+🌟 If you found DorkEye useful, please star the repository! 🌟
 </div>
-Happy Dorking! Stay Legal, Stay Ethical! 🔍🔐
