@@ -18,7 +18,7 @@ REM Clear screen and show banner
 cls
 echo.
 echo      ___
-echo  __H__     DorkEye v3.0
+echo  __H__     DorkEye v3.2
 echo   [,]      Advanced Windows Setup
 echo   [)]      
 echo   [;]      Module Verification • Auto-Retry • Testing
@@ -26,7 +26,7 @@ echo   ^|_^|
 echo    V
 echo.
 echo =========================================================
-echo           DorkEye v3.0 - Windows Installation
+echo           DorkEye v3.2 - Windows Installation
 echo =========================================================
 echo.
 
