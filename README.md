@@ -254,5 +254,5 @@ The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
 <div align="center">
-🌟 If you found DorkEye useful, please star the repository! 🌟
+🌟If you found DorkEye useful, please star the repository🌟
 </div>
