@@ -194,7 +194,8 @@ DorkEye/
 -  ├── INSTALL.md             # Detailed installation guide
 -  ├── README.md              # This file
 -  ├── dorkeye_config.yaml    # Sample configuration
--  ├── dorks.txt              # Example dorks (optional)
+-  ├── Dorks4SecTest.txt      # Example dorks (security test)
+-  ├── dorks.txt              # Your dorks (optional)
 -  ├── dorkeye_env/           # Virtual environment
 -  └── Dump/           # Output directory (auto-created)
 -   ├── *.csv              # CSV exports
