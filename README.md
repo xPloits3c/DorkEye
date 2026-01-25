@@ -88,6 +88,7 @@
 -     rm -rf venv
 
 # 🚀 Usage
+![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
 ![result_dorkeye](https://github.com/user-attachments/assets/552a370e-3382-44d7-b1ca-fe5cb44d8500)
 
 # Basic search
@@ -122,17 +123,6 @@
 -     python3 dorkeye.py -d dorks.txt --config custom_config.yaml -o results
 # Fast mode (no file analysis)
 -     python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
--     -d, --dork	Single dork or file with dorks	-d "inurl:admin"
--     -o, --output	Output filename (no extension)	-o results
--     -c, --count	Results per dork (default: 50)	-c 100
--     --sqli Enable SQL Injection testing
--     --stealth Enable stealth mode (slower, safer)
--     --config	Configuration file (YAML/JSON)	--config config.yaml
--     --blacklist	Extensions to exclude	--blacklist .jpg .png
--     --whitelist	Only include these extensions	--whitelist .pdf .doc
--     --no-analyze	Skip file analysis (faster)	--no-analyze
--     --create-config	Generate sample config file	--create-config
--     --help	Show help message	--help
   
 ![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc) 
 
