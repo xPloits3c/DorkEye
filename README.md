@@ -43,12 +43,9 @@
 -  ⚙️ Configuration Files - YAML/JSON config support for advanced customization
 -  🎨 Rich Terminal UI - Beautiful progress bars and formatted output
 -  💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports structured data with columns
--  ✨
--  1. CSV File (results.csv)
--  Structured data with columns:
--  URL, Title, Snippet, Dork, Timestamp
--  Extension, Category, File Size, Content Type
--  Accessibility Status, HTTP Status Code
+-    -- URL, Title, Snippet, Dork, Timestamp
+-    -- Extension, Category, File Size, Content Type
+-    -- Accessibility Status, HTTP Status Code
 
 ## Feature	Description
 -  🔎 Smart Dorking	Execute single or multiple dorks from files
