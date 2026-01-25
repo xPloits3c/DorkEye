@@ -125,8 +125,6 @@
 -     python3 dorkeye.py -d dorks.txt --config custom_config.yaml -o results
 # Fast mode (no file analysis)
 -     python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
-- Command-Line Options
-![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
 -     -d, --dork	Single dork or file with dorks	-d "inurl:admin"
 -     -o, --output	Output filename (no extension)	-o results
 -     -c, --count	Results per dork (default: 50)	-c 100
@@ -139,14 +137,7 @@
 -     --create-config	Generate sample config file	--create-config
 -     --help	Show help message	--help
   
-![photo_6_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9429b079-b865-4c48-9f76-b4aa2b232676)
-![photo_3_2026-01-18_20-13-17](https://github.com/user-attachments/assets/fc83cc7f-4753-4050-978a-f3f50cced578)
-
--  Example Output Structure:
--  Dump/
--  ├── results.csv      # Spreadsheet-friendly data
--  ├── results.json     # Machine-readable format
--  └── results.html     # Visual report
+![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc) 
 
 # Admin panels
 -     inurl:admin intitle:login
@@ -176,7 +167,9 @@
 -     python3 dorkeye.py -d "site:company.com ext:conf OR ext:ini" -o configs
 # Multiple targets from file
 -     python3 dorkeye.py -d sqli_dorks.txt --stealth --sqli -c 200 -o dorks
-   
+![photo_6_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9429b079-b865-4c48-9f76-b4aa2b232676)
+![photo_3_2026-01-18_20-13-17](https://github.com/user-attachments/assets/fc83cc7f-4753-4050-978a-f3f50cced578)
+
 ## 🔒 Best Practices
 - ✅ Always obtain written permission before testing
 - ✅ Use only on authorized targets or public data
