@@ -17,17 +17,17 @@
 
 ## 🐧 Hello, i don't break system, i search for their secrets.
 
-## What is DorkEye? 🧠
+## What is DorkEye 🧠
 - DorkEye is an advanced osint automated dorking tool that leverages DuckDuckGo to discover exposed web resources through OSINT (Open Source Intelligence) techniques.
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, and other publicly accessible resources—all in an anonymous, efficient, and legal manner.
 
-## Why DorkEye?
+## Why DorkEye
 -  ✅ Bypass CAPTCHA and rate-limiting typical of mainstream search engines.
 -  ✅ Maintain anonymity and privacy during searches, avoided IP blocks and detection mechanisms.
 -  ✅ Access a clean, unfiltered index of web resources.
 -  ✅ Dorking, analyze, extract metadata, test sqli vulnerability.
 
-## What's New in v3? 
+## What's New in v3
 -  🧠 SQL Param Vuln Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
 -  🔍 Advanced File Metadata Analysis - Checks file accessibility, size, and content-type
 -  🗂️ Global Deduplication - Removes duplicate URLs across all dorks
@@ -75,20 +75,17 @@
 -     ./setup.sh
 
 # Test:
--     cd DorkEye
--     source dorkeye_env/bin/activate
--     python dorkeye.py --help
 <img width="1713" height="611" alt="help_dorkeye" src="https://github.com/user-attachments/assets/69bfea2f-08a6-400b-a501-e6e69cd3b521" />
 
+-     python dorkeye.py --help
+
 # Exit Virtual environment:
--     cd DorkEye
 -     deactivate
 # Remove Virtual environment:
 -     cd DorkEye
--     rm -rf venv
+-     rm -rf dorkeye_env
 
 # 🚀 Usage
-![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
 ![result_dorkeye](https://github.com/user-attachments/assets/552a370e-3382-44d7-b1ca-fe5cb44d8500)
 
 # Basic search
@@ -122,10 +119,7 @@
 # Custom configuration
 -     python3 dorkeye.py -d dorks.txt --config custom_config.yaml -o results
 # Fast mode (no file analysis)
--     python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
-  
-![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc) 
-
+-     python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results 
 # Admin panels
 -     inurl:admin intitle:login
 -     inurl:administrator
@@ -154,6 +148,7 @@
 -     python3 dorkeye.py -d "site:company.com ext:conf OR ext:ini" -o configs
 # Multiple targets from file
 -     python3 dorkeye.py -d sqli_dorks.txt --stealth --sqli -c 200 -o dorks
+![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
 ![photo_6_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9429b079-b865-4c48-9f76-b4aa2b232676)
 ![photo_3_2026-01-18_20-13-17](https://github.com/user-attachments/assets/fc83cc7f-4753-4050-978a-f3f50cced578)
 
