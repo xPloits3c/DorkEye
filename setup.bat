@@ -1,5 +1,5 @@
 @echo off
-REM DorkEye v3.0 - Advanced Windows Setup Script
+REM DorkEye v3.2 - Advanced Windows Setup Script
 REM Features: Module verification, auto-retry, comprehensive testing, error handling
 
 setlocal enabledelayedexpansion
