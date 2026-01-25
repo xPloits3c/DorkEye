@@ -28,6 +28,12 @@
 -  ✅ Dorking, analyze, extract metadata, test sqli vulnerability.
 
 ## What's New in v3.1? 
+-  🧠 SQL Param Vuln Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
+-  🔍 Advanced File Metadata Analysis - Checks file accessibility, size, and content-type
+-  🗂️ Global Deduplication - Removes duplicate URLs across all dorks
+-  📈 Detailed Statistics - Comprehensive analytics and category breakdowns
+-  ⚙️ Configuration Files - YAML/JSON config support for advanced customization
+-  🎨 Rich Terminal UI - Beautiful progress bars and formatted output
 -  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, backups, configs, scripts, credentials)
 -    --  📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
 -    --  📦 Archives	.zip, .rar, .tar, .gz, .7z, .bz2	Compressed files, backups
@@ -36,12 +42,6 @@
 -    --  ⚙️ Configs	.conf, .ini, .yaml, .json, .xml	Configuration files
 -    --  📜 Scripts	.php, .asp, .jsp, .sh, .bat, .ps1	Server-side scripts
 -    --  🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
--  🧠 SQL Param Vuln Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
--  🔍 Advanced File Metadata Analysis - Checks file accessibility, size, and content-type
--  🗂️ Global Deduplication - Removes duplicate URLs across all dorks
--  📈 Detailed Statistics - Comprehensive analytics and category breakdowns
--  ⚙️ Configuration Files - YAML/JSON config support for advanced customization
--  🎨 Rich Terminal UI - Beautiful progress bars and formatted output
 -  💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports structured data with columns
 -    -- URL, Title, Snippet, Dork, Timestamp
 -    -- Extension, Category, File Size, Content Type
