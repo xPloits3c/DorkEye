@@ -27,7 +27,7 @@
 -  ✅ Access a clean, unfiltered index of web resources.
 -  ✅ Dorking, analyze, extract metadata, test sqli vulnerability.
 
-## What's New in v3
+## What's New
 -  🧠 SQL Param Vuln Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
 -  🔍 Advanced File Metadata Analysis - Checks file accessibility, size, and content-type
 -  🗂️ Global Deduplication - Removes duplicate URLs across all dorks
