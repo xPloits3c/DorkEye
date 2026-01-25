@@ -144,7 +144,7 @@
 -     --help	Show help message	--help
 
 # 📂 Output Formats
--  DorkEye v3.0 generates three comprehensive output files:
+-  DorkEye generates three comprehensive output files:
 
 1. CSV File (results.csv)
 -  Structured data with columns:
