@@ -87,7 +87,7 @@
 -     cd DorkEye
 -     rm -rf venv
 
-# 🚀 Basic Usage
+# 🚀 Usage
 ![result_dorkeye](https://github.com/user-attachments/assets/552a370e-3382-44d7-b1ca-fe5cb44d8500)
 
 # Basic search
