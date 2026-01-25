@@ -22,37 +22,44 @@
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, and other publicly accessible resources—all in an anonymous, efficient, and legal manner.
 
 ## Why DorkEye?
--  ✅ Bypass CAPTCHA and rate-limiting typical of mainstream search engines
--  ✅ Maintain anonymity and privacy during searches
--  ✅ Avoid IP blocks and detection mechanisms
--  ✅ Access a clean, unfiltered index of web resources
+-  ✅ Bypass CAPTCHA and rate-limiting typical of mainstream search engines.
+-  ✅ Maintain anonymity and privacy during searches, avoided IP blocks and detection mechanisms.
+-  ✅ Access a clean, unfiltered index of web resources.
 -  ✅ Dorking, analyze, extract metadata, test sqli vulnerability.
 
 ## What's New in v3.1? 
--  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, configs, etc.)
--  🧠 SQL Param Vuln - --Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
--  🚫 Blacklist/Whitelist System - Filter results by file extensions
--  📊 Enhanced Output Formats - Export results as CSV, JSON, and HTML reports
+-  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, backups, configs, scripts, credentials)
+-    --  📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
+-    --  📦 Archives	.zip, .rar, .tar, .gz, .7z, .bz2	Compressed files, backups
+-    --  🗄️ Databases	.sql, .db, .sqlite, .mdb	Database dumps, exports
+-    --  💾 Backups	.bak, .backup, .old, .tmp	Backup files, temp data
+-    --  ⚙️ Configs	.conf, .ini, .yaml, .json, .xml	Configuration files
+-    --  📜 Scripts	.php, .asp, .jsp, .sh, .bat, .ps1	Server-side scripts
+-    --  🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
+-  🧠 SQL Param Vuln Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
 -  🔍 Advanced File Metadata Analysis - Checks file accessibility, size, and content-type
 -  🗂️ Global Deduplication - Removes duplicate URLs across all dorks
 -  📈 Detailed Statistics - Comprehensive analytics and category breakdowns
 -  ⚙️ Configuration Files - YAML/JSON config support for advanced customization
 -  🎨 Rich Terminal UI - Beautiful progress bars and formatted output
--  💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports
--  ✨ Key Features
+-  💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports structured data with columns
+-  ✨
+-  1. CSV File (results.csv)
+-  Structured data with columns:
+-  URL, Title, Snippet, Dork, Timestamp
+-  Extension, Category, File Size, Content Type
+-  Accessibility Status, HTTP Status Code
 
 ## Feature	Description
 -  🔎 Smart Dorking	Execute single or multiple dorks from files
 -  🚫 Extension Filtering	Blacklist/whitelist specific file types
--  📁 Auto-Categorization	7 file categories (documents, archives, databases, backups, configs, scripts, credentials)
 -  🔍 File Analysis	Check file size, content-type, and accessibility
--  📊 Triple Export	CSV, JSON, and HTML report generation
 -  🎯 Global Deduplication	Intelligent URL hash-based duplicate removal
 -  ⚡ Rate Limit Protection	Smart delays to avoid blocking
 -  📈 Detailed Statistics	Real-time metrics and category breakdowns
 -  ⚙️ Config Support	YAML/JSON configuration files
 -  🎨 Beautiful UI	Rich terminal interface with progress tracking
--  📦 Installation
+-  📦 Automatic Installation
 
 # Quick Install
 -  📦 For full installation instructions on all platforms, follow the complete guide:
@@ -88,28 +95,20 @@
 
 # Basic search
 -     python3 dorkeye.py -d "inurl:admin" -o results
-
 # Advanced search with SQLi testing
 -     python3 dorkeye.py -d "site:example.com .php?id=" --sqli -o scan
-
 # Stealth mode for sensitive targets
 -     python3 dorkeye.py -d dorks.txt --stealth --sqli -c 100 -o stealth_scan
-
 # Filter specific file types
 -     python3 dorkeye.py -d "site:target.com" --whitelist .pdf .doc .xls -o documents
-
 # Fast search without file analysis
 -     python3 dorkeye.py -d dorks.txt --no-analyze -c 50 -o quick_scan
-
 # Generate config file
 -     python3 dorkeye.py --create-config
-
 ## Simple search ##
 -     python3 dorkeye.py -d "site:example.com filetype:pdf" -o results
-
 ## Multiple dorks from file ##
 -     python3 dorkeye.py -d dorks.txt -c 100 -o output
-
 ## With file analysis
 -     python3 dorkeye.py -d "inurl:admin" -o admin_pages
 
@@ -118,19 +117,16 @@
 -     python dorkeye.py -d dorks.txt --stealth --sqli -o results
 -     python dorkeye.py -d "site:example.com .php?id=" --sqli -o results
 -     python dorkeye.py -d dorks.txt --sqli --stealth -c 100 -o scan
-
 # Only PDF and Excel files
 -     python3 dorkeye.py -d "filetype:pdf OR filetype:xls" --whitelist .pdf .xls .xlsx -o documents
-
 # Exclude images
 -     python3 dorkeye.py -d "site:.com" --blacklist .jpg .png .gif .svg -o no_images
-
 # Custom configuration
 -     python3 dorkeye.py -d dorks.txt --config custom_config.yaml -o results
-
 # Fast mode (no file analysis)
 -     python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
 - Command-Line Options
+![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
 -     -d, --dork	Single dork or file with dorks	-d "inurl:admin"
 -     -o, --output	Output filename (no extension)	-o results
 -     -c, --count	Results per dork (default: 50)	-c 100
@@ -142,104 +138,54 @@
 -     --no-analyze	Skip file analysis (faster)	--no-analyze
 -     --create-config	Generate sample config file	--create-config
 -     --help	Show help message	--help
-
-# 📂 Output Formats
--  DorkEye generates three comprehensive output files:
-
-1. CSV File (results.csv)
--  Structured data with columns:
--  URL, Title, Snippet, Dork, Timestamp
--  Extension, Category, File Size, Content Type
--  Accessibility Status, HTTP Status Code
-
-2. JSON File (results.json)
-- Complete data export including:
-- All results with full metadata
--  Search statistics
--  Execution details
--  Category breakdowns
   
-![photo_5_2026-01-18_20-13-17](https://github.com/user-attachments/assets/baff38ab-76ec-4080-a002-311e02029ccc)
-
-
-3. HTML Report (results.html)
--  Interactive web-based report featuring:
--  Visual statistics dashboard
--  Sortable results table
--  Color-coded categories
--  Accessibility indicators
--  Professional presentation
-
 ![photo_6_2026-01-18_20-13-17](https://github.com/user-attachments/assets/9429b079-b865-4c48-9f76-b4aa2b232676)
 ![photo_3_2026-01-18_20-13-17](https://github.com/user-attachments/assets/fc83cc7f-4753-4050-978a-f3f50cced578)
 
 -  Example Output Structure:
--  results/
+-  Dump/
 -  ├── results.csv      # Spreadsheet-friendly data
 -  ├── results.json     # Machine-readable format
 -  └── results.html     # Visual report
-
-🗂️ File Categories
--  DorkEye automatically categorizes findings into 8 types:
-
-Category	Extensions	Use Case
--  📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
--  📦 Archives	.zip, .rar, .tar, .gz, .7z, .bz2	Compressed files, backups
--  🗄️ Databases	.sql, .db, .sqlite, .mdb	Database dumps, exports
--  💾 Backups	.bak, .backup, .old, .tmp	Backup files, temp data
--  ⚙️ Configs	.conf, .ini, .yaml, .json, .xml	Configuration files
--  📜 Scripts	.php, .asp, .jsp, .sh, .bat, .ps1	Server-side scripts
--  🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
--  ⚙️ Configuration File
-
-# Create a dorks.txt file with one dork per line:
 
 # Admin panels
 -     inurl:admin intitle:login
 -     inurl:administrator
 -     site:.com inurl:wp-admin
-
 # Sensitive files
 -     filetype:sql "MySQL dump"
 -     filetype:env DB_PASSWORD
 -     filetype:log inurl:access.log
-
 # Documents
 -     site:.edu filetype:pdf "confidential"
 -     site:.gov filetype:xls
 -     inurl:uploads filetype:pdf
-
 # Configuration files
 -     filetype:conf intext:password
 -     filetype:ini "database"
 -     ext:xml inurl:config
-
 #  Search for database dumps
 -     python3 dorkeye.py -d "filetype:sql" --whitelist .sql -o database_dumps
-
 # Gather leaked documents
 -     python3 dorkeye.py -d "site:.com filetype:pdf confidential" -o leaked_docs
-- 
 # Find exposed credentials
 -     python3 dorkeye.py -d "filetype:env OR filetype:git" -o credentials
-
 # Check for exposed backups
 -     python3 dorkeye.py -d "site:company.com filetype:bak OR filetype:backup" -o backups
-  
 # Find configuration files
 -     python3 dorkeye.py -d "site:company.com ext:conf OR ext:ini" -o configs
-
 # Multiple targets from file
 -     python3 dorkeye.py -d sqli_dorks.txt --stealth --sqli -c 200 -o dorks
    
-- 🔒 Best Practices
+## 🔒 Best Practices
 - ✅ Always obtain written permission before testing
 - ✅ Use only on authorized targets or public data
 - ✅ Respect robots.txt and site policies
 - ✅ Follow responsible disclosure for findings
 - ❌ Never access or download unauthorized data
 - ❌ Never use for malicious purposes
-Operational Tips
+
+## 🚀 Operational Tips
 - 🕒 Use appropriate delays to avoid rate limiting
 - 🔄 Rotate search terms for better coverage
 - 📊 Analyze HTML reports for visual insights
@@ -247,7 +193,7 @@ Operational Tips
 - 💾 Keep dork libraries organized and categorized
 - 🔐 Integrate findings with vulnerability scanners (SQLMap, Nuclei, Nikto)
 
-- 📁 Project Structure
+## 📁 Project Structure
 DorkEye/
 -  ├── dorkeye.py              # Main script
 -  ├── requirements.txt        # Python dependencies
@@ -257,7 +203,6 @@ DorkEye/
 -  ├── run_dorkeye.bat        # Quick launcher (Windows)
 -  ├── INSTALL.md             # Detailed installation guide
 -  ├── README.md              # This file
--  ├── INSTALL.md             # Detailed installation guide
 -  ├── dorkeye_config.yaml    # Sample configuration
 -  ├── dorks.txt              # Example dorks (optional)
 -  ├── dorkeye_env/           # Virtual environment
@@ -266,20 +211,7 @@ DorkEye/
 -   ├── *.json             # JSON exports
 -   └── *.html             # HTML reports
     
-- 🔄 Changelog v3.0.0 (Current)
-- ✨ Complete rewrite with enhanced functionality
-- 🎯 Added file analysis and categorization
-- 🚫 Implemented blacklist/whitelist system
-- 📊 Multiple export formats (CSV, JSON, HTML)
-- 🔍 Advanced metadata extraction
-- 📈 Comprehensive statistics dashboard
-- ⚙️ Configuration file support
-- 🎨 Rich terminal UI improvements
-- v2.4 (Legacy)
-- Basic dorking functionality
-- Single CSV output
-- DuckDuckGo integration
-- 🧩 Future Roadmap
+## 🧩 Future Roadmap
 -  Multi-threaded searching for faster results
  - Active vulnerability scanner integration
  - Interactive TUI with textual
@@ -289,18 +221,6 @@ DorkEye/
 -  API endpoint for automation
 -  Collaborative sharing platform
 -  Machine learning for dork optimization
-- 🤝 Contributions are welcome!
-Fork the repository:
-- Create a feature branch (git checkout -b feature/AmazingFeature)
-- Commit your changes (git commit -m 'Add AmazingFeature')
-- Push to the branch (git push origin feature/AmazingFeature)
-- Open a Pull Request
-- Contribution Ideas:
--  New file categories
--  Additional search engines
--  UI/UX improvements
--  Documentation translations
--  Bug fixes and optimizations
 
 ## ⚠️ Legal Disclaimer
 - READ CAREFULLY BEFORE USE
@@ -311,7 +231,8 @@ Fork the repository:
 - 📜 Users are solely responsible for compliance with local laws
 - 🚫 The author disclaims all liability for misuse or damages
 - ✅ Use responsibly and ethically at all times
-- By using DorkEye, you agree to:
+
+## 📜 By using DorkEye, you agree to:
 - Use only on authorized targets or public information
 - Comply with all applicable laws and regulations
 - Not use for malicious, illegal, or unethical purposes
@@ -322,16 +243,13 @@ Fork the repository:
 - Email: whitehat.report@onionmail.org
 - GitHub: @xPloits3c
 
-## Support the Project
+## ✅ Support the Project
 - ⭐ Star this repository
 - 🐛 Report bugs via Issues
 - 💡 Suggest features via Discussions
-- 🤝 Contribute via Pull Requests
-- 🔗 Related Projects
-<p> <a href="https://github.com/xPloits3c/MetaByte" target="_blank"> <img src="https://img.shields.io/badge/MetaByte-Metadata_Extractor-blue?style=for-the-badge" alt="MetaByte"> </a> </p>
-- Check out MetaByte - Advanced metadata extraction tool
+- 🤝 Fork the repository:
 
-📜 MIT License
+## 📜 MIT License
 - Copyright (c) 2026 xPloits3c I.C.W.T
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
