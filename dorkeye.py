@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v3.1 - Advanced OSINT Dorking Tool
+DorkEye v3.2 - Advanced OSINT Dorking Tool
 Enhanced with SQL injection detection, improved results, and better stealth
 This tool was created by @xPloits3c | https://github.com/xPloits3c
 """
