@@ -25,14 +25,24 @@
 -  ✅ Bypass CAPTCHA and rate-limiting typical of mainstream search engines.
 -  ✅ Maintain anonymity and privacy during searches, avoided IP blocks and detection mechanisms.
 -  ✅ Access a clean, unfiltered index of web resources.
--  ✅ Dorking, analyze, extract metadata, test sqli vulnerability.
+-  ✅ analyze, extract metadata, test SQLi vulnerabilities with advanced multi-technique detection.
 
 ## What's New
--  🧠 SQL Param Vuln Automatically Testing for SQL vulnerabilty after Potenzial SQLi Found 
+
+🔍 Error-based, boolean-based blind, and time-based blind SQLi testing capabilities.  
+📊 SQL Injection confidence scoring levels included to assess vulnerabilities effectively.  
+🎨 Realistic HTTP fingerprinting with automatic rotation using modern browser headers (Chrome, Firefox, Safari, Edge).  
+🎯 Enhanced stealth mode with dynamic and extended delays to evade rate-limiting. 
+
+-  🧠 SQL Injection Automatically Testing for SQLi vulnerabilty after Potenzial SQLi Found
+-   -   Error-based, boolean-based blind, and time-based blind SQLi testing capabilities.
+    -   SQL Injection confidence scoring levels included to assess vulnerabilities effectively.
 -  🔍 Advanced File Metadata Analysis - Checks file accessibility, size, and content-type
 -  🗂️ Global Deduplication - Removes duplicate URLs across all dorks
 -  📈 Detailed Statistics - Comprehensive analytics and category breakdowns
 -  ⚙️ Configuration Files - YAML/JSON config support for advanced customization
+-  🎨 Realistic HTTP fingerprinting with automatic rotation using modern browser headers (Chrome, Firefox, Safari, Edge).  
+-  🎯 Enhanced stealth mode with dynamic and extended delays to evade rate-limiting.
 -  🎨 Rich Terminal UI - Beautiful progress bars and formatted output
 -  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, backups, configs, scripts, credentials)
 -    --  📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
@@ -47,16 +57,26 @@
 -    -- Extension, Category, File Size, Content Type
 -    -- Accessibility Status, HTTP Status Code
 
-## Feature	Description
--  🔎 Smart Dorking	Execute single or multiple dorks from files
--  🚫 Extension Filtering	Blacklist/whitelist specific file types
--  🔍 File Analysis	Check file size, content-type, and accessibility
--  🎯 Global Deduplication	Intelligent URL hash-based duplicate removal
--  ⚡ Rate Limit Protection	Smart delays to avoid blocking
--  📈 Detailed Statistics	Real-time metrics and category breakdowns
--  ⚙️ Config Support	YAML/JSON configuration files
--  🎨 Beautiful UI	Rich terminal interface with progress tracking
--  📦 Automatic Installation
+ ## Features 
+---------------------------------
+- 🔎 Smart Dorking
+-  -   Execute single or multiple dorks from files.
+- 🚫 Extension Filtering
+-  -   Blacklist/whitelist specific file types.
+- 🔍 File Analysis
+-  -   HEAD-only analysis to check file size, content type, and accessibility without downloading.
+- 🎯 Global Deduplication
+-  -   Intelligent hash-based duplicate removal.
+- ⚡ Rate Limit Protection
+-  -   Smart delays to avoid blocking through stealth mode.
+- 📈 Detailed Statistics
+-  -   Real-time metrics and category breakdowns.
+- ⚙️ Config Support
+-  -   Support for YAML/JSON configuration files.
+| 🎨 Beautiful UI
+-  -   Rich terminal interface with progress tracking.
+- 📦 Automatic Installation
+-  -   Easy setup process.
 
 # Quick Install
 -  📦 For full installation instructions on all platforms, follow the complete guide:
