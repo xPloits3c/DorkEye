@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}"
 echo "  ___  "
-echo " __H__    DorkEye v3.2 Setup"
+echo " __H__    DorkEye v3.8 Setup"
 echo "  [,]  "
 echo "  [)]  "
 echo "  [;]    Setting up environment..."
