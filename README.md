@@ -95,7 +95,7 @@
 -     ./setup.sh
 
 # Test:
-<img width="1713" height="611" alt="help_dorkeye" src="https://github.com/user-attachments/assets/69bfea2f-08a6-400b-a501-e6e69cd3b521" />
+<img width="1107" height="596" alt="dev3 8-h" src="https://github.com/user-attachments/assets/9092321e-caf9-444c-ad44-54b2972bc92c" />
 
 -     python dorkeye.py --help
 
