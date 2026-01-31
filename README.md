@@ -106,7 +106,8 @@
 -     rm -rf dorkeye_env
 
 # 🚀 Usage
-![result_dorkeye](https://github.com/user-attachments/assets/552a370e-3382-44d7-b1ca-fe5cb44d8500)
+![start16dorks](https://github.com/user-attachments/assets/768f5d31-df67-451f-a9b1-5286eb849850)
+![end16dorks](https://github.com/user-attachments/assets/648e498f-08d8-4de9-8bb9-7f812740d65f)
 
 # Basic search
 -     python3 dorkeye.py -d "inurl:admin" -o results
@@ -140,6 +141,9 @@
 -     python3 dorkeye.py -d dorks.txt --config custom_config.yaml -o results
 # Fast mode (no file analysis)
 -     python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results 
+
+![multidorks_dorks](https://github.com/user-attachments/assets/e6eed7b5-aba0-488c-a330-42df3e96c7df)
+
 # Admin panels
 -     inurl:admin intitle:login
 -     inurl:administrator
