@@ -45,7 +45,7 @@
     -   ⚙️ Configs	.conf, .ini, .yaml, .json, .xml	Configuration files
     -   📜 Scripts	.php, .asp, .jsp, .sh, .bat, .ps1	Server-side scripts
     -   🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
-   💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports structured data with columns
+-  💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports structured data with columns
     -   URL, Title, Snippet, Dork, Timestamp
     -   Extension, Category, File Size, Content Type
     -   Accessibility Status, HTTP Status Code
