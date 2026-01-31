@@ -28,34 +28,27 @@
 -  ✅ analyze, extract metadata, test SQLi vulnerabilities with advanced multi-technique detection.
 
 ## What's New
-
-🔍 Error-based, boolean-based blind, and time-based blind SQLi testing capabilities.  
-📊 SQL Injection confidence scoring levels included to assess vulnerabilities effectively.  
-🎨 Realistic HTTP fingerprinting with automatic rotation using modern browser headers (Chrome, Firefox, Safari, Edge).  
-🎯 Enhanced stealth mode with dynamic and extended delays to evade rate-limiting. 
-
 -  🧠 SQL Injection Automatically Testing for SQLi vulnerabilty after Potenzial SQLi Found
     -   Error-based, boolean-based blind, and time-based blind SQLi testing capabilities.
     -   SQL Injection confidence scoring levels included to assess vulnerabilities effectively.
 -  🔍 Advanced File Metadata Analysis - Checks file accessibility, size, and content-type
 -  🗂️ Global Deduplication - Removes duplicate URLs across all dorks
--  📈 Detailed Statistics - Comprehensive analytics and category breakdowns
 -  ⚙️ Configuration Files - YAML/JSON config support for advanced customization
--  🎨 Realistic HTTP fingerprinting with automatic rotation using modern browser headers (Chrome, Firefox, Safari, Edge).  
+-  ⚡ Realistic HTTP fingerprinting with automatic rotation using modern browser headers (Chrome, Firefox, Safari, Edge).  
 -  🎯 Enhanced stealth mode with dynamic and extended delays to evade rate-limiting.
 -  🎨 Rich Terminal UI - Beautiful progress bars and formatted output
--  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, backups, configs, scripts, credentials)
-     --  📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
-     --  📦 Archives	.zip, .rar, .tar, .gz, .7z, .bz2	Compressed files, backups
-     --  🗄️ Databases	.sql, .db, .sqlite, .mdb	Database dumps, exports
-     --  💾 Backups	.bak, .backup, .old, .tmp	Backup files, temp data
-     --  ⚙️ Configs	.conf, .ini, .yaml, .json, .xml	Configuration files
-     --  📜 Scripts	.php, .asp, .jsp, .sh, .bat, .ps1	Server-side scripts
-     --  🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
+-  📈 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, backups, configs, scripts, credentials)
+    -   📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
+    -   📦 Archives	.zip, .rar, .tar, .gz, .7z, .bz2	Compressed files, backups
+    -   🗄️ Databases	.sql, .db, .sqlite, .mdb	Database dumps, exports
+    -   💾 Backups	.bak, .backup, .old, .tmp	Backup files, temp data
+    -   ⚙️ Configs	.conf, .ini, .yaml, .json, .xml	Configuration files
+    -   📜 Scripts	.php, .asp, .jsp, .sh, .bat, .ps1	Server-side scripts
+    -   🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
    💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports structured data with columns
-     -- URL, Title, Snippet, Dork, Timestamp
-     -- Extension, Category, File Size, Content Type
-     -- Accessibility Status, HTTP Status Code
+    -   URL, Title, Snippet, Dork, Timestamp
+    -   Extension, Category, File Size, Content Type
+    -   Accessibility Status, HTTP Status Code
 
  ## Features 
 ---------------------------------
