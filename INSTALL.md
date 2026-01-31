@@ -1,6 +1,6 @@
 <img width="1536" height="1024" alt="dorkeye-install" src="https://github.com/user-attachments/assets/a0983dc1-2c2e-4cbd-9ab9-7ae1a3743f29" />
 
-## 📦 DorkEye v3.1 — Installation Guide
+## 📦 DorkEye v3.8 — Installation Guide
 - Complete guide to installing DorkEye on Linux, Windows, and macOS.
 
 ========================================
