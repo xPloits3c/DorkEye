@@ -20,9 +20,9 @@ echo.
 echo   ___
 echo  __H__     DorkEye v3.8
 echo   [,]      Advanced Windows Setup
-echo   [)]      
+echo   [)]
 echo   [;]      Module Verification • Auto-Retry • Testing
-echo   |(|  
+echo   [(]
 echo    V
 echo.
 echo =========================================================
