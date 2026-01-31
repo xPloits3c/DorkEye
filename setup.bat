@@ -1,5 +1,5 @@
 @echo off
-REM DorkEye v3.2 - Advanced Windows Setup Script
+REM DorkEye v3.8 - Advanced Windows Setup Script
 REM Features: Module verification, auto-retry, comprehensive testing, error handling
 
 setlocal enabledelayedexpansion
@@ -18,7 +18,7 @@ REM Clear screen and show banner
 cls
 echo.
 echo      ___
-echo  __H__     DorkEye v3.2
+echo  __H__     DorkEye v3.8
 echo   [,]      Advanced Windows Setup
 echo   [)]      
 echo   [;]      Module Verification • Auto-Retry • Testing
@@ -26,7 +26,7 @@ echo   ^|_^|
 echo    V
 echo.
 echo =========================================================
-echo           DorkEye v3.2 - Windows Installation
+echo           DorkEye v3.8 - Windows Installation
 echo =========================================================
 echo.
 
