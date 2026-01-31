@@ -1,4 +1,5 @@
-![537309991-f4f59199-d30f-4628-bb92-e6ccf43a6814](https://github.com/user-attachments/assets/ac547327-8c58-4792-bb0c-7f93798032d0)
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/2d41cfd5-cd4d-49ab-b5bf-3306966ed0c5" />
+
 
 ## DorkEye | Advanced OSINT Dorking Tool 🔍
 
