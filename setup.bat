@@ -17,12 +17,12 @@ color 0A
 REM Clear screen and show banner
 cls
 echo.
-echo      ___
+echo   ___
 echo  __H__     DorkEye v3.8
 echo   [,]      Advanced Windows Setup
 echo   [)]      
 echo   [;]      Module Verification • Auto-Retry • Testing
-echo   ^|_^|  
+echo   |(|  
 echo    V
 echo.
 echo =========================================================
