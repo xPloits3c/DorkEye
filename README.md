@@ -35,7 +35,7 @@
 🎯 Enhanced stealth mode with dynamic and extended delays to evade rate-limiting. 
 
 -  🧠 SQL Injection Automatically Testing for SQLi vulnerabilty after Potenzial SQLi Found
--   -   Error-based, boolean-based blind, and time-based blind SQLi testing capabilities.
+    -   Error-based, boolean-based blind, and time-based blind SQLi testing capabilities.
     -   SQL Injection confidence scoring levels included to assess vulnerabilities effectively.
 -  🔍 Advanced File Metadata Analysis - Checks file accessibility, size, and content-type
 -  🗂️ Global Deduplication - Removes duplicate URLs across all dorks
@@ -45,38 +45,38 @@
 -  🎯 Enhanced stealth mode with dynamic and extended delays to evade rate-limiting.
 -  🎨 Rich Terminal UI - Beautiful progress bars and formatted output
 -  🎯 File Analysis & Categorization - Automatically categorizes results by file type (documents, archives, databases, backups, configs, scripts, credentials)
--    --  📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
--    --  📦 Archives	.zip, .rar, .tar, .gz, .7z, .bz2	Compressed files, backups
--    --  🗄️ Databases	.sql, .db, .sqlite, .mdb	Database dumps, exports
--    --  💾 Backups	.bak, .backup, .old, .tmp	Backup files, temp data
--    --  ⚙️ Configs	.conf, .ini, .yaml, .json, .xml	Configuration files
--    --  📜 Scripts	.php, .asp, .jsp, .sh, .bat, .ps1	Server-side scripts
--    --  🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
--  💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports structured data with columns
--    -- URL, Title, Snippet, Dork, Timestamp
--    -- Extension, Category, File Size, Content Type
--    -- Accessibility Status, HTTP Status Code
+     --  📄 Documents	.pdf, .doc, .docx, .xls, .xlsx, .ppt, .pptx	Office documents, reports
+     --  📦 Archives	.zip, .rar, .tar, .gz, .7z, .bz2	Compressed files, backups
+     --  🗄️ Databases	.sql, .db, .sqlite, .mdb	Database dumps, exports
+     --  💾 Backups	.bak, .backup, .old, .tmp	Backup files, temp data
+     --  ⚙️ Configs	.conf, .ini, .yaml, .json, .xml	Configuration files
+     --  📜 Scripts	.php, .asp, .jsp, .sh, .bat, .ps1	Server-side scripts
+     --  🔑 Credentials	.env, .git, .svn, .htpasswd	Sensitive auth files
+   💾 Multiple Export Formats - CSV, JSON, and interactive HTML reports structured data with columns
+     -- URL, Title, Snippet, Dork, Timestamp
+     -- Extension, Category, File Size, Content Type
+     -- Accessibility Status, HTTP Status Code
 
  ## Features 
 ---------------------------------
 - 🔎 Smart Dorking
--  -   Execute single or multiple dorks from files.
+   -   Execute single or multiple dorks from files.
 - 🚫 Extension Filtering
--  -   Blacklist/whitelist specific file types.
+   -   Blacklist/whitelist specific file types.
 - 🔍 File Analysis
--  -   HEAD-only analysis to check file size, content type, and accessibility without downloading.
+   -   HEAD-only analysis to check file size, content type, and accessibility without downloading.
 - 🎯 Global Deduplication
--  -   Intelligent hash-based duplicate removal.
+   -   Intelligent hash-based duplicate removal.
 - ⚡ Rate Limit Protection
--  -   Smart delays to avoid blocking through stealth mode.
+   -   Smart delays to avoid blocking through stealth mode.
 - 📈 Detailed Statistics
--  -   Real-time metrics and category breakdowns.
+   -   Real-time metrics and category breakdowns.
 - ⚙️ Config Support
--  -   Support for YAML/JSON configuration files.
-| 🎨 Beautiful UI
--  -   Rich terminal interface with progress tracking.
+   -   Support for YAML/JSON configuration files.
+- 🎨 Beautiful UI
+   -   Rich terminal interface with progress tracking.
 - 📦 Automatic Installation
--  -   Easy setup process.
+   -   Easy setup process.
 
 # Quick Install
 -  📦 For full installation instructions on all platforms, follow the complete guide:
