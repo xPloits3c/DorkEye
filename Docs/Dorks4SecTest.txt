@@ -1,0 +1,257 @@
+# DorkEye v3.0 - Example Dorks for Security Testing
+
+# ⚠️ USE ONLY ON AUTHORIZED TARGETS ⚠️
+# These dorks are for testing YOUR OWN websites or with written permission ⚠️
+
+# ============================================
+# ADMIN PANELS & LOGIN PAGES 
+# ============================================
+
+# Finding exposed admin interfaces
+
+site:yourdomain.com inurl:admin
+site:yourdomain.com inurl:login
+site:yourdomain.com inurl:administrator
+site:yourdomain.com intitle:“admin panel”
+site:yourdomain.com inurl:wp-admin
+site:yourdomain.com inurl:cpanel
+site:yourdomain.com inurl:phpmyadmin
+site:yourdomain.com inurl:webadmin
+site:yourdomain.com “dashboard” inurl:admin
+site:yourdomain.com intitle:“login” inurl:admin
+
+# ============================================
+# DATABASE FILES & SQL DUMPS
+# ============================================
+
+# Exposed database files
+
+site:yourdomain.com filetype:sql
+site:yourdomain.com filetype:sql “INSERT INTO”
+site:yourdomain.com filetype:sql “CREATE TABLE”
+site:yourdomain.com filetype:sql intext:password
+site:yourdomain.com filetype:db
+site:yourdomain.com filetype:sqlite
+site:yourdomain.com filetype:mdb
+site:yourdomain.com ext:sql “MySQL dump”
+site:yourdomain.com inurl:backup filetype:sql
+site:yourdomain.com “phpMyAdmin” “running on”
+
+# ============================================
+# BACKUP FILES
+# ============================================
+
+# Finding backup files that shouldn’t be public
+
+site:yourdomain.com filetype:bak
+site:yourdomain.com filetype:backup
+site:yourdomain.com filetype:old
+site:yourdomain.com ext:bak inurl:backup
+site:yourdomain.com filetype:zip inurl:backup
+site:yourdomain.com filetype:tar
+site:yourdomain.com filetype:gz
+site:yourdomain.com inurl:backup intitle:index.of
+site:yourdomain.com “backup” filetype:sql
+site:yourdomain.com inurl:old ext:sql
+
+# ============================================
+# CONFIGURATION FILES
+# ============================================
+
+# Exposed config files with potential credentials
+
+site:yourdomain.com filetype:env
+site:yourdomain.com filetype:config
+site:yourdomain.com filetype:ini
+site:yourdomain.com filetype:conf
+site:yourdomain.com ext:xml inurl:config
+site:yourdomain.com filetype:yaml “password”
+site:yourdomain.com filetype:json “password”
+site:yourdomain.com intext:“DB_PASSWORD”
+site:yourdomain.com “.env” “DB_PASSWORD”
+site:yourdomain.com “config.php” intext:password
+
+# ============================================
+# LOG FILES
+# ============================================
+
+# Exposed log files that may contain sensitive info
+
+site:yourdomain.com filetype:log
+site:yourdomain.com inurl:access.log
+site:yourdomain.com inurl:error.log
+site:yourdomain.com ext:log “error”
+site:yourdomain.com filetype:log intext:password
+site:yourdomain.com inurl:logs intitle:index.of
+site:yourdomain.com “php_error.log”
+site:yourdomain.com filetype:log inurl:admin
+
+# ============================================
+# VERSION CONTROL & GIT
+# ============================================
+
+# Exposed .git directories and repositories
+
+site:yourdomain.com inurl:.git
+site:yourdomain.com inurl:.git/config
+site:yourdomain.com filetype:git
+site:yourdomain.com “.git/HEAD”
+site:yourdomain.com inurl:.svn
+site:yourdomain.com “.git” intitle:“index of”
+
+# ============================================
+# DIRECTORY LISTINGS
+# ============================================
+
+# Open directories that shouldn’t be listed
+
+site:yourdomain.com intitle:“index of” inurl:uploads
+site:yourdomain.com intitle:“index of” inurl:backup
+site:yourdomain.com intitle:“index of” inurl:admin
+site:yourdomain.com intitle:“index of” inurl:files
+site:yourdomain.com intitle:“index of” inurl:documents
+site:yourdomain.com “Index of /” inurl:ftp
+site:yourdomain.com intitle:“Index of” “Parent Directory”
+
+# ============================================
+# SENSITIVE DOCUMENTS
+# ============================================
+
+# Documents that might contain sensitive information
+
+site:yourdomain.com filetype:pdf “confidential”
+site:yourdomain.com filetype:doc “password”
+site:yourdomain.com filetype:xls “username”
+site:yourdomain.com filetype:xlsx intext:password
+site:yourdomain.com filetype:txt intext:password
+site:yourdomain.com filetype:csv “email” “password”
+site:yourdomain.com “confidential” filetype:pdf
+site:yourdomain.com “not for distribution” filetype:pdf
+
+# ============================================
+# ERROR MESSAGES & DEBUG INFO
+# ============================================
+
+# Pages showing error messages that reveal system info
+
+site:yourdomain.com “Warning: mysql_connect()”
+site:yourdomain.com “SQL syntax” “error”
+site:yourdomain.com “Parse error” “syntax error”
+site:yourdomain.com “Fatal error”
+site:yourdomain.com intext:“sql error”
+site:yourdomain.com “MySQL Error” site:yourdomain.com
+site:yourdomain.com “Warning: include”
+site:yourdomain.com “error in your SQL syntax”
+
+# ============================================
+# PHP INFO & DEBUG
+# ============================================
+
+# phpinfo() pages exposing system configuration
+
+site:yourdomain.com intitle:“phpinfo()”
+site:yourdomain.com “PHP Version” intitle:phpinfo
+site:yourdomain.com ext:php intitle:phpinfo “published by the PHP Group”
+site:yourdomain.com “phpinfo()” inurl:test
+
+# ============================================
+# FILE UPLOAD DIRECTORIES
+# ============================================
+
+# Checking for exposed upload directories
+
+site:yourdomain.com inurl:upload
+site:yourdomain.com inurl:uploads
+site:yourdomain.com intitle:“index of” inurl:upload
+site:yourdomain.com inurl:files intitle:“index of”
+site:yourdomain.com inurl:images intitle:“index of”
+site:yourdomain.com inurl:temp intitle:“index of”
+
+# ============================================
+# CMS SPECIFIC (WordPress, Joomla, etc.)
+# ============================================
+
+# WordPress
+
+site:yourdomain.com inurl:wp-content/uploads
+site:yourdomain.com inurl:wp-config.php.bak
+site:yourdomain.com inurl:wp-includes
+site:yourdomain.com filetype:sql “wp_users”
+site:yourdomain.com inurl:wp-admin/install.php
+site:.com inurl:wp-includes/js/swfupload/
+
+# Joomla
+
+site:yourdomain.com inurl:configuration.php
+site:yourdomain.com “index of” inurl:administrator
+site:yourdomain.com inurl:/administrator/manifests/files/joomla.xml
+
+# Drupal
+
+site:yourdomain.com inurl:sites/default/files
+site:yourdomain.com intext:“Drupal” inurl:CHANGELOG.txt
+
+# ============================================
+# API KEYS & CREDENTIALS
+# ============================================
+
+# Searching for exposed API keys and credentials
+
+site:yourdomain.com “api_key”
+site:yourdomain.com “API_KEY” filetype:env
+site:yourdomain.com “sk_live” OR “pk_live”
+site:yourdomain.com “access_token”
+site:yourdomain.com “client_secret”
+site:yourdomain.com “AWS_ACCESS_KEY_ID”
+site:yourdomain.com “PRIVATE KEY”
+site:yourdomain.com filetype:json “password”
+
+# ============================================
+# VULNERABLE PARAMETERS
+# ============================================
+
+# Finding pages with potentially vulnerable parameters
+
+site:yourdomain.com inurl:id=
+site:yourdomain.com inurl:page=
+site:yourdomain.com inurl:file=
+site:yourdomain.com inurl:include=
+site:yourdomain.com inurl:cat=
+site:yourdomain.com inurl:action=
+site:yourdomain.com inurl:redirect=
+site:yourdomain.com inurl:download=
+site:.com inurl:UNION ALL SELECT 1,2,
+
+# ============================================
+# ROBOTS.TXT & SITEMAP
+# ============================================
+
+# Check what’s in robots.txt (often reveals sensitive paths)
+
+site:yourdomain.com inurl:robots.txt
+site:yourdomain.com filetype:txt inurl:robots.txt
+site:yourdomain.com inurl:sitemap.xml
+
+# ============================================
+# EMAIL ADDRESSES & CONTACT INFO
+# ============================================
+
+# Finding exposed email addresses
+
+site:yourdomain.com intext:”@yourdomain.com”
+site:yourdomain.com filetype:xls intext:“email”
+site:yourdomain.com filetype:csv “email”
+
+# ============================================
+# TESTING SPECIFIC VULNERABILITIES
+# ============================================
+
+# SQL Injection indicators
+
+site:yourdomain.com inurl:”.php?id=”
+site:yourdomain.com inurl:”.asp?id=”
+
+# LFI/RFI indicators
+
+site:yourdomain.com inurl:“page=http”
+site:yourdomain.com inurl:“file=../../”
