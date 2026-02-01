@@ -1,0 +1,87 @@
+#SQLi DORKS — ADVANCED LIST @xploits3c https://github.com/xPloits3c/DorkEye
+#╔══════════════════════════╗
+#║Error-based SQL Injection ║
+#╚══════════════════════════╝
+"in your SQL syntax near"
+"Warning: mysql_fetch_array()"
+"Warning: mysql_num_rows()"
+"mysql_fetch_assoc() expects parameter"
+"ORA-01756"
+"ORA-00933"
+"ODBC SQL Server Driver"
+"Unclosed quotation mark after the character string"
+"Microsoft OLE DB Provider for SQL Server"
+"PostgreSQL query failed"
+"pg_query(): Query failed"
+#╔══════════════════════════════════════╗
+#║Suspicious (high-risk) GET parameters ║
+#╚══════════════════════════════════════╝
+"inurl:?id="
+"inurl:?cat="
+"inurl:?pid="
+"inurl:?uid="
+"inurl:?product_id="
+"inurl:?item="
+"inurl:?news_id="
+"inurl:?page_id="
+"inurl:?id="
+"inurl:?cat="
+"inurl:?pid="
+#╔═════════════════════════╗
+#║SQLi + Common Extensions ║
+#╚═════════════════════════╝
+inurl:".php?id="
+inurl:".asp?id="
+inurl:".aspx?id="
+inurl:".jsp?id="
+site:.php inurl:"?id="
+#╔══════════════════════════╗
+#║Login / Auth (high value) ║
+#╚══════════════════════════╝
+inurl:login.php
+inurl:signin.php
+inurl:auth.php
+inurl:admin/login.php
+intitle:"Login" inurl:admin
+inurl:login.php?user=
+inurl:login.php?username=
+#╔════════════════════════════╗
+#║SQLi + DB specific messages ║
+#╚════════════════════════════╝
+#MySQL
+"supplied argument is not a valid MySQL"
+"MySQL server version for the right syntax"
+#MSSQL
+"Incorrect syntax near"
+"SQL Server Driver"
+#Oracle
+"ORA-00921"
+"ORA-01400"
+#PostgreSQL
+"PG::SyntaxError"
+"PostgreSQL ERROR"
+#╔═══════════════════════╗
+#║UNION-based indicators ║
+#╚═══════════════════════╝
+"UNION SELECT"
+"ORDER BY 1"
+inurl:id= "UNION SELECT"
+#╔════════════════════════════════╗
+#║PHP + SQL Errors (Lethal Combo) ║
+#╚════════════════════════════════╝
+"Warning: include()" "mysql"
+"Fatal error" "SQL"
+"Warning: pg_connect()"
+#╔═════════════════════════════╗
+#║SQLi in admin/backend panels ║
+#╚═════════════════════════════╝
+inurl:admin.php?id=
+inurl:dashboard.php?id=
+inurl:manage.php?id=
+#╔══════════════════════╗
+#║SQLi on CMS (generic) ║
+#╚══════════════════════╝
+inurl:wp-content/plugins/ "?id="
+index.php?option=com_
+inurl:product.php?id=
+inurl:category.php?id=
