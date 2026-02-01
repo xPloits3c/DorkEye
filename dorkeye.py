@@ -2,8 +2,7 @@
 """
 DorkEye v3.8 - Advanced OSINT Dorking Tool
 Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
-Security Research & Defensive OSINT Tool
-Original Author: @xPloits3c | https://github.com/xPloits3c
+Author: @xPloits3c | https://github.com/xPloits3c/DorkEye
 """
 
 import os
@@ -32,6 +31,8 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from rich.table import Table
 from rich.panel import Panel
 from ddgs import DDGS
+import socket
+import getpass
 
 console = Console()
 
@@ -47,6 +48,66 @@ ASCII_LOGO = """
 [bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
 """
 
+
+WELCOME_MESSAGES = [
+    "Hey {name}, welcome back. What's on your mind today?",
+    "Good to see you again, {name}. Ready to hunt something interesting?",
+    "Nice to see you, {name}. What’s the plan?",
+    "Welcome back {name}! What are we looking for today?",
+    "Hey {name} 👋 Let’s dig into some data.",
+    "Back again, {name}? Let’s make this search count.",
+    "Welcome back {name}. Time to uncover something hidden.",
+    "Connected. Welcome back, {name}.",
+    "Back online, {name}. Let’s see what the web is hiding.",
+    "Hey {name}. Targets are waiting.",
+    "Ready to dig deeper, {name}?",
+    "Back in the terminal, {name}. Let’s hunt.",
+    "OSINT mode engaged. Welcome back, {name}.",
+    "Let’s turn some queries into answers, {name}.",
+    "Data is out there, {name}. Let’s find it.",
+    "Session started. Hello {name}.",
+    "Session resumed. Hello {name}.",
+    "Back in silently, {name}.",
+    "No noise. Just data. Welcome back, {name}.",
+    "Environment ready, {name}.",
+    "All systems ready. Welcome back, {name}.",
+    "Workspace loaded. What’s your objective, {name}?",
+    "Welcome back {name}.",
+    "Hey {name}! Let’s break the internet (legally 😉).",
+    "Welcome back {name}. Curiosity mode: ON.",
+    "Hey {name}, let’s poke around responsibly.",
+    "Back again? Good. Let’s do something clever, {name}.",
+    "Ready to make Google uncomfortable, {name}?",
+]
+
+WELCOME_COLORS = [
+    "green",
+    "bright_green",
+    "yellow",
+    "bright_yellow",
+    "magenta",
+    "bright_magenta",
+    "blue",
+    "bright_blue",
+    "red",
+    "bright_red",
+    "white",
+]
+
+def get_user_name() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        try:
+            return socket.gethostname()
+        except Exception:
+            return "friend"
+
+def greet_user():
+    name = get_user_name()
+    message = random.choice(WELCOME_MESSAGES).format(name=name)
+    color = random.choice(WELCOME_COLORS)
+    console.print(f"[bold {color}]{message}[/bold {color}]\n")
 
 class SQLiConfidence(Enum):
     """SQL Injection Confidence Levels"""
@@ -82,56 +143,23 @@ class BrowserType(Enum):
 
 
 
-HTTP_FINGERPRINTS = {
-    "chrome_windows": {
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "accept_language": "en-US,en;q=0.9",
-        "accept_encoding": "gzip, deflate, br",
-        "sec_fetch_dest": "document",
-        "sec_fetch_mode": "navigate",
-        "sec_fetch_site": "none",
-        "cache_control": "max-age=0",
-        "browser": "Chrome 120",
-        "os": "Windows 10"
-    },
-    "firefox_linux": {
-        "user_agent": "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "accept_language": "en-US,en;q=0.5",
-        "accept_encoding": "gzip, deflate, br",
-        "sec_fetch_dest": "document",
-        "sec_fetch_mode": "navigate",
-        "sec_fetch_site": "none",
-        "cache_control": "max-age=0",
-        "browser": "Firefox 121",
-        "os": "Linux"
-    },
-    "safari_macos": {
-        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept_language": "en-US,en;q=0.9",
-        "accept_encoding": "gzip, deflate, br",
-        "sec_fetch_dest": "document",
-        "sec_fetch_mode": "navigate",
-        "sec_fetch_site": "none",
-        "cache_control": "max-age=0",
-        "browser": "Safari 17",
-        "os": "macOS 14"
-    },
-    "edge_windows": {
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "accept_language": "en-US,en;q=0.9",
-        "accept_encoding": "gzip, deflate, br",
-        "sec_fetch_dest": "document",
-        "sec_fetch_mode": "navigate",
-        "sec_fetch_site": "none",
-        "cache_control": "max-age=0",
-        "browser": "Edge 120",
-        "os": "Windows 10"
-    }
-}
+def load_http_fingerprints() -> Dict:
+    """Load HTTP fingerprints from JSON file"""
+    fingerprint_file = Path(__file__).parent / "http_fingerprints.json"
+
+    try:
+        with open(fingerprint_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict) or not data:
+            raise ValueError("Fingerprint file is empty or invalid")
+
+        return data
+
+    except Exception as e:
+        console.print(f"[yellow][!] Failed to load HTTP fingerprints: {e}[/yellow]")
+        console.print("[yellow][!] HTTP fingerprinting will be disabled[/yellow]")
+        return {}
 
 
 USER_AGENTS = {
@@ -181,60 +209,77 @@ class HTTPFingerprintRotator:
     """Manages realistic HTTP fingerprints for stealth"""
 
     def __init__(self):
+        self.raw_fingerprints = load_http_fingerprints()
         self.fingerprints = self._build_fingerprints()
         self.current_index = 0
 
     def _build_fingerprints(self) -> List[HTTPFingerprint]:
-        """Build HTTPFingerprint objects from database"""
         fingerprints = []
-        for fp_key, fp_data in HTTP_FINGERPRINTS.items():
-            fingerprints.append(HTTPFingerprint(
-                browser=fp_data["browser"],
-                os=fp_data["os"],
-                user_agent=fp_data["user_agent"],
-                accept_language=fp_data["accept_language"],
-                accept_encoding=fp_data["accept_encoding"],
-                accept=fp_data["accept"],
-                referer="",
-                sec_fetch_dest=fp_data["sec_fetch_dest"],
-                sec_fetch_mode=fp_data["sec_fetch_mode"],
-                sec_fetch_site=fp_data["sec_fetch_site"],
-                cache_control=fp_data["cache_control"]
-            ))
+
+        for fp_data in self.raw_fingerprints.values():
+            try:
+                fingerprints.append(HTTPFingerprint(
+                    browser=fp_data["browser"],
+                    os=fp_data["os"],
+                    user_agent=fp_data["user_agent"],
+                    accept_language=fp_data["accept_language"],
+                    accept_encoding=fp_data["accept_encoding"],
+                    accept=fp_data["accept"],
+                    referer="",
+                    sec_fetch_dest=fp_data["sec_fetch_dest"],
+                    sec_fetch_mode=fp_data["sec_fetch_mode"],
+                    sec_fetch_site=fp_data["sec_fetch_site"],
+                    cache_control=fp_data["cache_control"]
+                ))
+            except KeyError:
+                continue  # fingerprint malformato, ignorato
+
         return fingerprints
 
-    def get_random(self) -> HTTPFingerprint:
-        """Get random fingerprint"""
+    def get_random(self) -> Optional[HTTPFingerprint]:
+        if not self.fingerprints:
+            return None
         return random.choice(self.fingerprints)
 
-    def get_next(self) -> HTTPFingerprint:
-        """Get next fingerprint in rotation"""
+from typing import Optional, Dict
+
+def get_next(self) -> Optional[HTTPFingerprint]:
+        """Get next fingerprint in rotation (safe)"""
+        if not self.fingerprints:
+            return None
+
         fp = self.fingerprints[self.current_index]
         self.current_index = (self.current_index + 1) % len(self.fingerprints)
         return fp
 
-    def build_headers(self, fingerprint: HTTPFingerprint, referer: str = "") -> Dict:
-        """Build complete headers from fingerprint"""
-        headers = {
-            "User-Agent": fingerprint.user_agent,
-            "Accept": fingerprint.accept,
-            "Accept-Language": fingerprint.accept_language,
-            "Accept-Encoding": fingerprint.accept_encoding,
-            "Sec-Fetch-Dest": fingerprint.sec_fetch_dest,
-            "Sec-Fetch-Mode": fingerprint.sec_fetch_mode,
-            "Sec-Fetch-Site": fingerprint.sec_fetch_site,
-            "Cache-Control": fingerprint.cache_control,
-            "Pragma": "no-cache",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1"
+def build_headers(self, fingerprint: Optional[HTTPFingerprint], referer: str = "") -> Dict:
+    """Build complete headers from fingerprint or return safe fallback"""
+    if not fingerprint:
+        return {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "*/*",
+            "Connection": "keep-alive"
         }
 
-        if referer:
-            headers["Referer"] = referer
+    headers = {
+        "User-Agent": fingerprint.user_agent,
+        "Accept": fingerprint.accept,
+        "Accept-Language": fingerprint.accept_language,
+        "Accept-Encoding": fingerprint.accept_encoding,
+        "Sec-Fetch-Dest": fingerprint.sec_fetch_dest,
+        "Sec-Fetch-Mode": fingerprint.sec_fetch_mode,
+        "Sec-Fetch-Site": fingerprint.sec_fetch_site,
+        "Cache-Control": fingerprint.cache_control,
+        "Pragma": "no-cache",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1"
+    }
 
-        return headers
+    if referer:
+        headers["Referer"] = referer
 
+    return headers
 
 
 class SQLiDetector:
@@ -1257,6 +1302,8 @@ user_agent_rotation: true
 
 
 def main():
+    greet_user()
+
     parser = argparse.ArgumentParser(
         description="DorkEye v3.8 - Advanced Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
