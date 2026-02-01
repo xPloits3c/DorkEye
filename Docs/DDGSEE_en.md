@@ -61,13 +61,4 @@ DuckDuckGo is ideal for users who:
 - 🌐 Official website: https://duckduckgo.com  
 - 📘 Privacy policy: https://duckduckgo.com/privacy
 
----
 
-## ✨ Contributing
-
-If you would like to improve this document:
-1. Fork this repository
-2. Edit the file `DDGSEE.md`
-3. Submit a Pull Request
-
-Thank you for contributing! 🙌
