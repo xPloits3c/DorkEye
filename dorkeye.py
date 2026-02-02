@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
 from urllib.parse import urlparse, unquote, parse_qs, urlencode, quote
-from collections import defaultdict, Counter
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 
@@ -42,7 +42,7 @@ ASCII_LOGO = """
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[bold red] OSINT[/bold red][/bold yellow]
- [bold yellow] |_|[/bold yellow]  [bold red]  ᵛ³ˑ⁸_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
+ [bold yellow] |_|[/bold yellow]  [bold red]  ᵛ³ˑ⁸_ˣᴾˡᴑⁱᵗˢ³ᶜ [/bold red]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
 [bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
@@ -357,7 +357,7 @@ class SQLiDetector:
             r"PostgreSQL.*ERROR",
             r"Warning.*pg_",
             r"valid PostgreSQL result",
-            r"Npgsql\.",
+            r"Npgsql\. ",
             r"org\.postgresql"
         ],
         "mssql": [
@@ -408,13 +408,10 @@ class SQLiDetector:
 
     def is_potential_sqli_url(self, url: str) -> bool:
         """Check if URL matches SQLi patterns"""
-        try:
-            for pattern in self.POTENTIAL_SQLI_PATTERNS:
-                if re.search(pattern, url, re.IGNORECASE):
-                    return True
-            return False
-        except:
-            return False
+        for pattern in self.POTENTIAL_SQLI_PATTERNS:
+            if re.search(pattern, url, re.IGNORECASE):
+                return True
+        return False
 
     def _extract_query_params(self, url: str) -> Dict[str, str]:
         """Extract and normalize query parameters"""
@@ -468,9 +465,9 @@ class SQLiDetector:
             )
 
             diff = abs(len(response.text) - baseline_len)
-           return diff > baseline_len * 0.05
-       except:
-           return False
+            return diff > baseline_len * 0.05
+        except:
+            return False
 
     def _test_boolean_blind(self, url: str, param_name: str, baseline_len: int) -> Dict:
         """Test for Boolean-based blind SQLi"""
@@ -488,51 +485,47 @@ class SQLiDetector:
             ("1 AND 1=2", "false")
         ]
 
-        try:
-            fp = self.fingerprint_rotator.get_random()
-            headers = self.fingerprint_rotator.build_headers(fp)
+        true_responses = []
+        false_responses = []
 
-            true_responses = []
-            false_responses = []
+        for payload, payload_type in payloads:
+            test_url = self._inject_payload(url, param_name, payload)
 
-            for payload, payload_type in payloads:
-                test_url = self._inject_payload(url, param_name, payload)
+            try:
+                fp = self.fingerprint_rotator.get_random()
+                headers = self.fingerprint_rotator.build_headers(fp)
 
-                try:
-                    response = requests.get(
-                        test_url,
-                        headers=headers,
-                        timeout=self.timeout,
-                        verify=False,
-                        allow_redirects=True
-                    )
+                response = requests.get(
+                    test_url,
+                    headers=headers,
+                    timeout=self.timeout,
+                    verify=False,
+                    allow_redirects=True
+                )
 
-                    if payload_type == "true":
-                        true_responses.append(len(response.text))
-                    else:
-                        false_responses.append(len(response.text))
+                if payload_type == "true":
+                    true_responses.append(len(response.text))
+                else:
+                    false_responses.append(len(response.text))
 
-                    if self.stealth:
-                        time.sleep(random.uniform(1, 2))
+                if self.stealth:
+                    time.sleep(random.uniform(1, 2))
 
-                except:
-                    pass
+            except:
+                pass
 
-            if true_responses and false_responses:
-                avg_true = sum(true_responses) / len(true_responses)
-                avg_false = sum(false_responses) / len(false_responses)
+        if true_responses and false_responses:
+            avg_true = sum(true_responses) / len(true_responses)
+            avg_false = sum(false_responses) / len(false_responses)
 
-                difference = abs(avg_true - avg_false)
-                variation_true = max(true_responses) - min(true_responses) if true_responses else 0
-                variation_false = max(false_responses) - min(false_responses) if false_responses else 0
+            difference = abs(avg_true - avg_false)
+            variation_true = max(true_responses) - min(true_responses) if true_responses else 0
+            variation_false = max(false_responses) - min(false_responses) if false_responses else 0
 
-                if difference > baseline_len * 0.15 and variation_true < baseline_len * 0.05 and variation_false < baseline_len * 0.05:
-                    result["vulnerable"] = True
-                    result["confidence"] = SQLiConfidence.MEDIUM.value
-                    result["evidence"].append(f"Boolean-based response differential detected (True: {avg_true:.0f}B, False: {avg_false:.0f}B)")
-
-        except Exception as e:
-            result["error"] = str(e)
+            if difference > baseline_len * 0.15 and variation_true < baseline_len * 0.05 and variation_false < baseline_len * 0.05:
+                result["vulnerable"] = True
+                result["confidence"] = SQLiConfidence.MEDIUM.value
+                result["evidence"].append(f"Boolean-based response differential detected (True: {avg_true:.0f}B, False: {avg_false:.0f}B)")
 
         return result
 
@@ -552,38 +545,34 @@ class SQLiDetector:
             "1'; SELECT NULL#"
         ]
 
-        try:
-            fp = self.fingerprint_rotator.get_random()
-            headers = self.fingerprint_rotator.build_headers(fp)
+        for payload in payloads:
+            test_url = self._inject_payload(url, param_name, payload)
 
-            for payload in payloads:
-                test_url = self._inject_payload(url, param_name, payload)
+            try:
+                fp = self.fingerprint_rotator.get_random()
+                headers = self.fingerprint_rotator.build_headers(fp)
 
-                try:
-                    response = requests.get(
-                        test_url,
-                        headers=headers,
-                        timeout=self.timeout,
-                        verify=False,
-                        allow_redirects=True
-                    )
+                response = requests.get(
+                    test_url,
+                    headers=headers,
+                    timeout=self.timeout,
+                    verify=False,
+                    allow_redirects=True
+                )
 
-                    for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
-                        for pattern in patterns:
-                            if re.search(pattern, response.text, re.IGNORECASE):
-                                result["vulnerable"] = True
-                                result["confidence"] = SQLiConfidence.HIGH.value
-                                result["evidence"].append(f"{db_type.upper()} error detected: {pattern[:50]}")
-                                return result
+                for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
+                    for pattern in patterns:
+                        if re.search(pattern, response.text, re.IGNORECASE):
+                            result["vulnerable"] = True
+                            result["confidence"] = SQLiConfidence.HIGH.value
+                            result["evidence"].append(f"{db_type.upper()} error detected: {pattern[:50]}")
+                            return result
 
-                    if self.stealth:
-                        time.sleep(random.uniform(1.5, 3))
+                if self.stealth:
+                    time.sleep(random.uniform(1.5, 3))
 
-                except:
-                    pass
-
-        except Exception as e:
-            result["error"] = str(e)
+            except:
+                pass
 
         return result
 
@@ -601,58 +590,48 @@ class SQLiDetector:
             ("1 AND SLEEP(2)", 2)
         ]
 
-        try:
-            fp = self.fingerprint_rotator.get_random()
-            headers = self.fingerprint_rotator.build_headers(fp)
+        for payload, expected_delay in payloads:
+            test_url = self._inject_payload(url, param_name, payload)
 
-            for payload, expected_delay in payloads:
-                test_url = self._inject_payload(url, param_name, payload)
+            try:
+                start_time = time.time()
+                response = requests.get(
+                    test_url,
+                    headers=self.fingerprint_rotator.build_headers(self.fingerprint_rotator.get_random()),
+                    timeout=self.timeout + 5,
+                    verify=False,
+                    allow_redirects=True
+                )
+                elapsed = time.time() - start_time
 
-                try:
-                    start_time = time.time()
-                    response = requests.get(
-                        test_url,
-                        headers=headers,
-                        timeout=self.timeout + 5,
-                        verify=False,
-                        allow_redirects=True
-                    )
-                    elapsed = time.time() - start_time
-
-                    if elapsed >= expected_delay * 0.8:
-                        result["vulnerable"] = True
-                        result["confidence"] = SQLiConfidence.MEDIUM.value
-                        result["evidence"].append(f"Time-based response delay detected ({elapsed:.1f}s)")
-                        return result
-
-                except requests.Timeout:
+                if elapsed >= expected_delay * 0.8:
                     result["vulnerable"] = True
                     result["confidence"] = SQLiConfidence.MEDIUM.value
-                    result["evidence"].append("Request timeout on time-based payload")
+                    result["evidence"].append(f"Time-based response delay detected ({elapsed:.1f}s)")
                     return result
-                except:
-                    pass
 
-        except Exception as e:
-            result["error"] = str(e)
+            except requests.Timeout:
+                result["vulnerable"] = True
+                result["confidence"] = SQLiConfidence.MEDIUM.value
+                result["evidence"].append("Request timeout on time-based payload")
+                return result
+            except:
+                pass
 
         return result
 
     def _inject_payload(self, url: str, param_name: str, payload: str) -> str:
         """Safely inject payload into URL parameter"""
-        try:
-            parsed = urlparse(url)
-            params = parse_qs(parsed.query)
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
 
-            if param_name not in params:
-                return url
-
-            params[param_name] = [payload]
-
-            new_query = urlencode(params, doseq=True)
-            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{new_query}"
-        except:
+        if param_name not in params:
             return url
+
+        params[param_name] = [payload]
+
+        new_query = urlencode(params, doseq=True)
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{new_query}"
 
     def test_sqli(self, url: str) -> Dict:
         """Comprehensive SQLi detection"""
@@ -671,23 +650,22 @@ class SQLiDetector:
 
         result["tested"] = True
 
-        try:
-            params = self._extract_query_params(url)
-            if not params:
-                result["message"] = "No query parameters found"
-                return result
+        params = self._extract_query_params(url)
+        if not params:
+            result["message"] = "No query parameters found"
+            return result
 
-            baseline = self._get_baseline_response(url)
-            if not baseline:
-                result["message"] = "Could not establish baseline"
-                return result
+        baseline = self._get_baseline_response(url)
+        if not baseline:
+            result["message"] = "Could not establish baseline"
+            return result
 
-            baseline_status, baseline_text, baseline_len = baseline
+        baseline_status, baseline_text, baseline_len = baseline
 
-            confidence_scores = []
+        confidence_scores = []
 
-            for param_name in params.keys():
-                if not self._probe_parameter(url, param_name, baseline_len):
+        for param_name in params.keys():
+            if not self._probe_parameter(url, param_name, baseline_len):
                 error_result = self._test_error_based(url, param_name)
                 result["tests"].append(error_result)
                 if error_result["vulnerable"]:
@@ -707,22 +685,18 @@ class SQLiDetector:
                 if self.stealth:
                     time.sleep(random.uniform(2, 4))
 
-            if confidence_scores:
-                avg_score = sum(confidence_scores) / len(confidence_scores)
-                if avg_score >= 3:
-                    result["overall_confidence"] = SQLiConfidence.HIGH.value
-                    result["vulnerable"] = True
-                elif avg_score >= 2:
-                    result["overall_confidence"] = SQLiConfidence.MEDIUM.value
-                    result["vulnerable"] = True
-                else:
-                    result["overall_confidence"] = SQLiConfidence.LOW.value
+        if confidence_scores:
+            avg_score = sum(confidence_scores) / len(confidence_scores)
+            if avg_score >= 3:
+                result["overall_confidence"] = SQLiConfidence.HIGH.value
+                result["vulnerable"] = True
+            elif avg_score >= 2:
+                result["overall_confidence"] = SQLiConfidence.MEDIUM.value
+                result["vulnerable"] = True
+            else:
+                result["overall_confidence"] = SQLiConfidence.LOW.value
 
-            result["message"] = f"Tested {len(params)} parameter(s)"
-
-        except Exception as e:
-            result["error"] = str(e)
-            result["message"] = f"Error during testing: {str(e)}"
+        result["message"] = f"Tested {len(params)} parameter(s)"
 
         return result
 
@@ -1361,8 +1335,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="DorkEye v3.8 - Advanced Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
+        epilog="""Examples:
   %(prog)s -d "site:example.com filetype:pdf" -o results
   %(prog)s -d dorks.txt -c 100 -o output --analyze
   %(prog)s -d dorks.txt --config custom_config.yaml --sqli
