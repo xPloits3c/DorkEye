@@ -233,71 +233,113 @@ DEFAULT_CONFIG = {
 class HTTPFingerprintRotator:
     """Manages realistic HTTP fingerprints for stealth"""
 
-def __init__(self):
-    self.raw_fingerprints = load_http_fingerprints()
-    self.fingerprints = self._build_fingerprints()
-    self.current_index = 0
+    def __init__(self):
+        self.raw_fingerprints = load_http_fingerprints()
+        self.fingerprints = self._build_fingerprints()
+        self.current_index = 0
 
-def _build_fingerprints(self) -> List[HTTPFingerprint]:
-    fingerprints: List[HTTPFingerprint] = []
+    def _build_fingerprints(self) -> List[HTTPFingerprint]:
+        fingerprints: List[HTTPFingerprint] = []
 
-    mode = self.raw_fingerprints.get("_mode")
+        mode = self.raw_fingerprints.get("_mode")
 
-    if mode == "legacy":
-        for fp_data in self.raw_fingerprints.get("fingerprints", {}).values():
-            try:
-                fingerprints.append(HTTPFingerprint(
-                    browser=fp_data["browser"],
-                    os=fp_data["os"],
-                    user_agent=fp_data["user_agent"],
-                    accept_language=fp_data["accept_language"],
-                    accept_encoding=fp_data["accept_encoding"],
-                    accept=fp_data["accept"],
-                    referer="",
-                    sec_fetch_dest=fp_data["sec_fetch_dest"],
-                    sec_fetch_mode=fp_data["sec_fetch_mode"],
-                    sec_fetch_site=fp_data["sec_fetch_site"],
-                    cache_control=fp_data["cache_control"]
+        if mode == "legacy":
+            for fp_data in self.raw_fingerprints.get("fingerprints", {}).values():
+                try:
+                    fingerprints.append(
+                        HTTPFingerprint(
+                            browser=fp_data["browser"],
+                            os=fp_data["os"],
+                            user_agent=fp_data["user_agent"],
+                            accept_language=fp_data["accept_language"],
+                            accept_encoding=fp_data["accept_encoding"],
+                            accept=fp_data["accept"],
+                            referer="",
+                            sec_fetch_dest=fp_data["sec_fetch_dest"],
+                            sec_fetch_mode=fp_data["sec_fetch_mode"],
+                            sec_fetch_site=fp_data["sec_fetch_site"],
+                            cache_control=fp_data["cache_control"],
+                        )
                     )
-                )
-            except KeyError:
-                continue
+                except KeyError:
+                    continue
+
+            return fingerprints
+
+        if mode == "advanced":
+            language_profiles = self.raw_fingerprints.get("language_profiles", {})
+            common_headers = self.raw_fingerprints.get("common_headers", {})
+            fps = self.raw_fingerprints.get("fingerprints", {})
+
+            for fp in fps.values():
+                try:
+                    headers = fp.get("headers", {})
+                    sec_fetch = headers.get("sec_fetch", {})
+
+                    accept = resolve_reference(headers.get("accept", ""), common_headers)
+                    accept_encoding = resolve_reference(headers.get("accept_encoding", ""), common_headers)
+                    cache_control = resolve_reference(headers.get("cache_control", ""), common_headers)
+                    accept_language = resolve_accept_language(headers, language_profiles)
+
+                    fingerprints.append(
+                        HTTPFingerprint(
+                            browser=fp.get("browser", ""),
+                            os=fp.get("os", ""),
+                            user_agent=fp.get("user_agent", ""),
+                            accept_language=accept_language,
+                            accept_encoding=accept_encoding,
+                            accept=accept,
+                            referer="",
+                            sec_fetch_dest=sec_fetch.get("dest", "document"),
+                            sec_fetch_mode=sec_fetch.get("mode", "navigate"),
+                            sec_fetch_site=sec_fetch.get("site", "none"),
+                            cache_control=cache_control,
+                        )
+                    )
+                except Exception:
+                    continue
 
         return fingerprints
 
-    if mode == "advanced":
-        language_profiles = self.raw_fingerprints.get("language_profiles", {})
-        common_headers = self.raw_fingerprints.get("common_headers", {})
-        fps = self.raw_fingerprints.get("fingerprints", {})
+    def get_random(self) -> Optional[HTTPFingerprint]:
+        if not self.fingerprints:
+            return None
+        return random.choice(self.fingerprints)
 
-        for fp in fps.values():
-            try:
-                headers = fp.get("headers", {})
-                sec_fetch = headers.get("sec_fetch", {})
+    def get_next(self) -> Optional[HTTPFingerprint]:
+        if not self.fingerprints:
+            return None
+        fp = self.fingerprints[self.current_index]
+        self.current_index = (self.current_index + 1) % len(self.fingerprints)
+        return fp
 
-                accept = resolve_reference(headers.get("accept", ""), common_headers)
-                accept_encoding = resolve_reference(headers.get("accept_encoding", ""), common_headers)
-                cache_control = resolve_reference(headers.get("cache_control", ""), common_headers)
-                accept_language = resolve_accept_language(headers, language_profiles)
+    def build_headers(self, fingerprint: Optional[HTTPFingerprint], referer: str = "") -> Dict[str, str]:
+        if not fingerprint:
+            return {
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "*/*",
+                "Connection": "keep-alive"
+            }
 
-                fingerprints.append(HTTPFingerprint(
-                    browser=fp.get("browser", ""),
-                    os=fp.get("os", ""),
-                    user_agent=fp.get("user_agent", ""),
-                    accept_language=accept_language,
-                    accept_encoding=accept_encoding,
-                    accept=accept,
-                    referer="",
-                    sec_fetch_dest=sec_fetch.get("dest", "document"),
-                    sec_fetch_mode=sec_fetch.get("mode", "navigate"),
-                    sec_fetch_site=sec_fetch.get("site", "none"),
-                    cache_control=cache_control
-                    )
-                )
-            except Exception:
-                continue
+        headers = {
+            "User-Agent": fingerprint.user_agent,
+            "Accept": fingerprint.accept,
+            "Accept-Language": fingerprint.accept_language,
+            "Accept-Encoding": fingerprint.accept_encoding,
+            "Sec-Fetch-Dest": fingerprint.sec_fetch_dest,
+            "Sec-Fetch-Mode": fingerprint.sec_fetch_mode,
+            "Sec-Fetch-Site": fingerprint.sec_fetch_site,
+            "Cache-Control": fingerprint.cache_control,
+            "Pragma": "no-cache",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
+        }
 
-    return fingerprints
+        if referer:
+            headers["Referer"] = referer
+
+        return headers
 
 class SQLiDetector:
     """Advanced SQL Injection Detection with no false positives"""
