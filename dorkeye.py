@@ -232,7 +232,7 @@ class HTTPFingerprintRotator:
                     cache_control=fp_data["cache_control"]
                 ))
             except KeyError:
-                continue  # fingerprint malformato, ignorato
+                continue
 
         return fingerprints
 
