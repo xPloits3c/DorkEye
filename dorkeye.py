@@ -447,6 +447,31 @@ class SQLiDetector:
         except:
             return None
 
+    def _probe_parameter(self, url: str, param_name: str, baseline_len: int) -> bool:
+        """
+        Lightweight probe to detect if parameter affects response
+        Used to avoid testing non-influential parameters.
+        """
+        probe_payload = "1'"
+        test_url = self._inject_payload(url, param_name, probe_payload)
+
+        try:
+            fp = self.fingerprint_rotator.get_random()
+            headers = self.fingerprint_rotator.build_headers(fp)
+
+            response = requests.get(
+                test_url,
+                headers=headers,
+                timeout=self.timeout,
+                verify=False,
+                allow_redirects=True
+            )
+
+            diff = abs(len(response.text) - baseline_len)
+           return diff > baseline_len * 0.05
+       except:
+           return False
+
     def _test_boolean_blind(self, url: str, param_name: str, baseline_len: int) -> Dict:
         """Test for Boolean-based blind SQLi"""
         result = {
@@ -662,7 +687,7 @@ class SQLiDetector:
             confidence_scores = []
 
             for param_name in params.keys():
-                # Error-based testing
+                if not self._probe_parameter(url, param_name, baseline_len):
                 error_result = self._test_error_based(url, param_name)
                 result["tests"].append(error_result)
                 if error_result["vulnerable"]:
