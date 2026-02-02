@@ -133,7 +133,6 @@ class HTTPFingerprint:
     sec_fetch_site: str
     cache_control: str
 
-
 class BrowserType(Enum):
     """Browser fingerprint types"""
     CHROME = "chrome"
@@ -141,10 +140,8 @@ class BrowserType(Enum):
     SAFARI = "safari"
     EDGE = "edge"
 
-
-
 def load_http_fingerprints() -> Dict:
-    """Load HTTP fingerprints from JSON file"""
+    """Load HTTP fingerprints (legacy or advanced format)"""
     fingerprint_file = Path(__file__).parent / "http_fingerprints.json"
 
     try:
@@ -154,13 +151,41 @@ def load_http_fingerprints() -> Dict:
         if not isinstance(data, dict) or not data:
             raise ValueError("Fingerprint file is empty or invalid")
 
-        return data
+        if "fingerprints" in data:
+            return {
+                "_mode": "advanced",
+                "_meta": data.get("_meta", {}),
+                "fingerprints": data.get("fingerprints", {}),
+                "language_profiles": data.get("language_profiles", {}),
+                "common_headers": data.get("common_headers", {})
+            }
+
+        return {
+            "_mode": "legacy",
+            "fingerprints": data
+        }
 
     except Exception as e:
         console.print(f"[yellow][!] Failed to load HTTP fingerprints: {e}[/yellow]")
         console.print("[yellow][!] HTTP fingerprinting will be disabled[/yellow]")
-        return {}
+        return {"_mode": "disabled"}
 
+def resolve_reference(value: str, common_headers: Dict) -> str:
+    """Resolve @reference from common_headers"""
+    if isinstance(value, str) and value.startswith("@"):
+        key = value[1:]
+        return common_headers.get(key, "")
+    return value
+
+
+def resolve_accept_language(fp_headers: Dict, language_profiles: Dict) -> str:
+    """Choose and resolve Accept-Language"""
+    profiles = fp_headers.get("accept_language_profiles")
+    if not profiles:
+        return ""
+
+    profile = random.choice(profiles)
+    return language_profiles.get(profile, "")
 
 USER_AGENTS = {
     "chrome": [
@@ -208,15 +233,18 @@ DEFAULT_CONFIG = {
 class HTTPFingerprintRotator:
     """Manages realistic HTTP fingerprints for stealth"""
 
-    def __init__(self):
-        self.raw_fingerprints = load_http_fingerprints()
-        self.fingerprints = self._build_fingerprints()
-        self.current_index = 0
+def __init__(self):
+    self.raw_fingerprints = load_http_fingerprints()
+    self.fingerprints = self._build_fingerprints()
+    self.current_index = 0
 
-    def _build_fingerprints(self) -> List[HTTPFingerprint]:
-        fingerprints = []
+def _build_fingerprints(self) -> List[HTTPFingerprint]:
+    fingerprints: List[HTTPFingerprint] = []
 
-        for fp_data in self.raw_fingerprints.values():
+    mode = self.raw_fingerprints.get("_mode")
+
+    if mode == "legacy":
+        for fp_data in self.raw_fingerprints.get("fingerprints", {}).values():
             try:
                 fingerprints.append(HTTPFingerprint(
                     browser=fp_data["browser"],
@@ -230,62 +258,50 @@ class HTTPFingerprintRotator:
                     sec_fetch_mode=fp_data["sec_fetch_mode"],
                     sec_fetch_site=fp_data["sec_fetch_site"],
                     cache_control=fp_data["cache_control"]
-                ))
+                    )
+                )
             except KeyError:
                 continue
 
         return fingerprints
 
-    def get_random(self) -> Optional[HTTPFingerprint]:
-        if not self.fingerprints:
-            return None
-        return random.choice(self.fingerprints)
+    if mode == "advanced":
+        language_profiles = self.raw_fingerprints.get("language_profiles", {})
+        common_headers = self.raw_fingerprints.get("common_headers", {})
+        fps = self.raw_fingerprints.get("fingerprints", {})
 
-from typing import Optional, Dict
+        for fp in fps.values():
+            try:
+                headers = fp.get("headers", {})
+                sec_fetch = headers.get("sec_fetch", {})
 
-def get_next(self) -> Optional[HTTPFingerprint]:
-        """Get next fingerprint in rotation (safe)"""
-        if not self.fingerprints:
-            return None
+                accept = resolve_reference(headers.get("accept", ""), common_headers)
+                accept_encoding = resolve_reference(headers.get("accept_encoding", ""), common_headers)
+                cache_control = resolve_reference(headers.get("cache_control", ""), common_headers)
+                accept_language = resolve_accept_language(headers, language_profiles)
 
-        fp = self.fingerprints[self.current_index]
-        self.current_index = (self.current_index + 1) % len(self.fingerprints)
-        return fp
+                fingerprints.append(HTTPFingerprint(
+                    browser=fp.get("browser", ""),
+                    os=fp.get("os", ""),
+                    user_agent=fp.get("user_agent", ""),
+                    accept_language=accept_language,
+                    accept_encoding=accept_encoding,
+                    accept=accept,
+                    referer="",
+                    sec_fetch_dest=sec_fetch.get("dest", "document"),
+                    sec_fetch_mode=sec_fetch.get("mode", "navigate"),
+                    sec_fetch_site=sec_fetch.get("site", "none"),
+                    cache_control=cache_control
+                    )
+                )
+            except Exception:
+                continue
 
-def build_headers(self, fingerprint: Optional[HTTPFingerprint], referer: str = "") -> Dict:
-    """Build complete headers from fingerprint or return safe fallback"""
-    if not fingerprint:
-        return {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "*/*",
-            "Connection": "keep-alive"
-        }
-
-    headers = {
-        "User-Agent": fingerprint.user_agent,
-        "Accept": fingerprint.accept,
-        "Accept-Language": fingerprint.accept_language,
-        "Accept-Encoding": fingerprint.accept_encoding,
-        "Sec-Fetch-Dest": fingerprint.sec_fetch_dest,
-        "Sec-Fetch-Mode": fingerprint.sec_fetch_mode,
-        "Sec-Fetch-Site": fingerprint.sec_fetch_site,
-        "Cache-Control": fingerprint.cache_control,
-        "Pragma": "no-cache",
-        "DNT": "1",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1"
-    }
-
-    if referer:
-        headers["Referer"] = referer
-
-    return headers
-
+    return fingerprints
 
 class SQLiDetector:
     """Advanced SQL Injection Detection with no false positives"""
 
-    # Database-specific error signatures
     SQL_ERROR_SIGNATURES = {
         "mysql": [
             r"MySQL syntax.*error",
@@ -330,7 +346,6 @@ class SQLiDetector:
         ]
     }
 
-    # URL patterns indicating potential SQLi vectors
     POTENTIAL_SQLI_PATTERNS = [
         r'\.php\?.*id=',
         r'\.php\?.*page=',
@@ -364,7 +379,6 @@ class SQLiDetector:
         try:
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
-            # Convert to single values
             return {k: v[0] if isinstance(v, list) else v for k, v in params.items()}
         except:
             return {}
@@ -437,17 +451,14 @@ class SQLiDetector:
                 except:
                     pass
 
-            # Check for consistent boolean responses
             if true_responses and false_responses:
                 avg_true = sum(true_responses) / len(true_responses)
                 avg_false = sum(false_responses) / len(false_responses)
 
-                # Require significant and consistent difference
                 difference = abs(avg_true - avg_false)
                 variation_true = max(true_responses) - min(true_responses) if true_responses else 0
                 variation_false = max(false_responses) - min(false_responses) if false_responses else 0
 
-                # High confidence: large difference + low variation
                 if difference > baseline_len * 0.15 and variation_true < baseline_len * 0.05 and variation_false < baseline_len * 0.05:
                     result["vulnerable"] = True
                     result["confidence"] = SQLiConfidence.MEDIUM.value
@@ -467,7 +478,6 @@ class SQLiDetector:
             "evidence": []
         }
 
-        # Safe error-inducing payloads
         payloads = [
             "1' AND extractvalue(0,concat(0x7e,'TEST',0x7e)) AND '1'='1",
             "1 AND 1=CAST(CONCAT(0x7e,'TEST',0x7e) as INT)",
@@ -491,7 +501,6 @@ class SQLiDetector:
                         allow_redirects=True
                     )
 
-                    # Check for database error signatures
                     for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
                         for pattern in patterns:
                             if re.search(pattern, response.text, re.IGNORECASE):
@@ -520,7 +529,6 @@ class SQLiDetector:
             "evidence": []
         }
 
-        # Minimal time-based payloads (2 second delay)
         payloads = [
             ("1' AND SLEEP(2) AND '1'='1", 2),
             ("1 AND SLEEP(2)", 2)
@@ -544,7 +552,6 @@ class SQLiDetector:
                     )
                     elapsed = time.time() - start_time
 
-                    # Require response time to be significantly longer
                     if elapsed >= expected_delay * 0.8:
                         result["vulnerable"] = True
                         result["confidence"] = SQLiConfidence.MEDIUM.value
@@ -612,7 +619,6 @@ class SQLiDetector:
 
             confidence_scores = []
 
-            # Test each parameter
             for param_name in params.keys():
                 # Error-based testing
                 error_result = self._test_error_based(url, param_name)
@@ -625,7 +631,6 @@ class SQLiDetector:
                     result["overall_confidence"] = SQLiConfidence.HIGH.value
                     return result
 
-                # Boolean-based testing
                 if not error_result["vulnerable"]:
                     bool_result = self._test_boolean_blind(url, param_name, baseline_len)
                     result["tests"].append(bool_result)
@@ -635,7 +640,6 @@ class SQLiDetector:
                 if self.stealth:
                     time.sleep(random.uniform(2, 4))
 
-            # Determine overall confidence
             if confidence_scores:
                 avg_score = sum(confidence_scores) / len(confidence_scores)
                 if avg_score >= 3:
@@ -1266,31 +1270,14 @@ extensions:
   scripts: [".php", ".asp", ".jsp", ".sh"]
   credentials: [".env", ".git", ".htpasswd"]
 
-# Extensions to block (empty = allow all)
 blacklist: []
-
-# Extensions to allow (empty = allow all)
 whitelist: []
-
-# Analyze file metadata
 analyze_files: true
-
-# Enable SQL injection detection
 sqli_detection: false
-
-# Enable HTTP fingerprinting (realistic requests)
 http_fingerprinting: true
-
-# Enable stealth mode (slower but safer)
 stealth_mode: false
-
-# Request timeout in seconds
 request_timeout: 10
-
-# Maximum retries per request
 max_retries: 3
-
-# Rotate user agents
 user_agent_rotation: true
 """
 
@@ -1331,7 +1318,6 @@ Examples:
 
     args = parser.parse_args()
 
-    # Disable SSL warnings
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
