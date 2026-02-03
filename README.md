@@ -20,7 +20,7 @@
 
 ## What is DorkEye 🧠
 - DorkEye is an advanced osint automated dorking tool that leverages DuckDuckGo to discover exposed web resources through OSINT (Open Source Intelligence) techniques.
-- It can identify indexed directories, sensitive files, admin panels, databases, backups, and other publicly accessible resources—all in an anonymous, efficient, and legal manner.
+- It can identify indexed directories, sensitive files, admin panels, databases, backups, and other publicly accessible resources all in an anonymous, efficient, and legal manner.
 
 <img width="1024" height="1536" alt="whatisde" src="https://github.com/user-attachments/assets/f9fbd30b-60cb-4343-ae47-24e07b751c4c" />
 
