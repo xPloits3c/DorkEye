@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v3.8 - Advanced OSINT Dorking Tool
+DorkEye v4.1 - Advanced OSINT Dorking Tool
 Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
 Author: @xPloits3c | https://github.com/xPloits3c/DorkEye
 """
@@ -1244,7 +1244,7 @@ class DorkEyeEnhanced:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>DorkEye v3.8 Report</title>
+    <title>DorkEye v4.1 Report</title>
     <style>
         body {{ font-family: 'Courier New', monospace; margin: 20px; background: #0a0a0a; color: #00ff00; }}
         .header {{ background: #1a1a1a; color: #00ff00; padding: 20px; border: 2px solid #00ff00; margin-bottom: 20px; }}
@@ -1275,7 +1275,7 @@ class DorkEyeEnhanced:
 </head>
 <body>
     <div class="header">
-        <h1>┌─[ DorkEye v3.8 - OSINT Report ]</h1>
+        <h1>┌─[ DorkEye v4.1 - OSINT Report ]</h1>
         <p>└─> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
     </div>
 """
@@ -1432,7 +1432,7 @@ def load_config(config_file: str = None) -> Dict:
 
 def create_sample_config():
     """Create sample configuration file"""
-    config_yaml = """# DorkEye v3.8 Configuration
+    config_yaml = """# DorkEye v4.1 Configuration
 
 extensions:
   documents: [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"]
@@ -1463,7 +1463,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v3.8 - Advanced Dorking Tool",
+        description="DorkEye v4.1 - Advanced Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   %(prog)s -d "site:example.com filetype:pdf" -o results
