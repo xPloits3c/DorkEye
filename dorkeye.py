@@ -131,12 +131,6 @@ class HTTPFingerprint:
     sec_fetch_site: str
     cache_control: str
 
-class BrowserType(Enum):
-    """Browser fingerprint types"""
-    CHROME = "chrome"
-    FIREFOX = "firefox"
-    SAFARI = "safari"
-    EDGE = "edge"
 
 def load_http_fingerprints() -> Dict:
     """Load HTTP fingerprints (legacy or advanced format)"""
@@ -656,7 +650,7 @@ class SQLiDetector:
             result["message"] = "Could not establish baseline"
             return result
 
-        baseline_status, baseline_text, baseline_len = baseline
+        _, _, baseline_len = baseline
 
         confidence_scores = []
 
@@ -722,7 +716,7 @@ class SQLiDetector:
             result["message"] = "Could not establish baseline"
             return result
     
-        baseline_status, baseline_text, baseline_len = baseline
+        _, _, baseline_len = baseline
         confidence_scores = []
 
         # NOTE:
@@ -786,7 +780,7 @@ class SQLiDetector:
             result["message"] = "Could not establish baseline"
             return result
 
-        baseline_status, baseline_text, baseline_len = baseline
+        _, _, baseline_len = baseline
         
         confidence_scores = []
 
