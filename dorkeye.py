@@ -42,12 +42,11 @@ ASCII_LOGO = """
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[bold red] OSINT[/bold red][/bold yellow]
- [bold yellow] |_|[/bold yellow]  [bold red]  ᵛ³ˑ⁸_ˣᴾˡᴑⁱᵗˢ³ᶜ [/bold red]
+ [bold yellow] |_|[/bold yellow]  [bold red]  ᵛ⁴ˑ¹_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
 [bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
 """
-
 
 WELCOME_MESSAGES = [
     "Hey {name}, welcome back. What's on your mind today?",
@@ -117,7 +116,6 @@ class SQLiConfidence(Enum):
     HIGH = "high"
     CRITICAL = "critical"
 
-
 @dataclass
 class HTTPFingerprint:
     """HTTP Request Fingerprint for stealth"""
@@ -177,7 +175,6 @@ def resolve_reference(value: str, common_headers: Dict) -> str:
         return common_headers.get(key, "")
     return value
 
-
 def resolve_accept_language(fp_headers: Dict, language_profiles: Dict) -> str:
     """Choose and resolve Accept-Language"""
     profiles = fp_headers.get("accept_language_profiles")
@@ -229,7 +226,6 @@ DEFAULT_CONFIG = {
     "max_retries": 3
 }
 
-
 class HTTPFingerprintRotator:
     """Manages realistic HTTP fingerprints for stealth"""
 
@@ -237,6 +233,7 @@ class HTTPFingerprintRotator:
         self.raw_fingerprints = load_http_fingerprints()
         self.fingerprints = self._build_fingerprints()
         self.current_index = 0
+        self.current_fingerprint = None
 
     def _build_fingerprints(self) -> List[HTTPFingerprint]:
         fingerprints: List[HTTPFingerprint] = []
@@ -302,19 +299,18 @@ class HTTPFingerprintRotator:
         return fingerprints
 
     def get_random(self) -> Optional[HTTPFingerprint]:
-        if not self.fingerprints:
-            return None
-        return random.choice(self.fingerprints)
+        self.current_fingerprint = random.choice(self.fingerprints) if self.fingerprints else None
+        return self.current_fingerprint
 
     def get_next(self) -> Optional[HTTPFingerprint]:
         if not self.fingerprints:
             return None
-        fp = self.fingerprints[self.current_index]
+        self.current_fingerprint = self.fingerprints[self.current_index]
         self.current_index = (self.current_index + 1) % len(self.fingerprints)
-        return fp
+        return self.current_fingerprint
 
-    def build_headers(self, fingerprint: Optional[HTTPFingerprint], referer: str = "") -> Dict[str, str]:
-        if not fingerprint:
+    def build_headers(self, referer: str = "") -> Dict[str, str]:
+        if not self.current_fingerprint:
             return {
                 "User-Agent": "Mozilla/5.0",
                 "Accept": "*/*",
@@ -322,14 +318,14 @@ class HTTPFingerprintRotator:
             }
 
         headers = {
-            "User-Agent": fingerprint.user_agent,
-            "Accept": fingerprint.accept,
-            "Accept-Language": fingerprint.accept_language,
-            "Accept-Encoding": fingerprint.accept_encoding,
-            "Sec-Fetch-Dest": fingerprint.sec_fetch_dest,
-            "Sec-Fetch-Mode": fingerprint.sec_fetch_mode,
-            "Sec-Fetch-Site": fingerprint.sec_fetch_site,
-            "Cache-Control": fingerprint.cache_control,
+            "User-Agent": self.current_fingerprint.user_agent,
+            "Accept": self.current_fingerprint.accept,
+            "Accept-Language": self.current_fingerprint.accept_language,
+            "Accept-Encoding": self.current_fingerprint.accept_encoding,
+            "Sec-Fetch-Dest": self.current_fingerprint.sec_fetch_dest,
+            "Sec-Fetch-Mode": self.current_fingerprint.sec_fetch_mode,
+            "Sec-Fetch-Site": self.current_fingerprint.sec_fetch_site,
+            "Cache-Control": self.current_fingerprint.cache_control,
             "Pragma": "no-cache",
             "DNT": "1",
             "Connection": "keep-alive",
@@ -419,14 +415,14 @@ class SQLiDetector:
             parsed = urlparse(url)
             params = parse_qs(parsed.query)
             return {k: v[0] if isinstance(v, list) else v for k, v in params.items()}
-        except:
+        except Exception:
             return {}
 
     def _get_baseline_response(self, url: str) -> Optional[Tuple[int, str, int]]:
         """Get baseline response without injection"""
         try:
             fp = self.fingerprint_rotator.get_random()
-            headers = self.fingerprint_rotator.build_headers(fp)
+            headers = self.fingerprint_rotator.build_headers()
 
             response = requests.get(
                 url,
@@ -441,7 +437,7 @@ class SQLiDetector:
                 response.text,
                 len(response.text)
             )
-        except:
+        except Exception:
             return None
 
     def _probe_parameter(self, url: str, param_name: str, baseline_len: int) -> bool:
@@ -454,7 +450,7 @@ class SQLiDetector:
 
         try:
             fp = self.fingerprint_rotator.get_random()
-            headers = self.fingerprint_rotator.build_headers(fp)
+            headers = self.fingerprint_rotator.build_headers()
 
             response = requests.get(
                 test_url,
@@ -466,7 +462,7 @@ class SQLiDetector:
 
             diff = abs(len(response.text) - baseline_len)
             return diff > baseline_len * 0.05
-        except:
+        except Exception:
             return False
 
     def _test_boolean_blind(self, url: str, param_name: str, baseline_len: int) -> Dict:
@@ -493,7 +489,7 @@ class SQLiDetector:
 
             try:
                 fp = self.fingerprint_rotator.get_random()
-                headers = self.fingerprint_rotator.build_headers(fp)
+                headers = self.fingerprint_rotator.build_headers()
 
                 response = requests.get(
                     test_url,
@@ -511,7 +507,7 @@ class SQLiDetector:
                 if self.stealth:
                     time.sleep(random.uniform(1, 2))
 
-            except:
+            except Exception:
                 pass
 
         if true_responses and false_responses:
@@ -550,7 +546,7 @@ class SQLiDetector:
 
             try:
                 fp = self.fingerprint_rotator.get_random()
-                headers = self.fingerprint_rotator.build_headers(fp)
+                headers = self.fingerprint_rotator.build_headers()
 
                 response = requests.get(
                     test_url,
@@ -571,7 +567,7 @@ class SQLiDetector:
                 if self.stealth:
                     time.sleep(random.uniform(1.5, 3))
 
-            except:
+            except Exception:
                 pass
 
         return result
@@ -597,7 +593,7 @@ class SQLiDetector:
                 start_time = time.time()
                 response = requests.get(
                     test_url,
-                    headers=self.fingerprint_rotator.build_headers(self.fingerprint_rotator.get_random()),
+                    headers=self.fingerprint_rotator.build_headers(),
                     timeout=self.timeout + 5,
                     verify=False,
                     allow_redirects=True
@@ -615,7 +611,7 @@ class SQLiDetector:
                 result["confidence"] = SQLiConfidence.MEDIUM.value
                 result["evidence"].append("Request timeout on time-based payload")
                 return result
-            except:
+            except Exception:
                 pass
 
         return result
@@ -682,6 +678,11 @@ class SQLiDetector:
                     if bool_result["vulnerable"]:
                         confidence_scores.append(2)
 
+                time_based_result = self._test_time_based_blind(url, param_name)
+                result["tests"].append(time_based_result)
+                if time_based_result.get("vulnerable", False):
+                    confidence_scores.append(3 if time_based_result["confidence"] == SQLiConfidence.HIGH.value else 2)
+
                 if self.stealth:
                     time.sleep(random.uniform(2, 4))
 
@@ -693,14 +694,169 @@ class SQLiDetector:
             elif avg_score >= 2:
                 result["overall_confidence"] = SQLiConfidence.MEDIUM.value
                 result["vulnerable"] = True
-            else:
-                result["overall_confidence"] = SQLiConfidence.LOW.value
 
         result["message"] = f"Tested {len(params)} parameter(s)"
 
         return result
 
+    def test_post_sqli(self, url: str, post_data: Dict[str, str]) -> Dict:
+        """Test for SQL injection on POST requests (application/x-www-form-urlencoded)"""
+        result = {
+            "url": url,
+            "vulnerable": False,
+            "overall_confidence": SQLiConfidence.NONE.value,
+            "tests": [],
+            "tested": False,
+            "message": ""
+        }
 
+        if not self.is_potential_sqli_url(url):
+            result["message"] = "URL does not match SQLi patterns"
+            return result
+
+        result["tested"] = True
+
+        baseline = self._get_baseline_response(url)
+        if not baseline:
+            result["message"] = "Could not establish baseline"
+            return result
+
+        baseline_status, baseline_text, baseline_len = baseline
+        
+        confidence_scores = []
+
+        for param_name in post_data.keys():
+            if not self._probe_parameter(url, param_name, baseline_len):
+                error_result = self._test_error_based(url, param_name)
+                result["tests"].append(error_result)
+                if error_result["vulnerable"]:
+                    confidence_scores.append(3 if error_result["confidence"] == SQLiConfidence.HIGH.value else 2)
+
+                if error_result["vulnerable"] and error_result["confidence"] == SQLiConfidence.HIGH.value:
+                    result["vulnerable"] = True
+                    result["overall_confidence"] = SQLiConfidence.HIGH.value
+                    return result
+
+                if not error_result["vulnerable"]:
+                    bool_result = self._test_boolean_blind(url, param_name, baseline_len)
+                    result["tests"].append(bool_result)
+                    if bool_result["vulnerable"]:
+                        confidence_scores.append(2)
+
+                if self.stealth:
+                    time.sleep(random.uniform(2, 4))
+
+        if confidence_scores:
+            avg_score = sum(confidence_scores) / len(confidence_scores)
+            if avg_score >= 3:
+                result["overall_confidence"] = SQLiConfidence.HIGH.value
+                result["vulnerable"] = True
+            elif avg_score >= 2:
+                result["overall_confidence"] = SQLiConfidence.MEDIUM.value
+                result["vulnerable"] = True
+
+        for param_name in post_data.keys():
+            payload = post_data[param_name] + "'"
+            payload_dict = post_data.copy()
+            payload_dict[param_name] = payload
+            
+            response = requests.post(url, data=payload_dict, timeout=self.timeout, verify=False)
+            
+            if response.status_code == 200 and 'error' in response.text.lower():
+                result["vulnerable"] = True
+                result["confidence"] = SQLiConfidence.HIGH.value
+                confidence_scores.append(3)
+
+        if confidence_scores:
+            avg_score = sum(confidence_scores) / len(confidence_scores)
+            if avg_score >= 3:
+                result["overall_confidence"] = SQLiConfidence.HIGH.value
+                result["vulnerable"] = True
+            elif avg_score >= 2:
+                result["overall_confidence"] = SQLiConfidence.MEDIUM.value
+                result["vulnerable"] = True
+
+        result["message"] = f"Tested {len(post_data)} parameter(s)"
+
+        return result
+
+    def test_json_sqli(self, url: str, json_data: Dict[str, str]) -> Dict:
+        """Test for SQL injection in JSON POST requests"""
+        result = {
+            "url": url,
+            "vulnerable": False,
+            "overall_confidence": SQLiConfidence.NONE.value,
+            "tests": [],
+            "tested": False,
+            "message": ""
+        }
+
+        if not self.is_potential_sqli_url(url):
+            result["message"] = "URL does not match SQLi patterns"
+            return result
+
+        result["tested"] = True
+
+        baseline = self._get_baseline_response(url)
+        if not baseline:
+            result["message"] = "Could not establish baseline"
+            return result
+
+        baseline_status, baseline_text, baseline_len = baseline
+        
+        confidence_scores = []
+
+        for key in json_data.keys():
+            payload_dict = json_data.copy()
+            payload = payload_dict[key] + "'"
+            payload_dict[key] = payload
+            response = requests.post(url, json=payload_dict, timeout=self.timeout, verify=False)
+
+            if response.status_code == 200 and 'error' in response.text.lower():
+                result["vulnerable"] = True
+                result["confidence"] = SQLiConfidence.HIGH.value
+                confidence_scores.append(3)
+
+            if self.stealth:
+                time.sleep(random.uniform(2, 4))
+
+        if confidence_scores:
+            avg_score = sum(confidence_scores) / len(confidence_scores)
+            if avg_score >= 3:
+                result["overall_confidence"] = SQLiConfidence.HIGH.value
+                result["vulnerable"] = True
+            elif avg_score >= 2:
+                result["overall_confidence"] = SQLiConfidence.MEDIUM.value
+                result["vulnerable"] = True
+
+        result["message"] = "JSON injection test completed"
+
+        return result
+
+    def test_path_based_sqli(self, url: str) -> Dict:
+        """Check for path-based SQL injection"""
+        result = {
+            "method": "path_based",
+            "vulnerable": False,
+            "confidence": SQLiConfidence.NONE.value,
+            "evidence": []
+        }
+
+        parsed = urlparse(url)
+        path = parsed.path
+
+        if re.search(r'/\d+$', path) or re.search(r'/\w+$', path):
+            test_url = f"{url}'"
+            try:
+                response = requests.get(test_url, headers=self.fingerprint_rotator.build_headers(), timeout=self.timeout, verify=False)
+                if response.status_code == 200 and 'error' in response.text.lower():
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.HIGH.value
+                    result["evidence"].append(f"Path-based SQLi detected in {url}")
+            except Exception:
+                pass
+
+        return result
 
 class UserAgentRotator:
     """Rotates user agents for better results"""
@@ -720,8 +876,6 @@ class UserAgentRotator:
         agent = self.agents[self.current_index]
         self.current_index = (self.current_index + 1) % len(self.agents)
         return agent
-
-
 
 class FileAnalyzer:
     """Analyzes URLs and files found during dorking"""
@@ -766,7 +920,7 @@ class FileAnalyzer:
             path = unquote(parsed.path)
             ext = os.path.splitext(path)[1].lower()
             return ext if ext else ""
-        except:
+        except Exception:
             return ""
 
     def categorize_url(self, url: str) -> str:
@@ -805,7 +959,7 @@ class FileAnalyzer:
         try:
             if self.config.get("http_fingerprinting", True):
                 fp = self.fp_rotator.get_random()
-                headers = self.fp_rotator.build_headers(fp)
+                headers = self.fp_rotator.build_headers()
             else:
                 headers = {"User-Agent": self.ua_rotator.get_random()}
 
@@ -823,7 +977,7 @@ class FileAnalyzer:
             if "content-length" in response.headers:
                 try:
                     result["size"] = int(response.headers["content-length"])
-                except:
+                except Exception:
                     pass
 
             if "content-type" in response.headers:
@@ -840,8 +994,6 @@ class FileAnalyzer:
             return {"tested": False}
 
         return self.sqli_detector.test_sqli(url)
-
-
 
 class DorkEyeEnhanced:
     """Main DorkEye class with enhanced functionality"""
@@ -1271,8 +1423,6 @@ class DorkEyeEnhanced:
 
             console.print(cat_table)
 
-
-
 def load_config(config_file: str = None) -> Dict:
     """Load configuration from file or use defaults"""
     if not config_file:
@@ -1297,7 +1447,6 @@ def load_config(config_file: str = None) -> Dict:
         console.print("[yellow][!] Using default configuration[/yellow]")
         return DEFAULT_CONFIG.copy()
 
-
 def create_sample_config():
     """Create sample configuration file"""
     config_yaml = """# DorkEye v3.8 Configuration
@@ -1307,7 +1456,7 @@ extensions:
   archives: [".zip", ".rar", ".tar", ".gz", ".7z"]
   databases: [".sql", ".db", ".sqlite", ".mdb"]
   backups: [".bak", ".backup", ".old"]
-  configs: [".conf", ".config", ".ini", ".yaml", ".json", ".xml"]
+  configs: [".conf", ".config", ".ini", ".yaml", ".yml", ".json", ".xml"]
   scripts: [".php", ".asp", ".jsp", ".sh"]
   credentials: [".env", ".git", ".htpasswd"]
 
@@ -1326,8 +1475,6 @@ user_agent_rotation: true
         f.write(config_yaml)
 
     console.print("[green][✓] Sample config created: dorkeye_config.yaml[/green]")
-
-
 
 def main():
     greet_user()
@@ -1409,7 +1556,6 @@ def main():
         console.print(f"[bold green]├─>[/bold green] CSV:  {args.output}.csv")
         console.print(f"[bold green]├─>[/bold green] JSON: {args.output}.json")
         console.print(f"[bold green]└─>[/bold green] HTML: {args.output}.html")
-
 
 if __name__ == "__main__":
     main()
