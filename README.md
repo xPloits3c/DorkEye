@@ -91,9 +91,8 @@
 -     ./setup.sh
 
 # Test:
-<img width="1107" height="596" alt="dev3 8-h" src="https://github.com/user-attachments/assets/9092321e-caf9-444c-ad44-54b2972bc92c" />
-
--     python dorkeye.py --help
+<img width="1547" height="755" alt="de-h" src="https://github.com/user-attachments/assets/4b33c089-8502-4408-95be-d401e852c380" />
+-     python dorkeye.py -h
 
 # Exit Virtual environment:
 -     deactivate
