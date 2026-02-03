@@ -942,10 +942,15 @@ class FileAnalyzer:
 
         try:
             if self.config.get("http_fingerprinting", True):
-                fp = self.fp_rotator.get_random()
+                # Fingerprinting has priority and already includes UA
+                self.fp_rotator.get_random()
                 headers = self.fp_rotator.build_headers()
             else:
-                headers = {"User-Agent": self.ua_rotator.get_random()}
+                if self.config.get("user_agent_rotation", True):
+                    headers = {"User-Agent": self.ua_rotator.get_random()}
+                else:
+                    # Fixed User-Agent (first one in list)
+                    headers = {"User-Agent": self.ua_rotator.agents[0]}
 
             response = self.session.head(
                 url,
