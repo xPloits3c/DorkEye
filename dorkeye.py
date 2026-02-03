@@ -661,7 +661,7 @@ class SQLiDetector:
         confidence_scores = []
 
         for param_name in params.keys():
-            if not self._probe_parameter(url, param_name, baseline_len):
+            if self._probe_parameter(url, param_name, baseline_len):
                 error_result = self._test_error_based(url, param_name)
                 result["tests"].append(error_result)
                 if error_result["vulnerable"]:
@@ -710,6 +710,7 @@ class SQLiDetector:
             "message": ""
         }
 
+        # URL heuristic check (lightweight filter)
         if not self.is_potential_sqli_url(url):
             result["message"] = "URL does not match SQLi patterns"
             return result
@@ -720,52 +721,36 @@ class SQLiDetector:
         if not baseline:
             result["message"] = "Could not establish baseline"
             return result
-
+    
         baseline_status, baseline_text, baseline_len = baseline
-        
         confidence_scores = []
 
+        # NOTE:
+        # URL-based SQLi logic is intentionally DISABLED for POST.
+        # POST SQLi must inject payloads ONLY in request body.
+
+        # --- BODY-based SQLi testing ---
         for param_name in post_data.keys():
-            if not self._probe_parameter(url, param_name, baseline_len):
-                error_result = self._test_error_based(url, param_name)
-                result["tests"].append(error_result)
-                if error_result["vulnerable"]:
-                    confidence_scores.append(3 if error_result["confidence"] == SQLiConfidence.HIGH.value else 2)
-
-                if error_result["vulnerable"] and error_result["confidence"] == SQLiConfidence.HIGH.value:
-                    result["vulnerable"] = True
-                    result["overall_confidence"] = SQLiConfidence.HIGH.value
-                    return result
-
-                if not error_result["vulnerable"]:
-                    bool_result = self._test_boolean_blind(url, param_name, baseline_len)
-                    result["tests"].append(bool_result)
-                    if bool_result["vulnerable"]:
-                        confidence_scores.append(2)
-
-                if self.stealth:
-                    time.sleep(random.uniform(2, 4))
-
-        if confidence_scores:
-            avg_score = sum(confidence_scores) / len(confidence_scores)
-            if avg_score >= 3:
-                result["overall_confidence"] = SQLiConfidence.HIGH.value
-                result["vulnerable"] = True
-            elif avg_score >= 2:
-                result["overall_confidence"] = SQLiConfidence.MEDIUM.value
-                result["vulnerable"] = True
-
-        for param_name in post_data.keys():
-            payload = post_data[param_name] + "'"
             payload_dict = post_data.copy()
-            payload_dict[param_name] = payload
-            
-            response = requests.post(url, data=payload_dict, timeout=self.timeout, verify=False)
-            
-            if response.status_code == 200 and 'error' in response.text.lower():
-                result["vulnerable"] = True
-                result["confidence"] = SQLiConfidence.HIGH.value
-                confidence_scores.append(3)
+            payload_dict[param_name] = post_data[param_name] + "'"
+
+            try:
+                response = requests.post(
+                    url,
+                    data=payload_dict,
+                    timeout=self.timeout,
+                    verify=False
+                )
+
+                if response.status_code == 200 and 'error' in response.text.lower():
+                    result["vulnerable"] = True
+                    confidence_scores.append(3)
+
+            except Exception:
+                pass
+
+            if self.stealth:
+                time.sleep(random.uniform(2, 4))
 
         if confidence_scores:
             avg_score = sum(confidence_scores) / len(confidence_scores)
@@ -776,8 +761,7 @@ class SQLiDetector:
                 result["overall_confidence"] = SQLiConfidence.MEDIUM.value
                 result["vulnerable"] = True
 
-        result["message"] = f"Tested {len(post_data)} parameter(s)"
-
+        result["message"] = f"Tested {len(post_data)} POST parameter(s)"
         return result
 
     def test_json_sqli(self, url: str, json_data: Dict[str, str]) -> Dict:
