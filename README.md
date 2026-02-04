@@ -171,7 +171,7 @@ DorkEye/
 
 ---
 
-## ⚠️ Legal Disclaimer ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
+## ⚠️ ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
 
 This tool is for **educational, research, and authorized security testing only**.  
 Unauthorized access is illegal. The author is not responsible for misuse.
