@@ -55,7 +55,7 @@ All in an **anonymous, efficient, and legal** manner.
 
 ### 🔍 Advanced Analysis
 - File metadata inspection (size, type, accessibility)
-- Global URL deduplication
+- Intelligent deduplication
 - YAML / JSON configuration support
 
 ### 🎯 Stealth & Fingerprinting
@@ -82,7 +82,6 @@ All in an **anonymous, efficient, and legal** manner.
 
 - 🔎 Smart single/multi‑dork execution
 - 🚫 Extension blacklist & whitelist
-- 🎯 Intelligent deduplication
 - ⚡ Stealth mode & rate‑limit protection
 - 📈 Real‑time statistics
 - 🎨 Rich terminal UI
