@@ -123,7 +123,7 @@ rm -rf dorkeye_env
 ```
 ---
 
-## 🚀 Usage
+## 🚀 Usage [![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/USAGE.md)
 
 ![start16dorks](https://github.com/user-attachments/assets/768f5d31-df67-451f-a9b1-5286eb849850)
 ![end16dorks](https://github.com/user-attachments/assets/648e498f-08d8-4de9-8bb9-7f812740d65f)
