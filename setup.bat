@@ -7,7 +7,7 @@ setlocal enabledelayedexpansion
 REM Configuration
 set "VENV_DIR=dorkeye_env"
 set "MAX_RETRIES=3"
-set "PYTHON_MIN_VERSION=3.8"
+set "PYTHON_MIN_VERSION=3.9"
 set ERROR_COUNT=0
 set WARNING_COUNT=0
 
@@ -18,7 +18,7 @@ REM Clear screen and show banner
 cls
 echo.
 echo   ___
-echo  __H__     DorkEye v3.8
+echo  __H__     DorkEye v4.1
 echo   [,]      Advanced Windows Setup
 echo   [)]
 echo   [;]      Module Verification • Auto-Retry • Testing
@@ -26,7 +26,7 @@ echo   [(]
 echo    V
 echo.
 echo =========================================================
-echo           DorkEye v3.8 - Windows Installation
+echo           DorkEye v4.1 - Windows Installation
 echo =========================================================
 echo.
 
@@ -39,7 +39,7 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python is not installed or not in PATH!
     echo.
-    echo Please install Python 3.8+ from: https://www.python.org/downloads/
+    echo Please install Python 3.9+ from: https://www.python.org/downloads/
     echo Make sure to check "Add Python to PATH" during installation
     echo.
     pause
@@ -55,19 +55,19 @@ for /f "tokens=1,2 delims=." %%a in ("%PYTHON_VERSION%") do (
     set PYTHON_MINOR=%%b
 )
 
-REM Check minimum version (3.8)
+REM Check minimum version (3.9)
 if %PYTHON_MAJOR% LSS 3 (
-    echo [ERROR] Python version too old. Need 3.8+
+    echo [ERROR] Python version too old. Need 3.9+
     pause
     exit /b 1
 )
 if %PYTHON_MAJOR% EQU 3 if %PYTHON_MINOR% LSS 8 (
-    echo [ERROR] Python 3.%PYTHON_MINOR% is too old. Need 3.8+
+    echo [ERROR] Python 3.%PYTHON_MINOR% is too old. Need 3.9+
     pause
     exit /b 1
 )
 
-echo [OK] Python version is compatible ^(^>= 3.8^)
+echo [OK] Python version is compatible ^(^>= 3.9^)
 echo.
 
 REM ============================================
@@ -99,7 +99,7 @@ if not exist requirements.txt (
         echo requests^>=2.31.0
         echo PyYAML^>=6.0.1
         echo rich^>=13.7.0
-        echo ddgs^>=0.1.0
+        echo ddgs^>=4.0.0
         echo urllib3^>=2.0.0
         echo certifi^>=2023.7.22
         echo charset-normalizer^>=3.3.0
