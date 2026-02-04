@@ -32,7 +32,7 @@ It helps discover:
 
 All in an **anonymous, efficient, and legal** manner.
 
-![DorkEye-Demo](https://github.com/user-attachments/assets/694ee3b7-b90a-4322-9b4f-ec61f7166689)
+![dorkeye](https://github.com/user-attachments/assets/a6564d32-cd3a-47b8-8b3a-3429b4c12ccb)
 
 ---
 
