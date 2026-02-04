@@ -43,7 +43,7 @@ if command -v python3 &> /dev/null; then
 elif command -v python &> /dev/null; then
     PYTHON_CMD="python"
 else
-    echo -e "${RED}[!] Python not found. Please install Python 3.8+${NC}"
+    echo -e "${RED}[!] Python not found. Please install Python 3.9+${NC}"
     exit 1
 fi
 
@@ -52,7 +52,7 @@ PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
 if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 8 ]); then
-    echo -e "${RED}[!] Python 3.8 or higher is required. Found: $PYTHON_VERSION${NC}"
+    echo -e "${RED}[!] Python 3.9 or higher is required. Found: $PYTHON_VERSION${NC}"
     exit 1
 fi
 
