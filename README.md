@@ -45,6 +45,10 @@ All in an **anonymous, efficient, and legal** manner.
 
 ---
 
+![DorkEye-Demo](https://github.com/user-attachments/assets/694ee3b7-b90a-4322-9b4f-ec61f7166689)
+
+---
+
 ## ✨ What’s New
 
 ### 🧠 Automated SQL Injection Testing
