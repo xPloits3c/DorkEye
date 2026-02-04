@@ -114,19 +114,13 @@ sudo chmod +x setup.sh
 <img width="1547" height="755" alt="de-h" src="https://github.com/user-attachments/assets/4b33c089-8502-4408-95be-d401e852c380" />
 
 ```bash
+# Help:
 python dorkeye.py -h
-```
-
-Deactivate:
-```bash
+# Deactivate:
 deactivate
-```
-
-Remove environment:
-```bash
+# Remove environment:
 rm -rf dorkeye_env
 ```
-
 ---
 
 ## 🚀 Usage
@@ -146,15 +140,6 @@ python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
 ```
 
 <img src="https://github.com/user-attachments/assets/e6eed7b5-aba0-488c-a330-42df3e96c7df" />
-
----
-
-## 🔒 Best Practices
-
-- ✅ Test only authorized targets
-- ✅ Follow responsible disclosure
-- ❌ Never access unauthorized data
-- ❌ Never use maliciously
 
 ---
 
