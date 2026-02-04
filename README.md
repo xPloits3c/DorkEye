@@ -32,7 +32,7 @@ It helps discover:
 
 All in an **anonymous, efficient, and legal** manner.
 
-<img width="1024" height="1536" alt="whatisde" src="https://github.com/user-attachments/assets/f9fbd30b-60cb-4343-ae47-24e07b751c4c" />
+![DorkEye-Demo](https://github.com/user-attachments/assets/694ee3b7-b90a-4322-9b4f-ec61f7166689)
 
 ---
 
@@ -43,9 +43,7 @@ All in an **anonymous, efficient, and legal** manner.
 - ✅ Clean and unfiltered search results
 - ✅ Advanced analysis and automated SQLi testing
 
----
-
-![DorkEye-Demo](https://github.com/user-attachments/assets/694ee3b7-b90a-4322-9b4f-ec61f7166689)
+<img width="1024" height="1536" alt="whatisde" src="https://github.com/user-attachments/assets/f9fbd30b-60cb-4343-ae47-24e07b751c4c" />
 
 ---
 
