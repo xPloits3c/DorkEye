@@ -91,7 +91,7 @@ All in an **anonymous, efficient, and legal** manner.
 
 ## 📦 Quick Install
 
-[![INSTALL GUIDE](https://img.shields.io/badge/READ%20THE-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/INSTALL.md)
+[![INSTALL GUIDE](https://img.shields.io/badge/READ%20FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
 
 <img width="1918" height="1000" alt="install_dorkeye" src="https://github.com/user-attachments/assets/ff0c7db3-ff46-42d6-9f14-6044a0957639" />
 <img width="1918" height="972" alt="install_dorkeye0" src="https://github.com/user-attachments/assets/2d6e195f-2b83-40f6-91e4-4b3934cd365a" />
