@@ -17,7 +17,7 @@
 
 ---
 
-> 🐧 *“I don't break systems, I search for their secrets.”*
+> 🐲 *“I don't break systems, I search for their secrets.”*
 
 ## 🧠 What is DorkEye
 
