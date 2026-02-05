@@ -17,7 +17,7 @@
 
 ---
 
-> 🐲 *“I don't hack systems, i expose their secrets.”*
+> 🐲 *I don't hack systems, i expose their secrets.*
 
 ## 🧠 What is DorkEye
 
@@ -144,8 +144,6 @@ python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan
 # Fast scan
 python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
 ```
-
-<img src="https://github.com/user-attachments/assets/e6eed7b5-aba0-488c-a330-42df3e96c7df" />
 
 ---
 
