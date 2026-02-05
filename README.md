@@ -97,7 +97,7 @@ All in an **anonymous, efficient, and legal** manner.
 
 [![INSTALL GUIDE](https://img.shields.io/badge/READ%20FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
 
-![image](https://github.com/user-attachments/assets/3e39cfef-0c12-4dea-ae47-4245a6bea5cc)
+![image](https://github.com/user-attachments/assets/15ac9798-7cf3-487b-9a75-bd52b9de3eec)
 
 
 ```bash
