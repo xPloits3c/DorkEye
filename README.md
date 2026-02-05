@@ -155,6 +155,7 @@ python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
 DorkEye/
 ├── dorkeye.py
 ├── requirements.txt
+├── http_fingerprints.json
 ├── setup.sh / setup.bat
 ├── INSTALL.md
 ├── dorkeye_config.yaml
