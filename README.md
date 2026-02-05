@@ -131,8 +131,8 @@ rm -rf dorkeye_env
 
 [![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
 
-![start16dorks](https://github.com/user-attachments/assets/768f5d31-df67-451f-a9b1-5286eb849850)
-![end16dorks](https://github.com/user-attachments/assets/648e498f-08d8-4de9-8bb9-7f812740d65f)
+![de_start](https://github.com/user-attachments/assets/a8ae4c20-8670-4ab6-904f-5fbd71d7b986)
+
 
 ```bash
 # Basic search
