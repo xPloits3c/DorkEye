@@ -32,9 +32,7 @@ It helps discover:
 - Databases & backups  
 - Misconfigurations and leaked credentials  
 
-All in an **anonymous, efficient, and legal** manner.
-
-![dorkeye](https://github.com/user-attachments/assets/a6564d32-cd3a-47b8-8b3a-3429b4c12ccb)
+![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
 ---
 
