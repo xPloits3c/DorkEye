@@ -153,6 +153,7 @@ DorkEye/
 ├── http_fingerprints.json
 ├── setup.sh / setup.bat
 ├── INSTALL.md
+├── README.md
 ├── dorkeye_config.yaml
 ├── Dump/
 │   ├── *.csv
