@@ -23,7 +23,7 @@
 
 **DorkEye** is an advanced, automated **OSINT dorking tool** that leverages **DuckDuckGo** to identify exposed web resources using Open Source Intelligence techniques.
 
-![image](https://github.com/user-attachments/assets/6609eed1-cb04-48b4-909a-802ec0055b96)
+![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
 It helps discover:
 - Indexed directories  
@@ -32,8 +32,7 @@ It helps discover:
 - Databases & backups  
 - Misconfigurations and leaked credentials  
 
-![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
-
+![image](https://github.com/user-attachments/assets/6609eed1-cb04-48b4-909a-802ec0055b96)
 ---
 
 ## ❓ Why DorkEye
