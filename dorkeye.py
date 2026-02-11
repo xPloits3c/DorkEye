@@ -1393,8 +1393,8 @@ class DorkEyeEnhanced:
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="green", justify="right")
 
-        console.print("\n[bold cyan]┌─[ Search Statistics ][/bold cyan]")
-        console.print("[bold cyan]│[/bold cyan]")
+        console.print("\n[bold yellow]┌─[ Search Statistics ][/bold yellow]")
+        console.print("[bold yellow]│[/bold yellow]")
 
         table.add_row("├─> Total Results Found", str(self.stats.get("total_found", 0)))
         table.add_row("├─> Unique Results", str(len(self.results)))
