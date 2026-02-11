@@ -48,7 +48,6 @@ ASCII_LOGO = """
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
  [bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
 """
-
 WELCOME_MESSAGES = [
     "Stay safe, {name}.",
     "Session initialized, {name}.",
@@ -1192,18 +1191,37 @@ class DorkEyeEnhanced:
                     time.sleep(long_delay)
 
     def save_results(self):
-        """Save results in multiple formats"""
+        """Save results based on selected file extension"""
         if not self.output_file:
             return
 
-        downloads_folder = os.path.dirname(os.path.abspath(__file__))
-        downloads_folder = os.path.join(downloads_folder, "Dump")
+        downloads_folder = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "Dump"
+        )
         os.makedirs(downloads_folder, exist_ok=True)
 
-        base_name = os.path.join(downloads_folder, self.output_file)
-        self._save_csv(f"{base_name}.csv")
-        self._save_json(f"{base_name}.json")
-        self._save_html(f"{base_name}.html")
+        filename = os.path.join(downloads_folder, self.output_file)
+        ext = os.path.splitext(filename)[1].lower()
+
+        if not ext:
+            # Default to JSON if no extension provided
+            filename += ".json"
+            ext = ".json"
+
+        if ext == ".csv":
+            self._save_csv(filename)
+        elif ext == ".json":
+            self._save_json(filename)
+        elif ext == ".html":
+            self._save_html(filename)
+        elif ext == ".txt":
+            self._save_txt(filename)
+        else:
+            console.print(f"[red][!] Unsupported output format: {ext}[/red]")
+            return
+
+        console.print(f"[green][✓] Saved: {filename}[/green]")
 
     def _save_csv(self, filename: str):
         """Save results as CSV with SQLi info"""
@@ -1248,6 +1266,29 @@ class DorkEyeEnhanced:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         console.print(f"[green][✓] JSON saved: {filename}[/green]")
+
+    def _save_txt(self, filename: str):
+        """Save results as plain text"""
+        if not self.results:
+            return
+
+        with open(filename, "w", encoding="utf-8") as f:
+            for idx, result in enumerate(self.results, 1):
+                f.write(f"{idx}. {result.get('url')}\n")
+
+                if result.get("title"):
+                    f.write(f"   Title: {result.get('title')}\n")
+
+                if result.get("category"):
+                    f.write(f"   Category: {result.get('category')}\n")
+
+                if "sqli_test" in result:
+                    sqli = result["sqli_test"]
+                    if sqli.get("tested", False):
+                        status = "VULNERABLE" if sqli.get("vulnerable") else "SAFE"
+                        f.write(f"   SQLi: {status} ({sqli.get('overall_confidence')})\n")
+
+                f.write("\n")
 
     def _save_html(self, filename: str):
         """Save results as HTML report with SQLi warnings"""
@@ -1548,10 +1589,7 @@ def main():
     dorkeye.print_statistics()
 
     if args.output:
-        console.print(f"\n[bold green]┌─[ Results Saved Successfully ][/bold green]")
-        console.print(f"[bold green]├─>[/bold green] CSV:  {args.output}.csv")
-        console.print(f"[bold green]├─>[/bold green] JSON: {args.output}.json")
-        console.print(f"[bold green]└─>[/bold green] HTML: {args.output}.html")
+        console.print(f"\n[bold green][✓] Results saved: {args.output}[/bold green]")
 
 if __name__ == "__main__":
     main()
