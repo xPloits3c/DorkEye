@@ -133,13 +133,13 @@ rm -rf dorkeye_env
 
 ```bash
 # Basic search
-python3 dorkeye.py -d "inurl:admin" -o results
+python3 dorkeye.py -d "inurl:admin" -o results.txt
 
 # SQLi + stealth
-python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan
+python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
 
 # Fast scan
-python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results
+python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
 
 ---
