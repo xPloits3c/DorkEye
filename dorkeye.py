@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.1 - Advanced OSINT Dorking Tool
+DorkEye v4.1.2 - Advanced OSINT Dorking Tool
 Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
 Author: @xPloits3c | https://github.com/xPloits3c/DorkEye
 """
@@ -13,6 +13,7 @@ import yaml
 import random
 import argparse
 import hashlib
+import difflib
 import csv
 import re
 from datetime import datetime
@@ -37,17 +38,16 @@ import getpass
 console = Console()
 
 ASCII_LOGO = """
-     \n[bold yellow]  ___[/bold yellow][bold red]
- [bold yellow]__H__[/bold yellow]  [bold white]    Advanced OSINT Dorking Tool [/bold white]
+     \n[bold yellow]  ___[/bold yellow]
+ [bold yellow]__H__[/bold yellow]  [bold white]    xploits3c.github.io/DorkEye [/bold white]
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
- [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[bold red] OSINT[/bold red][/bold yellow]
- [bold yellow] |_|[/bold yellow]  [bold red]  ᵛ⁴ˑ¹_ˣᴾˡᵒⁱᵗˢ³ᶜ [/bold red]
+ [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[bold red] Advanced OSINT Dorking Tool[/bold red][/bold yellow]
+ [bold yellow] |_|[/bold yellow]  [bold white]                     v4.1.2[/bold white]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
-[bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
+ [bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
 """
-
 WELCOME_MESSAGES = [
     "Hey {name}, welcome back. What's on your mind today?",
     "Good to see you again, {name}. Ready to hunt something interesting?",
@@ -378,30 +378,19 @@ class SQLiDetector:
         ]
     }
 
-    POTENTIAL_SQLI_PATTERNS = [
-        r'\.php\?.*id=',
-        r'\.php\?.*page=',
-        r'\.php\?.*cat=',
-        r'\.php\?.*product=',
-        r'\.php\?.*item=',
-        r'\.php\?.*search=',
-        r'\.asp\?.*id=',
-        r'\.aspx\?.*id=',
-        r'\.jsp\?.*id=',
-        r'/api/.*?\?.*id='
-    ]
-
     def __init__(self, stealth: bool = False, timeout: int = 10):
         self.stealth = stealth
         self.timeout = timeout
         self.fingerprint_rotator = HTTPFingerprintRotator()
 
-    def is_potential_sqli_url(self, url: str) -> bool:
-        """Check if URL matches SQLi patterns"""
-        for pattern in self.POTENTIAL_SQLI_PATTERNS:
-            if re.search(pattern, url, re.IGNORECASE):
-                return True
-        return False
+    def has_query_params(self, url: str) -> bool:
+        """Check if URL contains query parameters (modern SQLi detection entrypoint)"""
+        try:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            return bool(params)
+        except Exception:
+            return False
 
     def _extract_query_params(self, url: str) -> Dict[str, str]:
         """Extract and normalize query parameters"""
@@ -434,16 +423,16 @@ class SQLiDetector:
         except Exception:
             return None
 
-    def _probe_parameter(self, url: str, param_name: str, baseline_len: int) -> bool:
+    def _probe_parameter(self, url: str, param_name: str, baseline_content: str) -> bool:
         """
-        Lightweight probe to detect if parameter affects response
-        Used to avoid testing non-influential parameters.
+        Lightweight probe to detect if parameter affects response.
+        Uses similarity comparison instead of raw length to reduce false positives.
         """
         probe_payload = "1'"
         test_url = self._inject_payload(url, param_name, probe_payload)
 
         try:
-            fp = self.fingerprint_rotator.get_random()
+            self.fingerprint_rotator.get_random()
             headers = self.fingerprint_rotator.build_headers()
 
             response = requests.get(
@@ -454,8 +443,15 @@ class SQLiDetector:
                 allow_redirects=True
             )
 
-            diff = abs(len(response.text) - baseline_len)
-            return diff > baseline_len * 0.05
+            similarity = difflib.SequenceMatcher(
+                None,
+                baseline_content,
+                response.text
+            ).ratio()
+
+            # If similarity drops below threshold → parameter affects output
+            return similarity < 0.90
+
         except Exception:
             return False
 
@@ -634,8 +630,8 @@ class SQLiDetector:
             "message": ""
         }
 
-        if not self.is_potential_sqli_url(url):
-            result["message"] = "URL does not match SQLi patterns"
+        if not self.has_query_params(url):
+            result["message"] = "No query parameters found"
             return result
 
         result["tested"] = True
@@ -650,12 +646,12 @@ class SQLiDetector:
             result["message"] = "Could not establish baseline"
             return result
 
-        _, _, baseline_len = baseline
+        _, baseline_content, baseline_len = baseline
 
         confidence_scores = []
 
         for param_name in params.keys():
-            if self._probe_parameter(url, param_name, baseline_len):
+            if self._probe_parameter(url, param_name, baseline_content):
                 error_result = self._test_error_based(url, param_name)
                 result["tests"].append(error_result)
                 if error_result["vulnerable"]:
@@ -695,6 +691,7 @@ class SQLiDetector:
 
     def test_post_sqli(self, url: str, post_data: Dict[str, str]) -> Dict:
         """Test for SQL injection on POST requests (application/x-www-form-urlencoded)"""
+
         result = {
             "url": url,
             "vulnerable": False,
@@ -704,41 +701,58 @@ class SQLiDetector:
             "message": ""
         }
 
-        # URL heuristic check (lightweight filter)
-        if not self.is_potential_sqli_url(url):
-            result["message"] = "URL does not match SQLi patterns"
+        # Validate presence of POST parameters before attempting injection tests
+        if not post_data:
+            result["message"] = "No POST parameters found"
             return result
 
         result["tested"] = True
 
+        # Establish baseline response (GET baseline, minimal impact)
         baseline = self._get_baseline_response(url)
         if not baseline:
             result["message"] = "Could not establish baseline"
             return result
-    
-        _, _, baseline_len = baseline
+
+        _, baseline_content, baseline_len = baseline
         confidence_scores = []
 
-        # NOTE:
-        # URL-based SQLi logic is intentionally DISABLED for POST.
-        # POST SQLi must inject payloads ONLY in request body.
-
-        # --- BODY-based SQLi testing ---
+        # BODY-based SQLi testing only (no URL injection)
         for param_name in post_data.keys():
+
             payload_dict = post_data.copy()
-            payload_dict[param_name] = post_data[param_name] + "'"
+            payload_dict[param_name] = str(post_data[param_name]) + "'"
 
             try:
+                self.fingerprint_rotator.get_random()
+                headers = self.fingerprint_rotator.build_headers()
+
                 response = requests.post(
                     url,
                     data=payload_dict,
+                    headers=headers,
                     timeout=self.timeout,
                     verify=False
                 )
 
-                if response.status_code == 200 and 'error' in response.text.lower():
-                    result["vulnerable"] = True
-                    confidence_scores.append(3)
+                # Check for SQL error signatures
+                for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
+                    for pattern in patterns:
+                        if re.search(pattern, response.text, re.IGNORECASE):
+                            result["vulnerable"] = True
+                            result["tests"].append({
+                                "method": "post_error_based",
+                                "parameter": param_name,
+                                "db": db_type,
+                                "evidence": pattern
+                            })
+                            confidence_scores.append(3)
+                            break
+
+                # Fallback generic error check (low confidence)
+                if not result["vulnerable"]:
+                    if "sql" in response.text.lower() or "syntax" in response.text.lower():
+                        confidence_scores.append(2)
 
             except Exception:
                 pass
@@ -746,8 +760,10 @@ class SQLiDetector:
             if self.stealth:
                 time.sleep(random.uniform(2, 4))
 
+        # Confidence aggregation
         if confidence_scores:
             avg_score = sum(confidence_scores) / len(confidence_scores)
+
             if avg_score >= 3:
                 result["overall_confidence"] = SQLiConfidence.HIGH.value
                 result["vulnerable"] = True
@@ -756,6 +772,7 @@ class SQLiDetector:
                 result["vulnerable"] = True
 
         result["message"] = f"Tested {len(post_data)} POST parameter(s)"
+
         return result
 
     def test_json_sqli(self, url: str, json_data: Dict[str, str]) -> Dict:
@@ -769,9 +786,10 @@ class SQLiDetector:
             "message": ""
         }
 
-        if not self.is_potential_sqli_url(url):
-            result["message"] = "URL does not match SQLi patterns"
+        if not json_data:
+            result["message"] = "No JSON parameters found"
             return result
+
 
         result["tested"] = True
 
@@ -1141,7 +1159,7 @@ class DorkEyeEnhanced:
 
     def run_search(self, dorks: List[str], count: int):
         """Run search for all dorks"""
-        console.print(f"[bold cyan][*] Starting search with {len(dorks)} dork(s)[/bold cyan]\n")
+        console.print(f"[bold cyan][*] Search with {len(dorks)} dork(s)[/bold cyan]\n")
 
         if self.config.get("stealth_mode", False):
             console.print("[bold magenta][*] Stealth mode: ACTIVE[/bold magenta]")
@@ -1244,7 +1262,7 @@ class DorkEyeEnhanced:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>DorkEye v4.1 Report</title>
+    <title>DorkEye v4.1.2 Report</title>
     <style>
         body {{ font-family: 'Courier New', monospace; margin: 20px; background: #0a0a0a; color: #00ff00; }}
         .header {{ background: #1a1a1a; color: #00ff00; padding: 20px; border: 2px solid #00ff00; margin-bottom: 20px; }}
@@ -1275,7 +1293,7 @@ class DorkEyeEnhanced:
 </head>
 <body>
     <div class="header">
-        <h1>┌─[ DorkEye v4.1 - OSINT Report ]</h1>
+        <h1>┌─[ DorkEye v4.1.2 - OSINT Report ]</h1>
         <p>└─> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
     </div>
 """
@@ -1432,7 +1450,7 @@ def load_config(config_file: str = None) -> Dict:
 
 def create_sample_config():
     """Create sample configuration file"""
-    config_yaml = """# DorkEye v4.1 Configuration
+    config_yaml = """# DorkEye v4.1.2 Configuration
 
 extensions:
   documents: [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"]
@@ -1463,7 +1481,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.1 - Advanced Dorking Tool",
+        description="DorkEye v4.1.2 - Advanced Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   %(prog)s -d "site:example.com filetype:pdf" -o results
@@ -1525,7 +1543,7 @@ def main():
 
     dorks = dorkeye.process_dorks(args.dork)
     console.print(f"[bold cyan]┌─[ LOADED {len(dorks)} DORK(s) ][/bold cyan]")
-    console.print(f"[bold cyan]└─>[/bold cyan] Dorking ...\n")
+    console.print(f"[bold cyan]└─>[/bold cyan] Starting ... \n")
 
     try:
         dorkeye.run_search(dorks, args.count)
