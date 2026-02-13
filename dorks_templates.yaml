@@ -1,6 +1,6 @@
 variables:
   domain:
-    - .it
+    - .net
     - .com
     - .org
 
