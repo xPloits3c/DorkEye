@@ -1,7 +1,5 @@
 # 🐲 DorkEye — Advanced Usage (Flag-by-Flag)
 
-> 🔥 *I don't hack systems. I expose their secrets.*
-
 This document explains **every available flag in detail**, including behavior, examples, and recommended combinations.
 
 ---
@@ -14,6 +12,7 @@ python3 dorkeye.py [OPTIONS]
 
 Minimal required flags:
 - `-d`
+- `--dg`
 - `-o`
 
 Everything else refines *how* the scan behaves.
@@ -32,10 +31,10 @@ Defines the search query or file containing multiple dorks.
 ### Examples
 ```bash
 # Single dork
-python3 dorkeye.py -d "inurl:admin" -o output
+python3 dorkeye.py -d "inurl:admin" -o output.txt
 
 # Multiple dorks
-python3 dorkeye.py -d dorks.txt -o output
+python3 dorkeye.py -d dorks.txt -o output.html
 ```
 
 💡 Recommended for automation: **use files**.
@@ -52,7 +51,7 @@ Specifies where all results, reports, and exports are saved.
 - Timestamped subfolders may be generated
 
 ```bash
-python3 dorkeye.py -d dorks.txt -o scan_results
+python3 dorkeye.py -d dorks.txt -o scan_results.csv
 ```
 
 ---
@@ -63,7 +62,7 @@ python3 dorkeye.py -d dorks.txt -o scan_results
 Limits the maximum number of URLs per dork.
 
 ```bash
-python3 dorkeye.py -d dorks.txt -c 100 -o output
+python3 dorkeye.py -d dorks.txt -c 100 -o output.txt
 ```
 
 ### Notes
@@ -83,7 +82,7 @@ Reduces detection and blocking risks.
 - Rate-limit evasion logic
 
 ```bash
-python3 dorkeye.py -d dorks.txt --stealth -o stealth_scan
+python3 dorkeye.py -d dorks.txt --stealth -o stealth_scan.txt
 ```
 
 ✅ Strongly recommended for:
@@ -98,22 +97,167 @@ python3 dorkeye.py -d dorks.txt --stealth -o stealth_scan
 **Purpose:**  
 Automatically tests discovered parameters for SQL Injection.
 
-### Techniques
-- Error-based
-- Boolean-based blind
-- Time-based blind
+### SQLi Detection Techniques
+- Strict URL pre-filtering (realistic SQLi candidates only)
+- Lightweight parameter influence probing
+- Error-based detection (DB-specific signatures)
+- Boolean-based blind (response differential stability analysis)
+- Time-based blind (low-impact controlled execution)
+- Deterministic confidence scoring (NONE / LOW / MEDIUM / HIGH / CRITICAL)
+- False-positive reduction through similarity thresholding
 
 ```bash
-python3 dorkeye.py -d "site:example.com .php?id=" --sqli -o sqli_scan
+python3 dorkeye.py -d "site:example.com .php?id=" --sqli -o sqli_scan.html
+```
+
+### --dg | Dork Generator Layer Purpose:
+# Generates structured Google dorks using a modular YAML template engine.
+# The Dork Generator allows controlled, scalable dork creation without hardcoded patterns.
+It uses:
+- dork_generator.py
+- dorks_templates.yaml
+# Generator Capabilities
+# Template-based dork generation
+Dynamic variable expansion:
+- {domain}
+- {param}
+- {extension}
+# Category-based generation:
+- sqli
+- backups
+- sensitive
+- admin
+Mode control:
+- soft
+- medium
+- aggressive
+```bash
+--dg
+--dg=<category>
+--mode
+--mode=<soft|medium|aggressive>
+```
+
+# Example — Generate SQLi Dorks
+```bash
+python3 dorkeye.py --dg=sqli --mode=aggressive
+```
+
+Example — Generate All Categories (default soft mode)
+```bash
+python3 dorkeye.py --dg
+```
+
+Example — Generate & Immediately Scan
+```bash
+python3 dorkeye.py --dg=sqli --mode=aggressive --sqli -o report.html
+```
+
+### 1️⃣ GENERATOR LAYER – ALL VALID VARIATIONS
+- Basic Activation
+```bash
+python dorkeye.py --dg
+```
+✔ Generates all categories
+✔ Mode = soft (default)
+
+- Specific Category
+```bash
+python dorkeye.py --dg=sqli
+python dorkeye.py --dg=backups
+python dorkeye.py --dg=sensitive
+python dorkeye.py --dg=admin
+```
+✔ Mode = soft (default)
+
+Mode Only (Without Value)
+```bash
+python dorkeye.py --dg --mode
+```
+✔ Mode = soft
+
+🔹 Explicit Mode
+```bash
+python dorkeye.py --dg --mode=soft
+python dorkeye.py --dg --mode=medium
+python dorkeye.py --dg --mode=aggressive
+```
+
+🔹 Category + Mode
+```bash
+python dorkeye.py --dg=sqli --mode=aggressive
+python dorkeye.py --dg=admin --mode=medium
+python dorkeye.py --dg=backups --mode=soft
+python dorkeye.py --dg=sensitive --mode=aggressive
+```
+
+### 2️⃣ GENERATOR + DETECTION
+
+Here the architectural separation becomes important:
+```bash
+--dg=sqli → Dork Generator category
+--sqli → SQLi detection engine
+```
+
+🔹 Generator + SQL Detection
+```bash
+python dorkeye.py --dg=sqli --sqli
+```
+
+🔹 Generator + Aggressive Mode + SQL Detection
+```bash
+python dorkeye.py --dg=sqli --mode=aggressive --sqli
+```
+
+🔹 Generator + Stealth Mode
+```bash
+python dorkeye.py --dg=sqli --stealth
+```
+
+🔹 Generator + Detection + Stealth + Output
+```bash
+python dorkeye.py --dg=sqli --mode=aggressive --sqli --stealth -o report.html
+```
+
+### 3️⃣ STANDARD MODE (Without Generator)
+
+Nothing changes here.
+```bash
+python dorkeye.py -d "inurl:.php?id=" --sqli
+python dorkeye.py -d dorks.txt --stealth
+python dorkeye.py -d dorks.txt -c 100 -o results.json
+```
+
+### 4️⃣ ALL COMPATIBLE COMBINATIONS
+🔹 You can combine with:
+```bash
+--stealth
+--sqli
+--no-analyze
+--no-fingerprint
+--blacklist .pdf .doc
+--whitelist .sql .env
+-c 100
+-o output.html
+--config custom.yaml
+```
+
+🔹 Full Example:
+```bash
+python dorkeye.py \
+  --dg=sensitive \
+  --mode=aggressive \
+  --sqli \
+  --stealth \
+  --blacklist .pdf .doc \
+  -c 80 \
+  -o full_report.html
 ```
 
 ### Output
 - Vulnerability type
 - Confidence score
 - Tested payload category
-
-⚠️ Always ensure **authorization**.
-
 ---
 
 ## 🔹 `--no-analyze` — Disable File Analysis
