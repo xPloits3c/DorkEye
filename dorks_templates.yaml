@@ -1,0 +1,296 @@
+variables:
+  domain:
+    - .ac
+    - .ad
+    - .ae
+    - .af
+    - .ag
+    - .ai
+    - .al
+    - .am
+    - .ao
+    - .aq
+    - .ar
+    - .as
+    - .at
+    - .au
+    - .aw
+    - .ax
+    - .az
+    - .ba
+    - .bb
+    - .bd
+    - .be
+    - .bf
+    - .bg
+    - .bh
+    - .bi
+    - .bj
+    - .bl
+    - .bm
+    - .bn
+    - .bo
+    - .bq
+    - .br
+    - .bs
+    - .bt
+    - .bv
+    - .bw
+    - .by
+    - .bz
+    - .ca
+    - .cc
+    - .cd
+    - .cf
+    - .cg
+    - .ch
+    - .ci
+    - .ck
+    - .cl
+    - .cm
+    - .cn
+    - .co
+    - .cr
+    - .cu
+    - .cv
+    - .cw
+    - .cx
+    - .cy
+    - .cz
+    - .de
+    - .dj
+    - .dk
+    - .dm
+    - .do
+    - .dz
+    - .ec
+    - .ee
+    - .eg
+    - .er
+    - .es
+    - .et
+    - .eu
+    - .fi
+    - .fj
+    - .fr
+    - .ga
+    - .gb
+    - .ge
+    - .gl
+    - .gr
+    - .hk
+    - .hr
+    - .hu
+    - .id
+    - .ie
+    - .il
+    - .in
+    - .io
+    - .ir
+    - .is
+    - .it
+    - .jp
+    - .lt
+    - .lu
+    - .lv
+    - .ma
+    - .mx
+    - .nl
+    - .no
+    - .pl
+    - .pt
+    - .ro
+    - .ru
+    - .se
+    - .uk
+    - .us
+    - .za
+
+  param:  #(Classic_Web)
+    - id
+    - page
+    - cat
+    - category
+    - product
+    - item
+    - view
+    - news
+    - article
+    - post
+    - content
+    - user
+    - userid
+    - uid
+    - profile
+    - account
+    - product_id
+    - order_id
+    - invoice
+    - file
+    - filename
+    - download
+    - path
+    - dir
+    - action
+    - module
+    - search
+    - query
+    - filter
+    - sort
+    - token
+    - session
+    - redirect
+    - next
+    - api
+    - version
+    - limit
+    - offset
+    - uuid
+    - guid
+    - hash
+    - password  #(HIGH_VULN)
+    - pass
+    - secret
+    - token
+    - access_token
+    - refresh_token
+    - code
+    - state
+    - client_id
+    - client_secret
+    - user  #(User_Account)
+    - username
+    - userid
+    - uid
+    - profile
+    - account
+    - member
+    - login
+    - email
+    - token
+    - session
+    - auth
+    - key
+    - api_key
+    - access
+    - role
+    - admin  #(Admin_Backend)
+    - panel
+    - dashboard
+    - action
+    - module
+    - controller
+    - task
+    - config
+    - setting
+    - update
+    - delete
+    - edit
+    - create
+    - product_id  #(E_commerce)
+    - pid
+    - sku
+    - cart
+    - basket
+    - order
+    - order_id
+    - invoice
+    - price
+    - currency
+    - quantity
+    - coupon
+    - discount
+    - checkout
+    - payment
+    - p  #(CMS_Blog)
+    - post_id
+    - page_id
+    - author
+    - comment
+    - reply
+    - attachment
+    - feed
+    - category_id
+    - archive
+    - template
+    - file  #(File_Download)
+    - filename
+    - filepath
+    - download
+    - doc
+    - document
+    - attachment
+    - path
+    - folder
+    - dir
+    - api  #(API)
+    - version
+    - v
+    - limit
+    - offset
+    - cursor
+    - per_page
+    - size
+    - include
+    - expand
+    - fields
+    - format
+    - callback
+    - redirect  #(Framework)
+    - return
+    - returnUrl
+    - next
+    - url
+    - target
+    - dest
+    - source
+    - continue
+    - origin
+    - uuid  #(Numeric_Identifier)
+    - guid
+    - hash
+    - reference
+    - object
+    - object_id
+    - record
+    - record_id
+    - entry
+    - entry_id
+
+  extension:
+    - sql
+    - bak
+    - old
+    - env
+    - log
+    - json
+
+templates:
+
+  sqli:
+    mode: aggressive
+    dorks:
+      - 'inurl:.php?{param}='
+      - 'site:{domain} inurl:?{param}='
+
+  backups:
+    mode: soft
+    dorks:
+      - 'filetype:{extension} site:{domain}'
+      - '"index of" backup'
+
+  sensitive:
+    mode: medium
+    dorks:
+      - 'filetype:env intext:password'
+      - '"DB_PASSWORD"'
+      - '"AWS_SECRET_ACCESS_KEY"'
+      - '"BEGIN RSA PRIVATE KEY"'
+      - '"index of" ".git"'
+      - 'filetype:json "api_key"'
+
+  admin:
+    mode: aggressive
+    dorks:
+      - 'intitle:"admin panel"'
+      - 'inurl:login'
