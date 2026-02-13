@@ -43,7 +43,7 @@ ASCII_LOGO = """
  [bold yellow]__H__[/bold yellow]  [bold white]    xploits3c.github.io/DorkEye [/bold white]
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
- [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[bold red] DorkEye | OSINT & Security Dorking Framework[/bold red][/bold yellow]
+ [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye |[bold red] OSINT & Security Dorking Framework[/bold red][/bold yellow]
  [bold yellow] |_|[/bold yellow]  [bold white]                     v4.1.2[/bold white]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
@@ -1514,6 +1514,32 @@ user_agent_rotation: true
 
     console.print("[green][✓] Sample config created: dorkeye_config.yaml[/green]")
 
+def resolve_templates_argument(template_arg):
+    templates_dir = Path(__file__).parent / "Templates"
+
+    # Case 1: no parameter → default
+    if template_arg is None:
+        return [templates_dir / "dorks_templates.yaml"]
+
+    # Case 2: --templates=all
+    if template_arg.lower() == "all":
+        yaml_files = list(templates_dir.glob("*.yaml"))
+
+        if not yaml_files:
+            console.print("[red][!] No template files found in Templates directory[/red]")
+            sys.exit(1)
+
+        return yaml_files
+
+    # Case 3: specific file
+    specific_path = templates_dir / template_arg
+
+    if not specific_path.exists():
+        console.print(f"[red][!] Template not found: {template_arg}[/red]")
+        sys.exit(1)
+
+    return [specific_path]
+
 def main():
     greet_user()
 
@@ -1536,6 +1562,7 @@ def main():
     parser.add_argument("--no-analyze", action="store_true", help="Disable file analysis")
     parser.add_argument("--sqli", action="store_true", help="Enable SQL injection detection")
     parser.add_argument("--stealth", action="store_true", help="Enable stealth mode (slower, safer)")
+    parser.add_argument("--templates", type=str, help="Template file inside Templates directory (use --templates=filename.yaml or --templates=all)")
     parser.add_argument("--no-fingerprint", action="store_true", help="Disable HTTP fingerprinting")
     parser.add_argument("--dg", action="append", nargs="?", const="all", help="Activate Dork Generator (optional: =category)")
     parser.add_argument("--mode", nargs="?", const="soft", default="soft", help="Generation mode: soft, medium, aggressive")
@@ -1544,6 +1571,12 @@ def main():
     parser.add_argument("--create-config", action="store_true", help="Create sample configuration file")
 
     args = parser.parse_args()
+
+    # Enforce --templates= syntax (no space allowed)
+    for arg in sys.argv:
+        if arg.startswith("--templates") and not arg.startswith("--templates="):
+            console.print("[red][!] Use --templates=filename.yaml format (no spaces)[/red]")
+            sys.exit(1)
 
     VALID_CATEGORIES = ["sqli", "backups", "sensitive", "admin"]
     VALID_MODES = ["soft", "medium", "aggressive"]
@@ -1610,13 +1643,25 @@ def main():
     dorkeye = DorkEyeEnhanced(config, args.output)
 
     # Determine dorks source
-    if args.dg:
-        generator = DorkGenerator("dorks_templates.yaml")
+    template_files = resolve_templates_argument(args.templates)
 
-        dorks = generator.generate(
+    console.print(
+        f"[cyan][*] Loaded template(s): {', '.join([t.name for t in template_files])}[/cyan]"
+    )
+
+    all_dorks = []
+
+    for template_file in template_files:
+        generator = DorkGenerator(str(template_file))
+
+        generated = generator.generate(
             categories=selected_categories,
             mode=args.mode
         )
+
+        all_dorks.extend(generated)
+
+    dorks = all_dorks
 
     console.print(f"[cyan][*] Generated {len(dorks)} dorks (mode: {args.mode})[/cyan]")
 
