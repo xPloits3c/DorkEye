@@ -155,16 +155,18 @@ python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ## 📁 Project Structure
 ```
 DorkEye/
-├── dorkeye.py
-├── dork_generator.py
-├── requirements.txt
-├── http_fingerprints.json
-├── dorks_templates.yaml
-├── setup.sh / setup.bat
-├── INSTALL.md
-├── README.md
-├── dorkeye_config.yaml
-├── Dump/
+│   ├── dorkeye.py
+│   ├── dork_generator.py
+│   ├── requirements.txt
+│   ├── http_fingerprints.json
+│   ├── setup.sh / setup.bat
+│   ├── INSTALL.md
+│   ├── README.md
+│   ├── dorkeye_config.yaml
+Templates/
+│   ├── dorks_templates.yaml
+│   ├── dorks_templates_research.yaml
+Dump/
 │   ├── *.csv 
 │   ├── *.json
 │   ├── *.txt
