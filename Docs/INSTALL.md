@@ -39,33 +39,19 @@ System Requirements:
 
 ## 🐧 LINUX INSTALLATION (Kali, Ubuntu, Debian)
 
-Method 1: Automatic Setup (Recommended)
+Method 1: Advanced / Manual Setup
 
 -     sudo apt update
--     sudo apt install -y python3 python3-pip python3-venv git
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
--     python3 -m venv dorkeye_env
--     sudo chmod +x setup.sh
--     ./setup.sh
-
-Test:
--     source dorkeye_env/bin/activate
--     python dorkeye.py --help
-
-Method 2: Advanced / Manual Setup
-
--     sudo apt update
--     sudo apt install -y python3 python3-pip python3-venv git
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
--     python3 -m venv dorkeye_env
--     source dorkeye_env/bin/activate
 -     pip install --upgrade pip
+-     sudo apt install -y python3 python3-pip python3-venv git
+-     git clone https://github.com/xPloits3c/DorkEye.git
+-     cd DorkEye
+-     python3 -m venv dorkeye_env
+-     source dorkeye_env/bin/activate
 -     pip install -r requirements.txt
--     python3 dorkeye.py --help
+-     python dorkeye.py -h
 
-Method 3: Quick Launcher (Optional)
+Method 2: Quick Launcher (Optional)
 -     sudo nano /usr/local/bin/dorkeye
 -     #!/bin/bash
 -     cd /path/to/DorkEye
@@ -74,84 +60,20 @@ Method 3: Quick Launcher (Optional)
 -     sudo chmod +x /usr/local/bin/dorkeye
 
 Usage:
--     dorkeye -d "your dork" -o results
-========================================
-
-## 🪟 WINDOWS INSTALLATION
-
-## Method 1: Automatic Setup (Recommended)
-
-- Install Python (check "Add to PATH")
-Download: https://www.python.org/downloads/
-✔ Check “Add Python to PATH”
--     python --version
-
-Method 2: Install Git (optional)
-Download: https://git-scm.com/download/win
--     git --version
-
-Method 3: Install DorkEye
-- Option A: Git
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
--     setup.bat
-
-- Option B: ZIP
--     cd C:\DorkEye
--     setup.bat
-
-4 Run:
--     run_dorkeye.bat -d "site:example.com" -o test
-
-## Method 2: Manual Setup (CMD)
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
--     python -m venv dorkeye_env
--     dorkeye_env\Scripts\activate.bat
--     python -m pip install --upgrade pip
--     pip install -r requirements.txt
--     python dorkeye.py --help
-
-## Method 3: PowerShell (Admin)
-- Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
--     python -m venv dorkeye_env-
--     .\dorkeye_env\Scripts\Activate.ps1
--     pip install -r requirements.txt
--     python dorkeye.py --help
-
+-     dorkeye -d "your dork" -o results.html
 ========================================
 
 ## 🍎 MACOS INSTALLATION
-- Method 1: Automatic
--     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
--     brew install python3 git
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
--     chmod +x setup.sh
--     ./setup.sh
-
-- Method 2: Manual
+- Manual:
 -     xcode-select --install
 -     brew install python3
 -     git clone https://github.com/xPloits3c/DorkEye.git
+-     python3 dorkeye.py --help
+
+- Create venv:
 -     cd DorkEye
 -     python3 -m venv dorkeye_env
 -     source dorkeye_env/bin/activate
--     pip install -r requirements.txt
--     python3 dorkeye.py --help
-
-## 🔧 Manual Installation (All Platforms)
-
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
-
-- Create venv:
--     python3 -m venv dorkeye_env
--     source dorkeye_env/bin/activate   # Linux/macOS
--     python -m venv dorkeye_env
--     dorkeye_env\Scripts\activate.bat  # Windows
 
 - Install deps:
 -     pip install --upgrade pip
@@ -174,9 +96,7 @@ Method 3: Install DorkEye
 - Kali: externally-managed-environment
 -     python3 -m venv dorkeye_env
 -     source dorkeye_env/bin/activate
-
-- Windows scripts disabled
--     Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+-     deactivate
 ========================================
 
 ## 🔄 Updating DorkEye
@@ -207,11 +127,11 @@ Include:
 
 ## ✅ Post-Installation Checklist
 
-- ✔ Python 3.8+
+- ✔ Python 3.9+
 - ✔ Virtual environment active
 - ✔ Dependencies installed
 - ✔ Test search works
-- ✔ CSV / JSON / HTML generated
+- ✔ Filetype generated
 - ✔ --help works
 - ✔ Config file created
 
