@@ -1,0 +1,33 @@
+# ==========================================
+# DorkEye v4.2.6 - Base Configuration
+# ==========================================
+
+# File extension categorization
+extensions:
+  documents: [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"]
+  archives: [".zip", ".rar", ".tar", ".gz", ".7z"]
+  databases: [".sql", ".db", ".sqlite", ".mdb"]
+  backups: [".bak", ".backup", ".old", ".tmp"]
+  configs: [".conf", ".config", ".ini", ".yaml", ".yml", ".json", ".xml"]
+  scripts: [".php", ".asp", ".jsp", ".sh"]
+  credentials: [".env", ".git", ".htpasswd"]
+
+# Filtering
+blacklist: []
+whitelist: []
+
+# Analysis Features
+analyze_files: true
+sqli_detection: false
+
+# Network Behavior
+stealth_mode: false
+http_fingerprinting: true
+user_agent_rotation: true
+
+# Networking Parameters
+request_timeout: 10
+max_retries: 3
+
+# File Handling
+max_file_size_check: 52428800  # 50MB
