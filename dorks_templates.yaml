@@ -22,3 +22,13 @@ templates:
     dorks:
       - 'site:{domain} inurl:{param}'
       - 'filetype:{extension} site:{domain}'
+
+  sqli:
+    mode: aggressive
+    dorks:
+      - 'inurl:.php?{param}='
+
+  sensitive:
+    mode: medium
+    dorks:
+      - '"BEGIN RSA PRIVATE KEY"'
