@@ -117,8 +117,7 @@ sudo chmod +x setup.sh
 ---
 
 ## ▶️ Test
-
-<img width="1547" height="755" alt="de-h" src="https://github.com/user-attachments/assets/4b33c089-8502-4408-95be-d401e852c380" />
+<img width="1468" height="896" alt="dev4 2 6_h" src="https://github.com/user-attachments/assets/9b7fb026-d052-44e2-a504-98a7ccb82d56" />
 
 ```bash
 # Help:
@@ -134,8 +133,7 @@ rm -rf dorkeye_env
 
 [![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
 
-![00](https://github.com/user-attachments/assets/bb038de4-e822-491c-9862-c39008bdf6c9)
-![01](https://github.com/user-attachments/assets/5bb193fd-5265-4ac7-9b27-1a8ffcd84ad1)
+<img width="1013" height="596" alt="dg_search_priv" src="https://github.com/user-attachments/assets/b85bd006-4d73-484f-9dae-5ebf86e4968e" />
 
 # 🔹 Basic search
 ```bash
