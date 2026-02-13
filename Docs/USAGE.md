@@ -216,7 +216,8 @@ python dorkeye.py --dg=sqli --stealth
 
 🔹 Generator + Detection + Stealth + Output
 ```bash
-python dorkeye.py --dg=sqli --mode=aggressive --sqli --stealth -o report.html
+python dorkeye.py --dg --mode=aggressive --sqli --stealth -o report.html
+python dorkeye.py --dg=sqli --mode=aggressive --templates=dorks_templates.yaml --sqli --stealth -o report.html
 ```
 
 ### 3️⃣ STANDARD MODE (Without Generator)
