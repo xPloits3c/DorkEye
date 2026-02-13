@@ -1,5 +1,5 @@
 variables:
-  domain:
+  domain: #COUNTRY_CODE
     - .ac
     - .ad
     - .ae
@@ -105,6 +105,22 @@ variables:
     - .uk
     - .us
     - .za
+    - .com #(Generic_Top-Level_Domains)
+    - .org
+    - .net
+    - .info
+    - .biz
+    - .name
+    - .pro
+    - .edu
+    - .gov
+    - .mil
+    - .int
+    - .aero
+    - .coop
+    - .museum
+    - .jobs
+    - .travel
 
   param:  #(Classic_Web)
     - id
