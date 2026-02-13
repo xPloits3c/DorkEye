@@ -1,0 +1,56 @@
+variables:
+  domain:
+    - .com
+    - .org
+    - .net
+    - .eu
+    - .it
+    - .de
+    - .fr
+
+  param:
+    - id
+    - page
+    - product
+    - user
+    - account
+    - search
+    - query
+    - redirect
+
+  extension:
+    - sql
+    - bak
+    - old
+    - log
+    - json
+    - yaml
+    - env
+
+templates:
+
+  parameter_discovery:
+    mode: medium
+    dorks:
+      - 'inurl:.php?{param}='
+      - 'site:{domain} inurl:?{param}='
+
+  backup_files:
+    mode: medium
+    dorks:
+      - 'filetype:{extension} site:{domain}'
+      - '"index of" backup site:{domain}'
+      - '"index of" .bak site:{domain}'
+
+  exposed_configs:
+    mode: medium
+    dorks:
+      - 'filetype:env site:{domain}'
+      - 'filetype:json "api" site:{domain}'
+      - '"index of" config site:{domain}'
+
+  login_panels:
+    mode: soft
+    dorks:
+      - 'intitle:"login" site:{domain}'
+      - 'inurl:admin site:{domain}'
