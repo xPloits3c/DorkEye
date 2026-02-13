@@ -11,19 +11,33 @@ variables:
     - user
 
   extension:
-    - sql
-    - bak
+    - pdf
+    - doc
+    - xls
+    - json
     - log
 
 templates:
 
   example_search:
-    mode: basic
+    mode: soft
     dorks:
       - 'site:{domain} inurl:{param}'
       - 'filetype:{extension} site:{domain}'
 
-  sqli:
+  documents:
+    mode: soft
+    dorks:
+      - 'site:{domain} filetype:{extension}'
+      - 'filetype:pdf site:{domain}'
+      
+    directories:
+    mode: soft
+    dorks:
+      - '"index of" site:{domain}'
+      - '"parent directory" site:{domain}'
+    
+    sqli:
     mode: aggressive
     dorks:
       - 'inurl:.php?{param}='
