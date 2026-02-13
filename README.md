@@ -43,9 +43,7 @@ It helps discover:
 - ✅ Maintain anonymity and avoid IP blocking
 - ✅ Clean and unfiltered search results
 - ✅ Advanced analysis and automated SQLi testing
-- ✅ Continue Dorking for hours, DorkEye won’t get banned thanks to its realistic browsers.
-
-<img width="1024" height="1536" alt="whatisde" src="https://github.com/user-attachments/assets/f9fbd30b-60cb-4343-ae47-24e07b751c4c" />
+- ✅ Continue Dorking for hours, DorkEye won’t get banned.
 
 ---
 
