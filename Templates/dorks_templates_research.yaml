@@ -4,7 +4,7 @@ variables:
     - .org
     - .net
     - .eu
-    - .it
+    - .ru
     - .de
     - .fr
 
