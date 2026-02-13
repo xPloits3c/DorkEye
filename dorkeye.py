@@ -44,7 +44,7 @@ ASCII_LOGO = """
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye |[bold red] OSINT & Security Dorking Framework[/bold red][/bold yellow]
- [bold yellow] |_|[/bold yellow]  [bold white]                     v4.1.2[/bold white]
+ [bold yellow] |_|[/bold yellow]  [bold white]                     v4.2.6[/bold white]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
  [bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
