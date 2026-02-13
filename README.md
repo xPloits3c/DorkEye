@@ -132,21 +132,24 @@ rm -rf dorkeye_env
 ![00](https://github.com/user-attachments/assets/bb038de4-e822-491c-9862-c39008bdf6c9)
 ![01](https://github.com/user-attachments/assets/5bb193fd-5265-4ac7-9b27-1a8ffcd84ad1)
 
+# 🔹 Basic search
 ```bash
-# Basic search
 python3 dorkeye.py -d "inurl:admin" -o results.txt
-
-# SQLi + stealth
+```
+🔹 # DORKS GENERATOR + DETECTION
+```bash
+python dorkeye.py --dg=sqli --mode=aggressive --sqli --stealth -o report.json
+```
+🔹 # SQLi + stealth
+```bash
 python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
-
-# Fast scan
+```
+🔹 # Fast scan
+```bash
 python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
-
 ---
-
 ## 📁 Project Structure
-
 ```
 DorkEye/
 ├── dorkeye.py
@@ -181,9 +184,9 @@ DorkEye/
 
 ## ⚠️  ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
 
-This tool is for **educational, research, and authorized security testing only.** 
-**Unauthorized access is illegal.**
-The **author is not responsible** for misuse.
+-   🔹 This tool is for **educational, research, and authorized security testing only.** 
+-   🔹 **Unauthorized access is illegal.**
+-   🔹 The **author is not responsible** for misuse.
 
 ---
 
