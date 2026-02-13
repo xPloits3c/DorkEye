@@ -23,7 +23,7 @@
 
 ## 🧠 What is DorkEye
 
-**DorkEye** is an advanced, automated **OSINT dorking tool** that leverages **DuckDuckGo** to identify exposed web resources using Open Source Intelligence techniques.
+**DorkEye** is an advanced, automated **Dorking** that leverages **DuckDuckGo** to identify exposed web resources using Open Source Intelligence techniques.
 
 ![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
