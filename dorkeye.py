@@ -1547,12 +1547,38 @@ def main():
         description="DorkEye v4.2.6 | OSINT & Security Dorking Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  %(prog)s -d "site:example.com filetype:pdf" -o results
-  %(prog)s -d dorks.txt -c 100 -o output --analyze
-  %(prog)s -d dorks.txt --config custom_config.yaml --sqli
-  %(prog)s -d "inurl:.php?id=" --sqli --stealth -o scan
-  %(prog)s --create-config
-        """
+
+  # Manual dork search
+    %(prog)s -d "site:example.com filetype:pdf" -o results.html
+
+  # Load dorks from file
+    %(prog)s -d dorks.txt -c 100 -o output.html
+
+  # Use Dork Generator (default template)
+    %(prog)s --dg=all
+
+  # Use specific DorkGenerator (DG) category
+    %(prog)s --dg=sqli --mode=medium --sqli --stealth -o results.html
+
+  # Use custom template file
+    %(prog)s --dg=backups --templates=dorks_templates_research.yaml
+
+  # Load all templates in Templates directory
+    %(prog)s --dg=all --templates=all
+
+  # Enable SQLi detection + stealth
+    %(prog)s --dg=sqli --mode=aggressive --sqli --stealth -o scan
+
+  # Use custom runtime config
+    %(prog)s --dg=sensitive --config=custom_config.yaml
+
+  # Create sample runtime config
+    %(prog)s --create-config
+
+  # Full Scan DG + SQLi + Stealth
+    %(prog)s python dorkeye.py --dg=sqli --mode=aggressive --templates=dorks_templates.yaml --sqli --stealth -o report_test.html
+
+"""
     )
 
     parser.add_argument("-d", "--dork", help="Single dork or file containing dorks")
@@ -1562,8 +1588,8 @@ def main():
     parser.add_argument("--no-analyze", action="store_true", help="Disable file analysis")
     parser.add_argument("--sqli", action="store_true", help="Enable SQL injection detection")
     parser.add_argument("--stealth", action="store_true", help="Enable stealth mode (slower, safer)")
+    parser.add_argument("--no-fingerprint", action="store_true", help="Disable HTTP fingerprinting")    
     parser.add_argument("--templates", type=str, help="Template file inside Templates directory (use --templates=filename.yaml or --templates=all)")
-    parser.add_argument("--no-fingerprint", action="store_true", help="Disable HTTP fingerprinting")
     parser.add_argument("--dg", action="append", nargs="?", const="all", help="Activate Dork Generator (optional: =category)")
     parser.add_argument("--mode", nargs="?", const="soft", default="soft", help="Generation mode: soft, medium, aggressive")
     parser.add_argument("--blacklist", nargs="+", help="Extensions to blacklist (e.g., .pdf .doc)")
