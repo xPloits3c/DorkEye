@@ -218,7 +218,7 @@ variables:
     - discount
     - checkout
     - payment
-    - p  #(CMS_Blog)
+    #(CMS_Blog)
     - post_id
     - page_id
     - author
