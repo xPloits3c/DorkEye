@@ -51,10 +51,8 @@ It helps discover:
 
 ## ✨ What’s New
 
----
-
 ### DORK GENERATOR
-...
+Generates structured Google dorks using a modular YAML template engine.
 
 ### 🧠 Automated SQL Injection Testing
 - Error‑based SQLi  
