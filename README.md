@@ -2,7 +2,8 @@
 <img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/2d41cfd5-cd4d-49ab-b5bf-3306966ed0c5" />
 </div>
 
-# 🔍 DorkEye — Advanced OSINT Dorking Tool
+# 🦅 DorkEye
+# OSINT & Security Dorking Framework
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -149,16 +150,20 @@ python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
 DorkEye/
 ├── dorkeye.py
+├── dork_generator.py
 ├── requirements.txt
 ├── http_fingerprints.json
+├── dorks_templates.yaml
 ├── setup.sh / setup.bat
 ├── INSTALL.md
 ├── README.md
 ├── dorkeye_config.yaml
 ├── Dump/
-│   ├── *.csv
+│   ├── *.csv 
 │   ├── *.json
-│   └── *.html
+│   ├── *.txt
+│   ├── *.html
+│   └── *....
 ```
 
 ---
@@ -174,10 +179,11 @@ DorkEye/
 
 ---
 
-## ⚠️ ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
+## ⚠️  ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
 
-This tool is for **educational, research, and authorized security testing only**.  
-Unauthorized access is illegal. The author is not responsible for misuse.
+This tool is for **educational, research, and authorized security testing only.** 
+**Unauthorized access is illegal.**
+The **author is not responsible** for misuse.
 
 ---
 
