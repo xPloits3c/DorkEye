@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.1.2 - Advanced OSINT Dorking Tool
+DorkEye v4.2.6 | OSINT & Security Dorking Framework
 Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
-Author: @xPloits3c | https://github.com/xPloits3c/DorkEye
+Author: xPloits3c | https://github.com/xPloits3c/DorkEye
 """
 
 import os
@@ -26,6 +26,7 @@ from enum import Enum
 
 import requests
 from requests.adapters import HTTPAdapter
+from dork_generator import DorkGenerator
 from urllib3.util.retry import Retry
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
@@ -42,7 +43,7 @@ ASCII_LOGO = """
  [bold yellow]__H__[/bold yellow]  [bold white]    xploits3c.github.io/DorkEye [/bold white]
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
- [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[bold red] Advanced OSINT Dorking Tool[/bold red][/bold yellow]
+ [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye[bold red] DorkEye | OSINT & Security Dorking Framework[/bold red][/bold yellow]
  [bold yellow] |_|[/bold yellow]  [bold white]                     v4.1.2[/bold white]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
@@ -1298,7 +1299,7 @@ class DorkEyeEnhanced:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>DorkEye v4.1.2 Report</title>
+    <title>DorkEye v4.2.6 Report</title>
     <style>
         body {{ font-family: 'Courier New', monospace; margin: 20px; background: #0a0a0a; color: #00ff00; }}
         .header {{ background: #1a1a1a; color: #00ff00; padding: 20px; border: 2px solid #00ff00; margin-bottom: 20px; }}
@@ -1329,7 +1330,7 @@ class DorkEyeEnhanced:
 </head>
 <body>
     <div class="header">
-        <h1>┌─[ DorkEye v4.1.2 - OSINT Report ]</h1>
+        <h1>┌─[ DorkEye v4.2.6 - OSINT Report ]</h1>
         <p>└─> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
     </div>
 """
@@ -1486,7 +1487,7 @@ def load_config(config_file: str = None) -> Dict:
 
 def create_sample_config():
     """Create sample configuration file"""
-    config_yaml = """# DorkEye v4.1.2 Configuration
+    config_yaml = """# DorkEye v4.2.6 Configuration
 
 extensions:
   documents: [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"]
@@ -1517,7 +1518,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.1.2 - Advanced Dorking Tool",
+        description="DorkEye v4.2.6 | OSINT & Security Dorking Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   %(prog)s -d "site:example.com filetype:pdf" -o results
@@ -1536,11 +1537,42 @@ def main():
     parser.add_argument("--sqli", action="store_true", help="Enable SQL injection detection")
     parser.add_argument("--stealth", action="store_true", help="Enable stealth mode (slower, safer)")
     parser.add_argument("--no-fingerprint", action="store_true", help="Disable HTTP fingerprinting")
+    parser.add_argument("--dg", action="append", nargs="?", const="all", help="Activate Dork Generator (optional: =category)")
+    parser.add_argument("--mode", nargs="?", const="soft", default="soft", help="Generation mode: soft, medium, aggressive")
     parser.add_argument("--blacklist", nargs="+", help="Extensions to blacklist (e.g., .pdf .doc)")
     parser.add_argument("--whitelist", nargs="+", help="Extensions to whitelist (e.g., .pdf .xls)")
     parser.add_argument("--create-config", action="store_true", help="Create sample configuration file")
 
     args = parser.parse_args()
+
+    VALID_CATEGORIES = ["sqli", "backups", "sensitive", "admin"]
+    VALID_MODES = ["soft", "medium", "aggressive"]
+
+    # --- Validate --dg ---
+    selected_categories = None
+
+    if args.dg:
+        if len(args.dg) > 1:
+            parser.error("Multiple --dg arguments are not allowed.")
+
+        dg_value = args.dg[0]
+
+        if dg_value == "all":
+            selected_categories = VALID_CATEGORIES
+        else:
+            if dg_value not in VALID_CATEGORIES:
+                parser.error(
+                    f"Invalid category '{dg_value}'. "
+                    f"Available: {', '.join(VALID_CATEGORIES)}"
+                )
+            selected_categories = [dg_value]
+
+    # --- Validate --mode ---
+    if args.mode not in VALID_MODES:
+        parser.error(
+            f"Invalid mode '{args.mode}'. "
+            f"Available: {', '.join(VALID_MODES)}"
+        )
 
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -1551,7 +1583,7 @@ def main():
         create_sample_config()
         return
 
-    if not args.dork:
+    if not args.dork and not args.dg:
         parser.print_help()
         return
 
@@ -1577,7 +1609,24 @@ def main():
 
     dorkeye = DorkEyeEnhanced(config, args.output)
 
-    dorks = dorkeye.process_dorks(args.dork)
+    # Determine dorks source
+    if args.dg:
+        generator = DorkGenerator("dorks_templates.yaml")
+
+        dorks = generator.generate(
+            categories=selected_categories,
+            mode=args.mode
+        )
+
+    console.print(f"[cyan][*] Generated {len(dorks)} dorks (mode: {args.mode})[/cyan]")
+
+    if selected_categories:
+        console.print(f"[cyan][*] Categories: {', '.join(selected_categories)}[/cyan]")
+
+    else:
+        dorks = dorkeye.process_dorks(args.dork)
+
+
     console.print(f"[bold cyan]┌─[ LOADED {len(dorks)} DORK(s) ][/bold cyan]")
     console.print(f"[bold cyan]└─>[/bold cyan] Starting ... \n")
 
