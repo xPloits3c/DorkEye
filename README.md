@@ -108,8 +108,7 @@ git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
 python3 -m venv dorkeye_env
 source dorkeye_env/bin/activate
-sudo chmod +x setup.sh
-./setup.sh
+pip install -r requirements.txt
 ```
 
 ---
@@ -120,7 +119,7 @@ sudo chmod +x setup.sh
 ```bash
 # Help:
 python dorkeye.py -h
-# Deactivate:
+# Deactivate environment:
 deactivate
 # Remove environment:
 rm -rf dorkeye_env
