@@ -2,8 +2,9 @@
 <img width="500" height="500" alt="image" src="https://github.com/user-attachments/assets/1d99ab23-85ab-4c1f-a842-d6d77dc7f652" />
 </div>
 
-# 🦅 DorkEye
-# OSINT & Security Dorking Framework
+---
+
+# 🦅 DorkEye | OSINT & Security Dorking Framework
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
