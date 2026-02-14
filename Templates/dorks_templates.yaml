@@ -40,8 +40,8 @@ templates:
     sqli:
     mode: aggressive
     dorks:
-      - 'inurl:.php?{param}='
-
+      - 'site:{domain} inurl:.php?{param}='
+      
   sensitive:
     mode: medium
     dorks:
