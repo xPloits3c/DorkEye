@@ -1549,33 +1549,12 @@ def main():
         epilog="""Examples:
 
   # Manual dork search
-    %(prog)s -d "site:example.com filetype:pdf" -o results.html
-
-  # Load dorks from file
+    %(prog)s -d "site:example.com filetype:pdf" -o results.json
     %(prog)s -d dorks.txt -c 100 -o output.html
-
-  # Use Dork Generator (default template)
     %(prog)s --dg=all
-
-  # Use specific DorkGenerator (DG) category
     %(prog)s --dg=sqli --mode=medium --sqli --stealth -o results.html
-
-  # Use custom template file
-    %(prog)s --dg=backups --templates=dorks_templates_research.yaml
-
-  # Load all templates in Templates directory
-    %(prog)s --dg=all --templates=all
-
-  # Enable SQLi detection + stealth
-    %(prog)s --dg=sqli --mode=aggressive --sqli --stealth -o scan
-
-  # Use custom runtime config
-    %(prog)s --dg=sensitive --config=custom_config.yaml
-
-  # Create sample runtime config
-    %(prog)s --create-config
-
-  # Full Scan DG + SQLi + Stealth
+    %(prog)s --dg=backups --templates=dorks_templates_research.yaml output.html
+    %(prog)s --dg=all --templates=all output.html
     %(prog)s python dorkeye.py --dg=sqli --mode=aggressive --templates=dorks_templates.yaml --sqli --stealth -o report_test.html
 
 """
