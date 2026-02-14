@@ -21,7 +21,7 @@ git clone https://github.com/xPloits3c/DorkEye.git
 ## 📋 Table of Contents
 
 1. [Prerequisites](#-prerequisites)
-2. [Quick Installation (recommended)](#-Quick Installation)
+2. [Quick Installation (Recommended)](#-Quick Installation)
 5. [CLI Command Mode (optional)](#-CLI)
 6. [Verification](#-verification)
 7. [Troubleshooting](#-troubleshooting)
