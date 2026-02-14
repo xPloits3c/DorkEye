@@ -1,23 +1,35 @@
 <img width="1536" height="1024" alt="dorkeye-install" src="https://github.com/user-attachments/assets/a0983dc1-2c2e-4cbd-9ab9-7ae1a3743f29" />
 
-## 📦 DorkEye v4.2.6 — Installation Guide
-- Complete guide to installing DorkEye.
+# 📦 DorkEye v4.2.6 — Installation Guide
+
+Official installation guide for **DorkEye v4.2.6**  
+OSINT & Security Dorking Framework
+
+---
+
+## 🔗 Direct Download
+
+You can download the latest version directly from GitHub:
+
+👉 https://github.com/xPloits3c/DorkEye/archive/refs/tags/DorkEye_v4.2.6.zip  
+
+Or clone the repository:
+
+```bash
+git clone https://github.com/xPloits3c/DorkEye.git
 
 ========================================
 
 ## 📋 Table of Contents
 
 1. [Prerequisites](#-prerequisites)
-2. [Linux Installation](#-linux-installation)
-3. [Windows Installation](#-windows-installation)
-4. [macOS Installation](#-macos-installation)
-5. [Manual Installation (All Platforms)](#-manual-installation-all-platforms)
+2. [Quick Installation (recommended)](#-Quick Installation)
+5. [CLI Command Mode (optional)](#-CLI)
 6. [Verification](#-verification)
 7. [Troubleshooting](#-troubleshooting)
 8. [Updating DorkEye](#-updating-dorkeye)
 9. [Uninstallation](#-uninstallation)
-10. [Getting Help](#-getting-help)
-11. [Post-Installation Checklist](#-post-installation-checklist)
+10. [Support](#-support)
 
 ========================================
 
@@ -25,9 +37,9 @@
 ----------------------------------------
 Required Software: |   Check Command:  |
 ----------------------------------------
-- Python 3.8+      | python3 --version
+- Python 3.9+      | python3 --version
 - pip (latest)     | pip3 --version
-- git              | git --version
+- git (latest)     | git --version
 
 System Requirements:
 - Linux / Windows 10+ / macOS 10.14+
@@ -37,93 +49,95 @@ System Requirements:
 
 ========================================
 
-## 🐧 LINUX INSTALLATION (Kali, Ubuntu, Debian)
+## 🐧 Quick Installation (Recommended)
+This method works on Linux, macOS, and Windows.
 
-Method 1: Advanced / Manual Setup
+git clone https://github.com/xPloits3c/DorkEye.git
+cd DorkEye
 
--     sudo apt update
--     pip install --upgrade pip
--     sudo apt install -y python3 python3-pip python3-venv git
--     git clone https://github.com/xPloits3c/DorkEye.git
--     cd DorkEye
--     python3 -m venv dorkeye_env
--     source dorkeye_env/bin/activate
--     pip install -r requirements.txt
--     python dorkeye.py -h
+# Create virtual environment
+python3 -m venv dorkeye_env
 
-Method 2: Quick Launcher (Optional)
--     sudo nano /usr/local/bin/dorkeye
--     #!/bin/bash
--     cd /path/to/DorkEye
--     source dorkeye_env/bin/activate
--     python3 dorkeye.py "$@"
--     sudo chmod +x /usr/local/bin/dorkeye
+# Activate virtual environment
+# Linux / macOS:
+source dorkeye_env/bin/activate
+# Windows:
+dorkeye_env\Scripts\activate
 
-Usage:
--     dorkeye -d "your dork" -o results.html
+# Upgrade pip
+pip install --upgrade pip
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run DorkEye:
+python dorkeye.py -h
 ========================================
 
-## 🍎 MACOS INSTALLATION
-- Manual:
--     xcode-select --install
--     brew install python3
--     git clone https://github.com/xPloits3c/DorkEye.git
--     python3 dorkeye.py --help
+## 💻 CLI Command Mode (Optional)
+To install DorkEye as a system command:
+pip install -e .
 
-- Create venv:
--     cd DorkEye
--     python3 -m venv dorkeye_env
--     source dorkeye_env/bin/activate
+Then you can use:
+dorkeye --help
 
-- Install deps:
--     pip install --upgrade pip
--     pip install -r requirements.txt
+This mode is recommended for advanced users.
 ========================================
 
-## ✅ VERIFICATION
+## ✅ Verification
+Test basic functionality:
+python dorkeye.py --create-config
+python dorkeye.py -d "python programming" -c 5 -o test
 
--     python3 dorkeye.py --create-config
--     python3 dorkeye.py -d "python programming" -c 5 -o test
+If using CLI mode:
+dorkeye --dg=all
 ========================================
 
 ## 🐛 Troubleshooting
+ModuleNotFoundError: ddgs
+pip uninstall duckduckgo-search -y
+pip install ddgs
 
-- Common Issues
--   ''ModuleNotFoundError: ddgs''
--     pip uninstall duckduckgo-search -y
--     pip install ddgs
+Externally Managed Environment (Kali Linux)
+Always use a virtual environment:
+python3 -m venv dorkeye_env
+source dorkeye_env/bin/activate
 
-- Kali: externally-managed-environment
--     python3 -m venv dorkeye_env
--     source dorkeye_env/bin/activate
--     deactivate
+Permission Errors:
+Avoid using sudo pip install.
+Use a virtual environment instead.
 ========================================
 
 ## 🔄 Updating DorkEye
+cd DorkEye
+git pull origin main
+pip install --upgrade -r requirements.txt
 
--     cd DorkEye
--     git pull origin main
--     source dorkeye_env/bin/activate
--     pip install --upgrade -r requirements.txt
+If installed in CLI mode:
+pip install -e . --upgrade
 ========================================
 
-## 🗑️ Uninstall
+## 🗑️ Uninstallation
+Linux / macOS:
+rm -rf DorkEye
 
-- (Linux/macOS)
--     rm -rf DorkEye
-- (Windows)
--     rmdir /s /q DorkEye
+Windows:
+rmdir /s /q DorkEye
+
+To remove only the virtual environment:
+rm -rf dorkeye_env
 ========================================
 
-## 📞 Getting Help
--     https://github.com/xPloits3c/DorkEye/issues
--     whitehat.report@onionmail.org
+## 📞 Support
+If you encounter issues.
+Open an issue on GitHub:
+https://github.com/xPloits3c/DorkEye/issues
 
-Include:
-- OS + version
-- Python version
-- Full error output
-- Steps to reproduce
+Please include:
+Operating system + version
+Python version
+Full error message
+Steps to reproduce the issue
 
 ## ✅ Post-Installation Checklist
 
@@ -135,4 +149,5 @@ Include:
 - ✔ --help works
 - ✔ Config file created
 
-## 🔍 Installation complete — ready to start dorking!
+## 🎯 Installation Complete
+DorkEye is now ready to use. Happy hunting. 🔍
