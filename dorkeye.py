@@ -1548,7 +1548,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
 
-  # Manual dork search
+  # Dork(s) Search
     %(prog)s -d "site:example.com filetype:pdf" -o results.json
     %(prog)s -d dorks.txt -c 100 -o output.html
     %(prog)s --dg=all
