@@ -21,8 +21,8 @@ git clone https://github.com/xPloits3c/DorkEye.git
 ## 📋 Table of Contents
 
 1. [Prerequisites](#-prerequisites)
-2. [Quick Installation (Recommended)](#-quick_installation)
-5. [CLI Command Mode (optional)](#-CLI)
+2. [Quick Installation (Recommended)](#-quick_installation_recommended)
+5. [CLI Command Mode (optional)](#-cli_command_mode_(opzional))
 6. [Verification](#-verification)
 7. [Troubleshooting](#-troubleshooting)
 8. [Updating DorkEye](#-updating-dorkeye)
