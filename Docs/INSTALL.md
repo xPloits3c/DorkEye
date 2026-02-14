@@ -10,14 +10,12 @@ OSINT & Security Dorking Framework
 ## 🔗 Direct Download
 
 You can download the latest version directly from GitHub:
-
-👉 https://github.com/xPloits3c/DorkEye/archive/refs/tags/DorkEye_v4.2.6.zip  
+👉 (https://github.com/xPloits3c/DorkEye/archive/refs/tags/v4.2.6.zip)  
 
 Or clone the repository:
-
 ```bash
 git clone https://github.com/xPloits3c/DorkEye.git
-
+```
 ========================================
 
 ## 📋 Table of Contents
@@ -51,81 +49,103 @@ System Requirements:
 
 ## 🐧 Quick Installation (Recommended)
 This method works on Linux, macOS, and Windows.
-
+```bash
 git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
-
+```
 # Create virtual environment
+```bash
 python3 -m venv dorkeye_env
-
+```
 # Activate virtual environment
 # Linux / macOS:
+```bash
 source dorkeye_env/bin/activate
+```
 # Windows:
+```bash
 dorkeye_env\Scripts\activate
-
+```
 # Upgrade pip
+```bash
 pip install --upgrade pip
-
+```
 # Install dependencies
+```bash
 pip install -r requirements.txt
-
+```
 # Run DorkEye:
+```bash
 python dorkeye.py -h
+```
 ========================================
 
 ## 💻 CLI Command Mode (Optional)
 To install DorkEye as a system command:
+```bash
 pip install -e .
-
+```
 Then you can use:
+```bash
 dorkeye --help
-
+```
 This mode is recommended for advanced users.
 ========================================
 
 ## ✅ Verification
 Test basic functionality:
+```bash
 python dorkeye.py --create-config
 python dorkeye.py -d "python programming" -c 5 -o test
-
+```
 If using CLI mode:
+```bash
 dorkeye --dg=all
+```
 ========================================
 
 ## 🐛 Troubleshooting
 ModuleNotFoundError: ddgs
+```bash
 pip uninstall duckduckgo-search -y
 pip install ddgs
-
+```
 Externally Managed Environment (Kali Linux)
 Always use a virtual environment:
+```bash
 python3 -m venv dorkeye_env
 source dorkeye_env/bin/activate
-
+```
 Permission Errors:
 Avoid using sudo pip install.
 Use a virtual environment instead.
 ========================================
 
 ## 🔄 Updating DorkEye
+```bash
 cd DorkEye
 git pull origin main
 pip install --upgrade -r requirements.txt
-
+```
 If installed in CLI mode:
+```bash
 pip install -e . --upgrade
+```
 ========================================
 
 ## 🗑️ Uninstallation
 Linux / macOS:
+```bash
 rm -rf DorkEye
-
+```
 Windows:
+```bash
 rmdir /s /q DorkEye
-
+```
 To remove only the virtual environment:
+```bash
 rm -rf dorkeye_env
+```
 ========================================
 
 ## 📞 Support
