@@ -98,9 +98,6 @@ Generates structured Google dorks using a modular YAML template engine.
 
 [![INSTALL GUIDE](https://img.shields.io/badge/READ%20FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
 
-![image](https://github.com/user-attachments/assets/15ac9798-7cf3-487b-9a75-bd52b9de3eec)
-
-
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv git
