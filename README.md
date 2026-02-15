@@ -44,7 +44,6 @@ It helps discover:
 - ✅ Clean and unfiltered search results
 - ✅ Advanced analysis and automated SQLi testing
 - ✅ Continue Dorking for hours, DorkEye won’t get banned.
-
 ---
 
 ## ✨ What’s New
@@ -76,11 +75,8 @@ Generates structured Google dorks using a modular YAML template engine.
 - 📜 Scripts: `.php .jsp`
 - 🔑 Credentials: `.env .git`
 
-### 💾 Export Formats
-- CSV
-- JSON
-- Interactive HTML reports
-
+### 💾 Export Formats available
+- 📄 `.csv .json .txt .html`
 ---
 
 ## 🚀 Features
@@ -91,7 +87,6 @@ Generates structured Google dorks using a modular YAML template engine.
 - 📈 Real‑time statistics
 - 🎨 Rich terminal UI
 - 📦 Automatic installation
-
 ---
 
 ## 📦 Quick Install
@@ -107,10 +102,8 @@ python3 -m venv dorkeye_env
 source dorkeye_env/bin/activate
 pip install -r requirements.txt
 ```
-
 ---
-
-## ▶️ Test
+## Test
 <img width="1468" height="896" alt="dev4 2 6_h" src="https://github.com/user-attachments/assets/9b7fb026-d052-44e2-a504-98a7ccb82d56" />
 
 ```bash
@@ -146,6 +139,7 @@ python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
 python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
 ---
+
 ## 📁 Project Structure
 ```
 DorkEye/
@@ -167,7 +161,6 @@ DorkEye/
 │    ├── *.html
 │    └── *....
 ```
-
 ---
 
 ## 🧩 Roadmap
@@ -178,7 +171,6 @@ DorkEye/
 - Cloud integrations
 - API support
 - ML‑based dork optimization
-
 ---
 
 ## ⚠️  ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
@@ -186,7 +178,6 @@ DorkEye/
 -   🔹 This tool is for **educational, research, and authorized security testing only.** 
 -   🔹 **Unauthorized access is illegal.**
 -   🔹 The **author is not responsible** for misuse.
-
 ---
 
 ## 📞 Contact
@@ -194,13 +185,11 @@ DorkEye/
 - **Author:** xPloits3c  
 - **Email:** whitehat.report@onionmail.org  
 - **Telegram:** https://t.me/DorkEye  
-
 ---
 
 ## ⭐ Support
 
 If you find DorkEye useful, please consider starring the repository 🌟
-
 ---
 
 ## 📜 License
