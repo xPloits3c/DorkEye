@@ -123,7 +123,8 @@ rm -rf dorkeye_env
 
 [![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
 
-<img width="1013" height="596" alt="dg_search_priv" src="https://github.com/user-attachments/assets/b85bd006-4d73-484f-9dae-5ebf86e4968e" />
+<img width="1142" height="906" alt="de_run" src="https://github.com/user-attachments/assets/1968c10d-1241-4f34-bae9-411e49aaccb5" />
+
 
 🔹 # Basic search
 ```bash
