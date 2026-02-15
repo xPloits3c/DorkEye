@@ -77,6 +77,9 @@ Generates structured Google dorks using a modular YAML template engine.
 
 ### 💾 Export Formats available
 -    `.csv .json .txt .html`
+<img width="1918" height="1013" alt="dorkeye_html_results" src="https://github.com/user-attachments/assets/ecee13e2-3581-4def-8098-52b3d96b805a" />
+<img width="1918" height="926" alt="dorkeye_html_results_vuln" src="https://github.com/user-attachments/assets/bc13d89d-5c7f-4c2a-b2a7-cfb194cfa79d" />
+
 ---
 
 ## 🚀 Features
@@ -122,7 +125,6 @@ rm -rf dorkeye_env
 
 <img width="1013" height="596" alt="dg_search_priv" src="https://github.com/user-attachments/assets/b85bd006-4d73-484f-9dae-5ebf86e4968e" />
 
-# Basic USAGE
 🔹 # Basic search
 ```bash
 python3 dorkeye.py -d "inurl:admin" -o results.txt
