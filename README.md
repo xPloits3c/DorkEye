@@ -147,7 +147,6 @@ DorkEye/
 │ ├── dork_generator.py
 │ ├── requirements.txt
 │ ├── http_fingerprints.json
-│ ├── setup.sh / setup.bat
 │ ├── INSTALL.md
 │ ├── README.md
 │ ├── dorkeye_config.yaml
@@ -158,8 +157,7 @@ DorkEye/
 │    ├── *.csv 
 │    ├── *.json
 │    ├── *.txt
-│    ├── *.html
-│    └── *....
+│    └── *.html
 ```
 ---
 
@@ -175,9 +173,9 @@ DorkEye/
 
 ## ⚠️  ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
 
--   🔹 This tool is for **educational, research, and authorized security testing only.** 
--   🔹 **Unauthorized access is illegal.**
--   🔹 The **author is not responsible** for misuse.
+  🔹 This tool is for **educational, research, and authorized security testing only.** 
+  🔹 **Unauthorized access is illegal.**
+  🔹 The **author is not responsible** for misuse.
 ---
 
 ## 📞 Contact
