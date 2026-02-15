@@ -19,9 +19,9 @@
 
 ---
 
-> 🐲 *I don't hack systems, i expose their secrets.*
+> *I don't hack systems, i expose their secrets.*
 
-## 🧠 What is DorkEye
+## What is DorkEye
 
 **DorkEye** is an advanced, automated **Dorking** script in python language that leverages **DuckDuckGo** to identify exposed web resources using Open Source Intelligence techniques.
 
@@ -37,7 +37,7 @@ It helps discover:
 ![image](https://github.com/user-attachments/assets/6609eed1-cb04-48b4-909a-802ec0055b96)
 ---
 
-## ❓ Why DorkEye
+## Why DorkEye
 
 - ✅ Bypass CAPTCHA and rate‑limiting
 - ✅ Maintain anonymity and avoid IP blocking
@@ -46,23 +46,23 @@ It helps discover:
 - ✅ Continue Dorking for hours, DorkEye won’t get banned.
 ---
 
-## ✨ What’s New
+## What’s New
 
 ### DORK GENERATOR
 Generates structured Google dorks using a modular YAML template engine.
 
-### 🧠 Automated SQL Injection Testing
+### Automated SQL Injection Testing
 - Error‑based SQLi  
 - Boolean‑based blind SQLi  
 - Time‑based blind SQLi  
 - Vulnerability confidence scoring  
 
-### 🔍 Advanced Analysis
+### Advanced Analysis
 - File metadata inspection (size, type, accessibility)
 - Intelligent deduplication
 - YAML / JSON configuration support
 
-### 🎯 Stealth & Fingerprinting
+### Stealth & Fingerprinting
 - Realistic browser fingerprint rotation
 - Dynamic delays to evade rate limits
 
@@ -76,7 +76,7 @@ Generates structured Google dorks using a modular YAML template engine.
 - 🔑 Credentials: `.env .git`
 
 ### 💾 Export Formats available
-- 📄 `.csv .json .txt .html`
+-    `.csv .json .txt .html`
 ---
 
 ## 🚀 Features
@@ -116,7 +116,7 @@ rm -rf dorkeye_env
 ```
 ---
 
-## 🚀 Usage 
+## 🎯 Usage 
 
 [![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
 
