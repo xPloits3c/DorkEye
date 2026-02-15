@@ -1,3 +1,4 @@
+#Google Dork Generator I.C.W.T 2026
 import yaml
 import itertools
 import re
