@@ -1,14 +1,15 @@
 variables:
   domain:
-    - .net
     - .com
-    - .org
+    - .ru
 
   param:
+    - ?
     - id
-    - page
-    - search
-    - user
+    - ?id
+    - cat
+    - ?cat
+    - .php?
 
   extension:
     - pdf
@@ -31,17 +32,17 @@ templates:
       - 'site:{domain} filetype:{extension}'
       - 'filetype:pdf site:{domain}'
       
-    directories:
+  directories:
     mode: soft
     dorks:
       - '"index of" site:{domain}'
       - '"parent directory" site:{domain}'
     
-    sqli:
+  sqli:
     mode: aggressive
     dorks:
-      - 'site:{domain} inurl:.php?{param}='
-      
+      - 'site:{domain} inurl:{param}'
+
   sensitive:
     mode: medium
     dorks:
