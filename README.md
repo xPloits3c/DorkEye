@@ -123,11 +123,11 @@ rm -rf dorkeye_env
 <img width="1013" height="596" alt="dg_search_priv" src="https://github.com/user-attachments/assets/b85bd006-4d73-484f-9dae-5ebf86e4968e" />
 
 # Basic USAGE
-🔹 Basic search
+🔹 # Basic search
 ```bash
 python3 dorkeye.py -d "inurl:admin" -o results.txt
 ```
-🔹 # DORKS GENERATOR + DETECTION
+🔹 # Dork Generator + Detection
 ```bash
 python dorkeye.py --dg=sqli --mode=aggressive --sqli --stealth -o report.json
 ```
