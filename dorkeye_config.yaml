@@ -18,15 +18,15 @@ whitelist: []
 
 # Analysis Features
 analyze_files: true
-sqli_detection: false
+sqli_detection: true
 
 # Network Behavior
-stealth_mode: false
+stealth_mode: true
 http_fingerprinting: true
-user_agent_rotation: true
+user_agent_rotation: false
 
 # Networking Parameters
-request_timeout: 10
+request_timeout: 7
 max_retries: 3
 
 # File Handling
