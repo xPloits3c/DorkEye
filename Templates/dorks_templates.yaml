@@ -1,7 +1,7 @@
 variables:
   domain:
-    - .com
-    - .ru
+    - com
+    - ru
 
   param:
     - ?
