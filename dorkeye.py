@@ -43,7 +43,7 @@ ASCII_LOGO = """
  [bold yellow]__H__[/bold yellow]  [bold white]    xploits3c.github.io/DorkEye [/bold white]
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
- [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye |[bold red] OSINT & Security Dorking Framework[/bold red][/bold yellow]
+ [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye |[bold red] Security Dorking Framework[/bold red][/bold yellow]
  [bold yellow] |_|[/bold yellow]  [bold white]                     v4.2.6[/bold white]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
