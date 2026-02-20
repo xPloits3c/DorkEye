@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.2.6 | OSINT & Security Dorking Framework
+DorkEye v4.2.6 | Security Dorking Framework
 Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
 Author: xPloits3c | https://github.com/xPloits3c/DorkEye
 """
