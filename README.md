@@ -101,7 +101,6 @@ Generates structured Google dorks using a modular YAML template engine.
 ---
 
 ## 📦 Quick Install
-
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv git
@@ -126,7 +125,6 @@ rm -rf dorkeye_env
 ---
 
 ## 🎯 Usage 
-[![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
 <img width="1142" height="906" alt="de_run" src="https://github.com/user-attachments/assets/1968c10d-1241-4f34-bae9-411e49aaccb5" />
 
 🔹 # Basic search
