@@ -5,18 +5,7 @@
 ---
 
 # 🦅 DorkEye 
-
-<div align="center">
-
-```
-  ___
- __H__       xploits3c.github.io/DorkEye
-  [,]
-  [)]
-  [;]    DorkEye  |  Security Dorking Framework
-  |_|                     v4.2.6
-   V
-```
+*I don't hack systems, I expose their secrets.*
 
 <!-- ── Row 1: Project identity ── -->
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
@@ -35,8 +24,6 @@
 [![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](#)
 
 ---
-
-*I don't hack systems, I expose their secrets.*
 
 </div>
 
@@ -58,6 +45,7 @@ It helps discover:
 - Misconfigurations and leaked credentials  
 
 ![image](https://github.com/user-attachments/assets/6609eed1-cb04-48b4-909a-802ec0055b96)
+
 ---
 
 ## Why DorkEye
