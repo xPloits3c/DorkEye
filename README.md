@@ -22,8 +22,12 @@
 > *I don't hack systems, i expose their secrets.*
 
 ## What is DorkEye
-
 **DorkEye** is an advanced, automated **Dorking** script in python language that leverages **DuckDuckGo** to identify exposed web resources using Open Source Intelligence techniques.
+Read full documents:
+
+[![INSTALL GUIDE](https://img.shields.io/badge/READ%20FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
+[![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
+[![DORKS_GENERATOR](https://img.shields.io/badge/FULL%20DG-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/DORK_GENERATOR.md)
 
 ![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
@@ -94,8 +98,6 @@ Generates structured Google dorks using a modular YAML template engine.
 
 ## 📦 Quick Install
 
-[![INSTALL GUIDE](https://img.shields.io/badge/READ%20FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
-
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv git
@@ -120,11 +122,8 @@ rm -rf dorkeye_env
 ---
 
 ## 🎯 Usage 
-
 [![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
-
 <img width="1142" height="906" alt="de_run" src="https://github.com/user-attachments/assets/1968c10d-1241-4f34-bae9-411e49aaccb5" />
-
 
 🔹 # Basic search
 ```bash
