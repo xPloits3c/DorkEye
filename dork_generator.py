@@ -8,7 +8,7 @@ from pathlib import Path
 
 class DorkGenerator:
 
-    def __init__(self, yaml_file: str, max_combinations: int = 1255):
+    def __init__(self, yaml_file: str, max_combinations: int = 4500):
         self.yaml_file = Path(yaml_file)
         self.max_combinations = max_combinations
         self.variables = {}
