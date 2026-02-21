@@ -113,6 +113,8 @@ python3 dorkeye.py -d "site:example.com .php?id=" --sqli -o sqli_scan.html
 ### --dg | Dork Generator Layer Purpose:
 # Generates structured Google dorks using a modular YAML template engine.
 # The Dork Generator allows controlled, scalable dork creation without hardcoded patterns.
+# Read the FULL Dorks Generator System Bellow:
+[![DORKS_GENERATOR](https://img.shields.io/badge/FULL%20DG-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/DORK_GENERATOR.md)
 It uses:
 - dork_generator.py
 - dorks_templates.yaml
