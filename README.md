@@ -25,7 +25,7 @@
 ---
 
 ## What is DorkEye
-**DorkEye** is an advanced, automated **Dorking** script to identify exposed web resources using Open Source Intelligence techniques.
+**DorkEye** DorkEye is an advanced and automated python script for Google Dorking to identify exposed web resources using Open Source Intelligence techniques.
 ## See the full documents below:
 
 [![INSTALL GUIDE](https://img.shields.io/badge/FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
