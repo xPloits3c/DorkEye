@@ -6,30 +6,39 @@
 
 # 🦅 DorkEye 
 
-![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Status](https://img.shields.io/badge/status-Stable-brightgreen.svg)
-![DuckDuckGo](https://img.shields.io/badge/search-DuckDuckGo-orange.svg)
-![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=blue)
-![Stars](https://img.shields.io/github/stars/xPloits3c/DorkEye?style=flat)
-![Forks](https://img.shields.io/github/forks/xPloits3c/DorkEye)
-![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye)
-![Last Commit](https://img.shields.io/github/last-commit/xPloits3c/DorkEye)
-[![Join Telegram](https://img.shields.io/badge/Join%20Telegram-2CA5E0?style=flat&logo=telegram&logoColor=white)](https://t.me/DorkEye)
+<div align="center">
+
+```
+  ___
+ __H__       xploits3c.github.io/DorkEye
+  [,]
+  [)]
+  [;]    DorkEye  |  Security Dorking Framework
+  |_|                     v4.2.6
+   V
+```
+
+<!-- ── Row 1: Project identity ── -->
+![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
+![Search](https://img.shields.io/badge/Search-DuckDuckGo-FF6600?style=flat-square&logo=duckduckgo&logoColor=white)
+
+<!-- ── Row 2: Live stats ── -->
+![Views](https://img.shields.io/badge/DorkEye_Views-4%2C791-blue?style=flat-square&logo=github)
+![Stars](https://img.shields.io/github/stars/xPloits3c/DorkEye?style=flat-square&logo=github&label=Stars&color=yellow)
+![Forks](https://img.shields.io/github/forks/xPloits3c/DorkEye?style=flat-square&logo=github&label=Forks&color=lightgrey)
+![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye?style=flat-square&logo=github&label=Issues&color=brightgreen)
+![Last Commit](https://img.shields.io/github/last-commit/xPloits3c/DorkEye?style=flat-square&logo=github&label=Last+Commit&color=informational)
+
+<!-- ── Row 3: Community ── -->
+[![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](#)
 
 ---
 
-> *I don't hack systems, i expose their secrets.*
-```
- ___
-__H__       xploits3c.github.io/DorkEye
- [,]
- [)]
- [;]    DorkEye | Security Dorking Framework
- |_|                         v4.2.6
-  V
-```
----
+*I don't hack systems, I expose their secrets.*
+
+</div>
 
 ## What is DorkEye
 **DorkEye** is an advanced, automated **Dorking** script to identify exposed web resources using Open Source Intelligence techniques.
