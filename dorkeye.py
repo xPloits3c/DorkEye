@@ -1544,7 +1544,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.2.6 | OSINT & Security Dorking Framework",
+        description="DorkEye v4.2.6 | Security Dorking Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
 
