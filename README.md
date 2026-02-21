@@ -4,7 +4,7 @@
 
 ---
 
-🦅 *DorkEye* > `I don't hack systems, I expose their secrets.` <
+🦅 *DorkEye* `> I don't hack systems, i expose their secrets <`
 
 <!-- ── Row 1: Project identity ── -->
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
@@ -26,7 +26,7 @@
 
 ## What is DorkEye
 **DorkEye** is an advanced, automated **Dorking** script to identify exposed web resources using Open Source Intelligence techniques.
-## Read full documents:
+## See the full documents below:
 
 [![INSTALL GUIDE](https://img.shields.io/badge/FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
 [![USAGE](https://img.shields.io/badge/FULL-USAGE%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
