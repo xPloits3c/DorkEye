@@ -84,12 +84,12 @@ Generates structured Google dorks using a modular YAML template engine.
 
 ## 🚀 Features
 
+- 📦 Google Dorks Generator (10.000) Dorks Max Queries.
 - 🔎 Smart single/multi‑dork execution
 - 🚫 Extension blacklist & whitelist
 - ⚡ Stealth mode & rate‑limit protection
 - 📈 Real‑time statistics
 - 🎨 Rich terminal UI
-- 📦 Automatic installation
 ---
 
 ## 📦 Quick Install
