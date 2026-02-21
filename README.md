@@ -22,8 +22,8 @@
 > *I don't hack systems, i expose their secrets.*
 
 ## What is DorkEye
-**DorkEye** is an advanced, automated **Dorking** script in python language that leverages **DuckDuckGo** to identify exposed web resources using Open Source Intelligence techniques.
-Read full documents:
+**DorkEye** is an advanced, automated **Dorking** script to identify exposed web resources using Open Source Intelligence techniques.
+## Read full documents:
 
 [![INSTALL GUIDE](https://img.shields.io/badge/READ%20FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
 [![USAGE](https://img.shields.io/badge/READ%20FULL-USAGE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
