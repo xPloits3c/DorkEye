@@ -9,7 +9,7 @@
 __H__       xploits3c.github.io/DorkEye
  [,]
  [)]
- [;]    DorkEye | OSINT & Security Dorking Framework
+ [;]    DorkEye | Security Dorking Framework
  |_|                         v4.2.6
   V
 ```
