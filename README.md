@@ -2,10 +2,10 @@
 <img width="2048" height="2048" alt="image" src="https://github.com/user-attachments/assets/6c253be8-f8ce-445e-bc3d-1c21eacbf567" />
 </div>
 
+---
+
 # 🦅 *DorkEye*
 `*I don't hack systems, I expose their secrets.*`
-
----
 <!-- ── Row 1: Project identity ── -->
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
