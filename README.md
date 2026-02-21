@@ -4,7 +4,7 @@
 
 ---
 
-🦅 *DorkEye* > `*I don't hack systems, I expose their secrets.*` <
+🦅 *DorkEye* > `I don't hack systems, I expose their secrets.` <
 
 <!-- ── Row 1: Project identity ── -->
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
