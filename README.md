@@ -25,9 +25,9 @@
 **DorkEye** is an advanced, automated **Dorking** script to identify exposed web resources using Open Source Intelligence techniques.
 ## Read full documents:
 
-[![INSTALL GUIDE](https://img.shields.io/badge/READ%20INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
-[![USAGE](https://img.shields.io/badge/READ%20USAGE%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
-[![DORKS_GENERATOR](https://img.shields.io/badge/FULL%20Dork-Generator-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/DORK_GENERATOR.md)
+[![INSTALL GUIDE](https://img.shields.io/badge/INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
+[![USAGE](https://img.shields.io/badge/USAGE%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
+[![DORKS_GENERATOR](https://img.shields.io/badge/Dork-Generator%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/DORK_GENERATOR.md)
 
 ![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
