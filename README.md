@@ -24,8 +24,6 @@
 
 ---
 
-</div>
-
 ## What is DorkEye
 **DorkEye** is an advanced, automated **Dorking** script to identify exposed web resources using Open Source Intelligence techniques.
 ## Read full documents:
