@@ -3,10 +3,6 @@
 </div>
 
 ---
-
-# 🦅 DorkEye 
-*I don't hack systems, I expose their secrets.*
-
 <!-- ── Row 1: Project identity ── -->
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
@@ -24,6 +20,9 @@
 [![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](#)
 
 ---
+
+# 🦅 DorkEye 
+*I don't hack systems, I expose their secrets.*
 
 </div>
 
