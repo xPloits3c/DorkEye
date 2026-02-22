@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.2.6 | Security Dorking Framework
+DorkEye v4.2.6 | OSINT Dorking Tool
 Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
 Author: xPloits3c | https://github.com/xPloits3c/DorkEye
 """
@@ -38,12 +38,14 @@ import getpass
 
 console = Console()
 
+VALID_MODES = ["soft", "medium", "aggressive"]
+
 ASCII_LOGO = """
      \n[bold yellow]  ___[/bold yellow]
  [bold yellow]__H__[/bold yellow]  [bold white]    xploits3c.github.io/DorkEye [/bold white]
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
- [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye |[bold red] Security Dorking Framework[/bold red][/bold yellow]
+ [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye |[bold red] OSINT Dorking Tool[/bold red][/bold yellow]
  [bold yellow] |_|[/bold yellow]  [bold white]                     v4.2.6[/bold white]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
@@ -1222,8 +1224,6 @@ class DorkEyeEnhanced:
             console.print(f"[red][!] Unsupported output format: {ext}[/red]")
             return
 
-        console.print(f"[green][✓] Saved: {filename}[/green]")
-
     def _save_csv(self, filename: str):
         """Save results as CSV with SQLi info"""
         if not self.results:
@@ -1246,8 +1246,6 @@ class DorkEyeEnhanced:
                     row["sqli_confidence"] = result["sqli_test"].get("overall_confidence", "none")
                 writer.writerow(row)
 
-        console.print(f"[green][✓] CSV saved: {filename}[/green]")
-
     def _save_json(self, filename: str):
         """Save results as JSON with SQLi details"""
         data = {
@@ -1265,8 +1263,6 @@ class DorkEyeEnhanced:
 
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-
-        console.print(f"[green][✓] JSON saved: {filename}[/green]")
 
     def _save_txt(self, filename: str):
         """Save results as plain text"""
@@ -1292,77 +1288,464 @@ class DorkEyeEnhanced:
                 f.write("\n")
 
     def _save_html(self, filename: str):
-        """Save results as HTML report with SQLi warnings"""
-        sqli_count = self.stats.get("sqli_vulnerable", 0)
+        """Save results as HTML report with Matrix background, SQLi warnings, sub-filter dropdowns and download buttons"""
+        sqli_count   = self.stats.get("sqli_vulnerable", 0)
+        sqli_safe    = sum(1 for r in self.results if "sqli_test" in r and r["sqli_test"].get("tested") and not r["sqli_test"].get("vulnerable"))
+        sqli_total   = sqli_count + sqli_safe
+
+        # Badge counters per group
+        cnt = {"all": len(self.results), "doc": 0, "sqli": 0, "scripts": 0, "page": 0}
+        for r in self.results:
+            cat = r.get("category", "unknown")
+            if cat in ("documents", "archives", "backups"):
+                cnt["doc"] += 1
+            elif cat in ("databases",):
+                cnt["sqli"] += 1
+            elif cat in ("scripts", "configs", "credentials"):
+                cnt["scripts"] += 1
+            elif cat == "webpage":
+                cnt["page"] += 1
 
         html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>DorkEye v4.2.6 Report</title>
+    <title>DorkEye v4.2.6 | Report</title>
     <style>
-        body {{ font-family: 'Courier New', monospace; margin: 20px; background: #0a0a0a; color: #00ff00; }}
-        .header {{ background: #1a1a1a; color: #00ff00; padding: 20px; border: 2px solid #00ff00; margin-bottom: 20px; }}
-        .header h1 {{ margin: 0; font-size: 24px; }}
-        .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 20px 0; }}
-        .stat-card {{ background: #1a1a1a; padding: 15px; border: 1px solid #00ff00; }}
-        .stat-card h3 {{ margin: 0; color: #00ff00; font-size: 14px; }}
-        .stat-card p {{ font-size: 20px; font-weight: bold; margin: 10px 0 0 0; color: #fff; }}
-        .sqli-alert {{ background: #330000; border: 2px solid #ff0000; padding: 15px; margin: 20px 0; color: #ff0000; }}
-        table {{ width: 100%; border-collapse: collapse; background: #1a1a1a; margin: 20px 0; border: 1px solid #00ff00; }}
-        th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #333; }}
-        th {{ background: #0a0a0a; color: #00ff00; border-bottom: 2px solid #00ff00; }}
-        tr:hover {{ background: #2a2a2a; }}
+        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+        body {{
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #00ff41;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }}
+
+        /* ── Matrix canvas background ── */
+        #matrix-canvas {{
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            opacity: 0.32;
+            pointer-events: none;
+        }}
+
+        /* ── Content wrapper above canvas ── */
+        #content {{
+            position: relative;
+            z-index: 1;
+            padding: 28px 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }}
+
+        /* ── Header ── */
+        .header {{
+            background: rgba(0, 10, 0, 0.85);
+            border: 1px solid #00ff41;
+            border-left: 4px solid #00ff41;
+            padding: 22px 28px;
+            margin-bottom: 24px;
+            box-shadow: 0 0 24px rgba(0,255,65,0.15), inset 0 0 40px rgba(0,255,65,0.03);
+            backdrop-filter: blur(4px);
+        }}
+        .header h1 {{
+            font-size: 22px;
+            color: #00ff41;
+            text-shadow: 0 0 10px #00ff41;
+            letter-spacing: 2px;
+        }}
+        .header .subtitle {{
+            margin-top: 6px;
+            font-size: 12px;
+            color: #009922;
+            letter-spacing: 1px;
+        }}
+        .header .blink {{ animation: blink 1.1s step-end infinite; }}
+        @keyframes blink {{ 50% {{ opacity: 0; }} }}
+
+        /* ── Stats grid ── */
+        .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }}
+        .stat-card {{
+            background: rgba(0, 10, 0, 0.82);
+            border: 1px solid #00aa2a;
+            padding: 16px 18px;
+            backdrop-filter: blur(4px);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }}
+        .stat-card:hover {{ border-color: #00ff41; box-shadow: 0 0 12px rgba(0,255,65,0.2); }}
+        .stat-card h3 {{
+            font-size: 11px;
+            color: #009922;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }}
+        .stat-card p {{
+            font-size: 26px;
+            font-weight: bold;
+            color: #00ff41;
+            margin-top: 8px;
+            text-shadow: 0 0 8px rgba(0,255,65,0.5);
+        }}
+
+        /* ── SQLi alert banner ── */
+        .sqli-alert {{
+            background: rgba(40, 0, 0, 0.88);
+            border: 1px solid #ff2222;
+            border-left: 4px solid #ff2222;
+            padding: 14px 20px;
+            margin-bottom: 20px;
+            color: #ff4444;
+            box-shadow: 0 0 20px rgba(255,34,34,0.15);
+            animation: pulse-red 2s ease-in-out infinite;
+        }}
+        @keyframes pulse-red {{
+            0%, 100% {{ box-shadow: 0 0 12px rgba(255,34,34,0.15); }}
+            50%       {{ box-shadow: 0 0 28px rgba(255,34,34,0.35); }}
+        }}
+        .sqli-alert h2 {{ font-size: 15px; letter-spacing: 2px; margin-bottom: 6px; }}
+        .sqli-alert p  {{ font-size: 13px; color: #ff6666; }}
+
+        /* ══════════════════════════════════════
+           FILTER BAR & DROPDOWN SUB-MENUS
+           ══════════════════════════════════════ */
+        .filter-bar {{
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+            position: relative;
+        }}
+        .filter-label {{
+            color: #009922;
+            font-size: 12px;
+            letter-spacing: 1px;
+            margin-right: 4px;
+        }}
+
+        /* Wrapper that holds main button + dropdown */
+        .filter-group {{
+            position: relative;
+            display: inline-block;
+        }}
+
+        .filter-btn {{
+            background: rgba(0,10,0,0.7);
+            border: 1px solid #00aa2a;
+            color: #00aa2a;
+            padding: 5px 14px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            cursor: pointer;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: all 0.15s;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .filter-btn:hover  {{ background: rgba(0,255,65,0.12); border-color: #00ff41; color: #00ff41; }}
+        .filter-btn.active {{ background: #00ff41; color: #000; border-color: #00ff41; font-weight: bold; box-shadow: 0 0 10px rgba(0,255,65,0.4); }}
+
+        /* Badge counter on main buttons */
+        .badge {{
+            display: inline-block;
+            background: rgba(0,255,65,0.15);
+            border: 1px solid #009922;
+            color: #00ff41;
+            font-size: 9px;
+            padding: 1px 5px;
+            border-radius: 2px;
+            letter-spacing: 0;
+            min-width: 20px;
+            text-align: center;
+        }}
+        .filter-btn.active .badge {{
+            background: rgba(0,0,0,0.25);
+            border-color: rgba(0,0,0,0.3);
+            color: #000;
+        }}
+
+        /* Arrow indicator on buttons that have sub-menus */
+        .has-sub .arrow {{ font-size: 8px; opacity: 0.7; transition: transform 0.2s; }}
+        .has-sub.active  .arrow {{ transform: rotate(180deg); opacity: 1; }}
+
+        /* ── Vertical slide-down sub-menu ── */
+        .sub-menu {{
+            display: none;
+            position: absolute;
+            top: calc(100% + 3px);
+            left: 0;
+            z-index: 200;
+            background: rgba(0, 6, 0, 0.97);
+            border: 1px solid #00aa2a;
+            border-top: 2px solid #00ff41;
+            box-shadow: 0 6px 24px rgba(0,255,65,0.18);
+            min-width: 160px;
+            overflow: hidden;
+
+            /* Slide animation */
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.25s ease, opacity 0.2s ease;
+        }}
+        .sub-menu.open {{
+            display: block;
+            max-height: 300px;
+            opacity: 1;
+        }}
+
+        .sub-btn {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(0,170,42,0.18);
+            color: #009922;
+            padding: 8px 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.12s, color 0.12s, padding-left 0.12s;
+            gap: 8px;
+        }}
+        .sub-btn:last-child {{ border-bottom: none; }}
+        .sub-btn:hover {{
+            background: rgba(0,255,65,0.08);
+            color: #00ff41;
+            padding-left: 22px;
+        }}
+        .sub-btn.active {{
+            color: #00ff41;
+            font-weight: bold;
+            background: rgba(0,255,65,0.06);
+            padding-left: 22px;
+        }}
+        .sub-btn .sub-badge {{
+            font-size: 9px;
+            color: #005500;
+            background: rgba(0,255,65,0.08);
+            border: 1px solid #003300;
+            padding: 1px 5px;
+            border-radius: 2px;
+            letter-spacing: 0;
+            min-width: 22px;
+            text-align: center;
+        }}
+        .sub-btn.active .sub-badge {{ color: #00aa44; border-color: #005500; }}
+
+        /* ── Sub-filter info bar ── */
+        .active-sub-info {{
+            font-size: 11px;
+            color: #005500;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            min-height: 16px;
+            padding-left: 2px;
+        }}
+        .active-sub-info span {{ color: #00aa44; }}
+
+        /* ── Table ── */
+        .table-wrap {{
+            background: rgba(0, 8, 0, 0.82);
+            border: 1px solid #00aa2a;
+            backdrop-filter: blur(4px);
+            overflow-x: auto;
+        }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        th {{
+            background: rgba(0,255,65,0.06);
+            color: #00ff41;
+            padding: 11px 14px;
+            text-align: left;
+            border-bottom: 1px solid #00aa2a;
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }}
+        td {{
+            padding: 9px 14px;
+            border-bottom: 1px solid rgba(0,170,42,0.15);
+            font-size: 12px;
+            vertical-align: middle;
+        }}
+        tr:hover td {{ background: rgba(0,255,65,0.04); }}
+        tr.hidden    {{ display: none; }}
+
         a {{ color: #00aaff; text-decoration: none; }}
-        a:hover {{ color: #00ff00; }}
-        .category {{ display: inline-block; padding: 2px 8px; border: 1px solid; font-size: 11px; }}
-        .category-documents {{ border-color: #ff6b6b; color: #ff6b6b; }}
-        .category-archives {{ border-color: #ffa500; color: #ffa500; }}
-        .category-databases {{ border-color: #9b59b6; color: #9b59b6; }}
-        .category-backups {{ border-color: #e67e22; color: #e67e22; }}
-        .category-configs {{ border-color: #1abc9c; color: #1abc9c; }}
-        .category-scripts {{ border-color: #f1c40f; color: #f1c40f; }}
-        .category-webpage {{ border-color: #95a5a6; color: #95a5a6; }}
-        .sqli-vuln {{ color: #ff0000; font-weight: bold; }}
-        .sqli-safe {{ color: #00ff00; }}
-        .sqli-untested {{ color: #888; }}
+        a:hover {{ color: #00ff41; text-shadow: 0 0 6px rgba(0,255,65,0.5); }}
+
+        /* ── Category badges ── */
+        .category {{
+            display: inline-block;
+            padding: 2px 9px;
+            border: 1px solid;
+            font-size: 10px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }}
+        .category-documents   {{ border-color: #ff6b6b; color: #ff6b6b; }}
+        .category-archives    {{ border-color: #ffa500; color: #ffa500; }}
+        .category-databases   {{ border-color: #b47fff; color: #b47fff; }}
+        .category-backups     {{ border-color: #e67e22; color: #e67e22; }}
+        .category-configs     {{ border-color: #1abc9c; color: #1abc9c; }}
+        .category-scripts     {{ border-color: #f1c40f; color: #f1c40f; }}
+        .category-webpage     {{ border-color: #7f8c8d; color: #7f8c8d; }}
+        .category-credentials {{ border-color: #e74c3c; color: #e74c3c; }}
+
+        /* ── SQLi status ── */
+        .sqli-vuln     {{ color: #ff3333; font-weight: bold; text-shadow: 0 0 6px rgba(255,51,51,0.5); }}
+        .sqli-safe     {{ color: #00ff41; }}
+        .sqli-untested {{ color: #444; }}
+
+        /* ── Download button ── */
+        .url-cell {{ display: flex; align-items: center; gap: 8px; }}
+        .dl-btn {{
+            flex-shrink: 0;
+            background: transparent;
+            border: 1px solid #0077bb;
+            color: #00aaff;
+            padding: 2px 9px;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            font-family: 'Courier New', monospace;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }}
+        .dl-btn:hover {{ background: #00aaff; color: #000; border-color: #00aaff; box-shadow: 0 0 8px rgba(0,170,255,0.4); }}
+
+        /* ── Footer ── */
+        .footer {{
+            margin-top: 28px;
+            padding: 14px 0;
+            border-top: 1px solid #002200;
+            text-align: center;
+            font-size: 11px;
+            color: #004400;
+            letter-spacing: 2px;
+        }}
     </style>
 </head>
 <body>
+
+<canvas id="matrix-canvas"></canvas>
+
+<div id="content">
     <div class="header">
-        <h1>┌─[ DorkEye v4.2.6 - OSINT Report ]</h1>
-        <p>└─> Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <h1>&#9632; DorkEye | Report <span class="blink">_</span></h1>
+        <div class="subtitle">&#10132; Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} &nbsp;|&nbsp; xploits3c.github.io/DorkEye</div>
     </div>
 """
 
         if sqli_count > 0:
             html += f"""    <div class="sqli-alert">
-        <h2>⚠ SECURITY ALERT ⚠</h2>
+        <h2>&#9888; SECURITY ALERT &#9888;</h2>
         <p><strong>{sqli_count}</strong> potential SQL injection vulnerabilities detected!</p>
-        <p>Review the results marked with [SQLI VULN] below.</p>
+        <p>Review the results marked with VULNERABLE below.</p>
     </div>
 """
 
         html += f"""    <div class="stats">
         <div class="stat-card">
-            <h3>┌─[ Total Results ]</h3>
-            <p>└─> {len(self.results)}</p>
+            <h3>&#9632; TOTAL RESULTS</h3>
+            <p>{len(self.results)}</p>
         </div>
         <div class="stat-card">
-            <h3>┌─[ Duplicates Filtered ]</h3>
-            <p>└─> {self.stats.get('duplicates', 0)}</p>
+            <h3>&#9632; DUPLICATES FILTERED</h3>
+            <p>{self.stats.get('duplicates', 0)}</p>
         </div>
         <div class="stat-card">
-            <h3>┌─[ SQLi Vulnerabilities ]</h3>
-            <p class="sqli-vuln">└─> {sqli_count}</p>
+            <h3>&#9632; SQLI VULNERABILITIES</h3>
+            <p class="sqli-vuln">{sqli_count}</p>
         </div>
         <div class="stat-card">
-            <h3>┌─[ Execution Time ]</h3>
-            <p>└─> {round(time.time() - self.start_time, 2)}s</p>
+            <h3>&#9632; EXECUTION TIME</h3>
+            <p>{round(time.time() - self.start_time, 2)}s</p>
         </div>
     </div>
 
-    <h2>┌─[ Results ]</h2>
+    <!-- ══════════════════════════════════════════
+         FILTER BAR — main buttons + sub-menus
+         ══════════════════════════════════════════ -->
+    <div class="filter-bar">
+        <span class="filter-label">[ FILTER ]</span>
+
+        <!-- ALL -->
+        <button class="filter-btn active" data-group="all" onclick="applyFilter(this)">
+            ALL <span class="badge" id="badge-all">{cnt["all"]}</span>
+        </button>
+
+        <!-- DOC ▸ sub-menu -->
+        <div class="filter-group" id="fg-doc">
+            <button class="filter-btn has-sub" data-group="doc" onclick="applyFilter(this)">
+                DOC <span class="badge" id="badge-doc">{cnt["doc"]}</span>
+                <span class="arrow">&#9660;</span>
+            </button>
+            <div class="sub-menu" id="sub-doc">
+                <button class="sub-btn active" data-sub="doc-all"  onclick="applySubFilter(this,'doc')">ALL  <span class="sub-badge" id="sbadge-doc-all">{cnt["doc"]}</span></button>
+                <button class="sub-btn"        data-sub="doc-pdf"  onclick="applySubFilter(this,'doc')">PDF  <span class="sub-badge" id="sbadge-doc-pdf">–</span></button>
+                <button class="sub-btn"        data-sub="doc-docx" onclick="applySubFilter(this,'doc')">DOCX <span class="sub-badge" id="sbadge-doc-docx">–</span></button>
+                <button class="sub-btn"        data-sub="doc-xlsx" onclick="applySubFilter(this,'doc')">XLSX <span class="sub-badge" id="sbadge-doc-xlsx">–</span></button>
+                <button class="sub-btn"        data-sub="doc-ppt"  onclick="applySubFilter(this,'doc')">PPT  <span class="sub-badge" id="sbadge-doc-ppt">–</span></button>
+                <button class="sub-btn"        data-sub="doc-arc"  onclick="applySubFilter(this,'doc')">ARCHIVES <span class="sub-badge" id="sbadge-doc-arc">–</span></button>
+            </div>
+        </div>
+
+        <!-- SQLi ▸ sub-menu -->
+        <div class="filter-group" id="fg-sqli">
+            <button class="filter-btn has-sub" data-group="sqli" onclick="applyFilter(this)">
+                SQLi <span class="badge" id="badge-sqli">{cnt["sqli"]}</span>
+                <span class="arrow">&#9660;</span>
+            </button>
+            <div class="sub-menu" id="sub-sqli">
+                <button class="sub-btn active" data-sub="sqli-all"  onclick="applySubFilter(this,'sqli')">SQLi ALL  <span class="sub-badge" id="sbadge-sqli-all">{sqli_total}</span></button>
+                <button class="sub-btn"        data-sub="sqli-vuln" onclick="applySubFilter(this,'sqli')">SQLi VULN <span class="sub-badge sqli-vuln" id="sbadge-sqli-vuln">{sqli_count}</span></button>
+                <button class="sub-btn"        data-sub="sqli-safe" onclick="applySubFilter(this,'sqli')">SQLi SAFE <span class="sub-badge" id="sbadge-sqli-safe">{sqli_safe}</span></button>
+            </div>
+        </div>
+
+        <!-- SCRIPTS ▸ sub-menu -->
+        <div class="filter-group" id="fg-scripts">
+            <button class="filter-btn has-sub" data-group="scripts" onclick="applyFilter(this)">
+                SCRIPTS <span class="badge" id="badge-scripts">{cnt["scripts"]}</span>
+                <span class="arrow">&#9660;</span>
+            </button>
+            <div class="sub-menu" id="sub-scripts">
+                <button class="sub-btn active" data-sub="scripts-all"    onclick="applySubFilter(this,'scripts')">ALL     <span class="sub-badge" id="sbadge-scripts-all">{cnt["scripts"]}</span></button>
+                <button class="sub-btn"        data-sub="scripts-php"    onclick="applySubFilter(this,'scripts')">PHP     <span class="sub-badge" id="sbadge-scripts-php">–</span></button>
+                <button class="sub-btn"        data-sub="scripts-asp"    onclick="applySubFilter(this,'scripts')">ASP     <span class="sub-badge" id="sbadge-scripts-asp">–</span></button>
+                <button class="sub-btn"        data-sub="scripts-sh"     onclick="applySubFilter(this,'scripts')">SH/BAT  <span class="sub-badge" id="sbadge-scripts-sh">–</span></button>
+                <button class="sub-btn"        data-sub="scripts-config" onclick="applySubFilter(this,'scripts')">CONFIGS <span class="sub-badge" id="sbadge-scripts-config">–</span></button>
+                <button class="sub-btn"        data-sub="scripts-creds"  onclick="applySubFilter(this,'scripts')">CREDS   <span class="sub-badge" id="sbadge-scripts-creds">–</span></button>
+            </div>
+        </div>
+
+        <!-- PAGE (no sub-menu) -->
+        <button class="filter-btn" data-group="page" onclick="applyFilter(this)">
+            PAGE <span class="badge" id="badge-page">{cnt["page"]}</span>
+        </button>
+    </div>
+
+    <!-- Active sub-filter info line -->
+    <div class="active-sub-info" id="sub-info"></div>
+
+    <div class="table-wrap">
     <table>
         <thead>
             <tr>
@@ -1374,29 +1757,41 @@ class DorkEyeEnhanced:
                 <th>Details</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="results-tbody">
 """
 
         for idx, result in enumerate(self.results, 1):
-            size = self._format_size(result.get('file_size'))
+            size     = self._format_size(result.get('file_size'))
+            category = result.get('category', 'unknown')
+            ext      = result.get('extension', '').lower()
+            url      = result['url']
+            url_display = url[:80] + ('...' if len(url) > 80 else '')
 
             sqli_status = "N/A"
-            sqli_class = "sqli-untested"
+            sqli_class  = "sqli-untested"
+            sqli_data   = "untested"
 
             if "sqli_test" in result and result["sqli_test"].get("tested", False):
                 if result["sqli_test"].get("vulnerable", False):
-                    confidence = result["sqli_test"].get("overall_confidence", "unknown")
+                    confidence  = result["sqli_test"].get("overall_confidence", "unknown")
                     sqli_status = f"VULNERABLE ({confidence})"
-                    sqli_class = "sqli-vuln"
+                    sqli_class  = "sqli-vuln"
+                    sqli_data   = "vuln"
                 else:
                     sqli_status = "SAFE"
-                    sqli_class = "sqli-safe"
+                    sqli_class  = "sqli-safe"
+                    sqli_data   = "safe"
 
-            html += f"""            <tr>
+            html += f"""            <tr data-category="{category}" data-ext="{ext}" data-sqli="{sqli_data}">
                 <td>{idx}</td>
-                <td><a href="{result['url']}" target="_blank">{result['url'][:80]}...</a></td>
+                <td>
+                    <div class="url-cell">
+                        <a href="{url}" target="_blank">{url_display}</a>
+                        <a class="dl-btn" href="{url}" download title="Download file">&#8681;</a>
+                    </div>
+                </td>
                 <td>{result.get('title', 'N/A')[:50]}</td>
-                <td><span class="category category-{result['category']}">{result['category']}</span></td>
+                <td><span class="category category-{category}">{category}</span></td>
                 <td class="{sqli_class}">{sqli_status}</td>
                 <td>{size}</td>
             </tr>
@@ -1404,14 +1799,242 @@ class DorkEyeEnhanced:
 
         html += """        </tbody>
     </table>
+    </div><!-- /table-wrap -->
+
+    <div class="footer">DorkEye v4.2.6 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+</div><!-- /content -->
+
+<script>
+/* ═══════════════════════════════════════════════
+   MATRIX RAIN ANIMATION
+   ═══════════════════════════════════════════════ */
+(function() {
+    const canvas = document.getElementById('matrix-canvas');
+    const ctx    = canvas.getContext('2d');
+    const CHARS  = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF<>{}[]|\\/*+-=_';
+    const FS     = 14;
+    let cols, drops;
+
+    function resize() {
+        canvas.width  = window.innerWidth;
+        canvas.height = window.innerHeight;
+        cols  = Math.floor(canvas.width / FS);
+        drops = Array.from({ length: cols }, () => Math.random() * -100);
+    }
+    function draw() {
+        ctx.fillStyle = 'rgba(0,0,0,0.05)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < cols; i++) {
+            const char = CHARS[Math.floor(Math.random() * CHARS.length)];
+            ctx.fillStyle = Math.random() > 0.95 ? '#ffffff' : '#00ff41';
+            ctx.font      = FS + 'px monospace';
+            ctx.fillText(char, i * FS, drops[i] * FS);
+            if (drops[i] * FS > canvas.height && Math.random() > 0.975) drops[i] = 0;
+            drops[i] += 0.5 + Math.random() * 0.5;
+        }
+    }
+    resize();
+    window.addEventListener('resize', resize);
+    setInterval(draw, 45);
+})();
+
+/* ═══════════════════════════════════════════════
+   FILTER ENGINE
+   ═══════════════════════════════════════════════ */
+
+/* Category groups → which data-category values belong */
+const GROUP_CATS = {
+    "doc":     ["documents", "archives", "backups"],
+    "sqli":    ["databases"],
+    "scripts": ["scripts", "configs", "credentials"],
+    "page":    ["webpage"],
+};
+
+/* Sub-filter predicates: (row) => bool  */
+const SUB_PRED = {
+    /* DOC sub-filters */
+    "doc-all":        ()    => true,
+    "doc-pdf":        (row) => row.dataset.ext === ".pdf",
+    "doc-docx":       (row) => [".doc",".docx",".odt"].includes(row.dataset.ext),
+    "doc-xlsx":       (row) => [".xls",".xlsx",".ods"].includes(row.dataset.ext),
+    "doc-ppt":        (row) => [".ppt",".pptx"].includes(row.dataset.ext),
+    "doc-arc":        (row) => [".zip",".rar",".tar",".gz",".7z",".bz2"].includes(row.dataset.ext),
+    /* SQLi sub-filters */
+    "sqli-all":       ()    => true,
+    "sqli-vuln":      (row) => row.dataset.sqli === "vuln",
+    "sqli-safe":      (row) => row.dataset.sqli === "safe",
+    /* SCRIPTS sub-filters */
+    "scripts-all":    ()    => true,
+    "scripts-php":    (row) => row.dataset.ext === ".php",
+    "scripts-asp":    (row) => [".asp",".aspx"].includes(row.dataset.ext),
+    "scripts-sh":     (row) => [".sh",".bat",".ps1"].includes(row.dataset.ext),
+    "scripts-config": (row) => [".conf",".config",".ini",".yaml",".yml",".json",".xml"].includes(row.dataset.ext),
+    "scripts-creds":  (row) => [".env",".git",".svn",".htpasswd"].includes(row.dataset.ext),
+};
+
+/* State */
+let activeGroup = "all";
+let activeSub   = null;
+
+/* Close all open sub-menus */
+function closeAllSubMenus() {
+    document.querySelectorAll('.sub-menu.open').forEach(m => {
+        m.classList.remove('open');
+        m.style.maxHeight = '0';
+        m.style.opacity   = '0';
+    });
+    document.querySelectorAll('.filter-btn.has-sub').forEach(b => b.classList.remove('active'));
+}
+
+/* Toggle sub-menu open / close */
+function toggleSubMenu(groupId) {
+    const menu = document.getElementById('sub-' + groupId);
+    if (!menu) return;
+    const isOpen = menu.classList.contains('open');
+    closeAllSubMenus();
+    if (!isOpen) {
+        menu.classList.add('open');
+        menu.style.maxHeight = '300px';
+        menu.style.opacity   = '1';
+    }
+}
+
+/* Main filter button click */
+function applyFilter(btn) {
+    const group = btn.dataset.group;
+
+    /* If clicking same group that has sub-menu → toggle menu only */
+    if (btn.classList.contains('has-sub')) {
+        if (activeGroup === group) {
+            toggleSubMenu(group);
+            return;
+        }
+        /* Switch group */
+        activeGroup = group;
+        activeSub   = group + '-all';
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        /* Reset sub-btn selection to ALL */
+        const menu = document.getElementById('sub-' + group);
+        if (menu) {
+            menu.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+            menu.querySelector('.sub-btn').classList.add('active');
+        }
+        toggleSubMenu(group);
+    } else {
+        /* Simple button (ALL, PAGE) */
+        closeAllSubMenus();
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeGroup = group;
+        activeSub   = null;
+    }
+
+    renderRows();
+    updateInfoBar();
+}
+
+/* Sub-filter button click */
+function applySubFilter(btn, groupId) {
+    btn.closest('.sub-menu').querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeSub = btn.dataset.sub;
+    renderRows();
+    updateInfoBar();
+    /* Keep sub-menu open */
+}
+
+/* Apply current group + sub filter to all rows */
+function renderRows() {
+    const rows    = document.querySelectorAll('#results-tbody tr');
+    const cats    = GROUP_CATS[activeGroup] || [];
+    const subPred = activeSub ? (SUB_PRED[activeSub] || (() => true)) : (() => true);
+
+    rows.forEach(row => {
+        if (activeGroup === 'all') {
+            row.classList.remove('hidden');
+            return;
+        }
+        const inGroup = cats.includes(row.dataset.category || '');
+        if (inGroup && subPred(row)) {
+            row.classList.remove('hidden');
+        } else {
+            row.classList.add('hidden');
+        }
+    });
+}
+
+/* Update badge counts for sub-items (computed once on load) */
+function buildSubBadges() {
+    const rows = Array.from(document.querySelectorAll('#results-tbody tr'));
+
+    const count = (pred) => rows.filter(pred).length;
+    const inGroup = (cats) => (row) => cats.includes(row.dataset.category || '');
+
+    const docRows     = rows.filter(inGroup(GROUP_CATS['doc']));
+    const sqliRows    = rows.filter(inGroup(GROUP_CATS['sqli']));
+    const scriptsRows = rows.filter(inGroup(GROUP_CATS['scripts']));
+
+    const set = (id, n) => { const el = document.getElementById(id); if(el) el.textContent = n; };
+
+    /* DOC badges */
+    set('sbadge-doc-all',  docRows.length);
+    set('sbadge-doc-pdf',  docRows.filter(r => r.dataset.ext === '.pdf').length);
+    set('sbadge-doc-docx', docRows.filter(r => ['.doc','.docx','.odt'].includes(r.dataset.ext)).length);
+    set('sbadge-doc-xlsx', docRows.filter(r => ['.xls','.xlsx','.ods'].includes(r.dataset.ext)).length);
+    set('sbadge-doc-ppt',  docRows.filter(r => ['.ppt','.pptx'].includes(r.dataset.ext)).length);
+    set('sbadge-doc-arc',  docRows.filter(r => ['.zip','.rar','.tar','.gz','.7z','.bz2'].includes(r.dataset.ext)).length);
+
+    /* SQLi badges */
+    set('sbadge-sqli-all',  sqliRows.length);
+    set('sbadge-sqli-vuln', sqliRows.filter(r => r.dataset.sqli === 'vuln').length);
+    set('sbadge-sqli-safe', sqliRows.filter(r => r.dataset.sqli === 'safe').length);
+
+    /* SCRIPTS badges */
+    set('sbadge-scripts-all',    scriptsRows.length);
+    set('sbadge-scripts-php',    scriptsRows.filter(r => r.dataset.ext === '.php').length);
+    set('sbadge-scripts-asp',    scriptsRows.filter(r => ['.asp','.aspx'].includes(r.dataset.ext)).length);
+    set('sbadge-scripts-sh',     scriptsRows.filter(r => ['.sh','.bat','.ps1'].includes(r.dataset.ext)).length);
+    set('sbadge-scripts-config', scriptsRows.filter(r => ['.conf','.config','.ini','.yaml','.yml','.json','.xml'].includes(r.dataset.ext)).length);
+    set('sbadge-scripts-creds',  scriptsRows.filter(r => ['.env','.git','.svn','.htpasswd'].includes(r.dataset.ext)).length);
+}
+
+/* Info bar below filter bar */
+function updateInfoBar() {
+    const bar = document.getElementById('sub-info');
+    if (!bar) return;
+    const visible = document.querySelectorAll('#results-tbody tr:not(.hidden)').length;
+
+    if (activeGroup === 'all' || !activeSub) {
+        bar.innerHTML = `&#10142; Showing <span>${visible}</span> result(s)`;
+    } else {
+        const subLabel = activeSub.split('-').slice(1).join(' ').toUpperCase();
+        const grpLabel = activeGroup.toUpperCase();
+        bar.innerHTML = `&#10142; Filter: <span>${grpLabel}</span> &rsaquo; <span>${subLabel}</span> &mdash; <span>${visible}</span> result(s) visible`;
+    }
+}
+
+/* Close sub-menus when clicking outside */
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.filter-group') && !e.target.closest('.filter-btn[data-group]')) {
+        closeAllSubMenus();
+        /* Restore active state on main btn if group is still selected */
+        document.querySelectorAll('.filter-btn').forEach(b => {
+            if (b.dataset.group === activeGroup) b.classList.add('active');
+        });
+    }
+});
+
+/* Init */
+buildSubBadges();
+updateInfoBar();
+</script>
 </body>
 </html>
 """
 
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(html)
-
-        console.print(f"[green][✓] HTML report saved: {filename}[/green]")
 
     def _format_size(self, size):
         """Format file size"""
@@ -1540,11 +2163,25 @@ def resolve_templates_argument(template_arg):
 
     return [specific_path]
 
+def get_categories_from_templates(template_files) -> List[str]:
+    """Legge le categorie disponibili direttamente dai template YAML"""
+    categories = set()
+    for template_file in template_files:
+        try:
+            with open(template_file, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+                if data and "templates" in data:
+                    categories.update(data["templates"].keys())
+        except Exception as e:
+            console.print(f"[yellow][!] Could not read categories from {template_file}: {e}[/yellow]")
+    return sorted(categories)
+
+
 def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.2.6 | Security Dorking Framework",
+        description="DorkEye v4.2.6 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
 
@@ -1554,7 +2191,7 @@ def main():
     %(prog)s --dg=all
     %(prog)s --dg=sqli --mode=medium --sqli --stealth -o results.html
     %(prog)s --dg=backups --templates=dorks_templates_research.yaml output.html
-    %(prog)s --dg=all --templates=all output.html
+    %(prog)s --dg=all --templates=dorks_template.yaml output.html
     %(prog)s python dorkeye.py --dg=sqli --mode=aggressive --templates=dorks_templates.yaml --sqli --stealth -o report_test.html
 
 """
@@ -1583,8 +2220,11 @@ def main():
             console.print("[red][!] Use --templates=filename.yaml format (no spaces)[/red]")
             sys.exit(1)
 
-    VALID_CATEGORIES = ["sqli", "backups", "sensitive", "admin"]
-    VALID_MODES = ["soft", "medium", "aggressive"]
+    template_files_for_validation = resolve_templates_argument(args.templates)
+    VALID_CATEGORIES = get_categories_from_templates(template_files_for_validation)
+
+    if not VALID_CATEGORIES:
+        parser.error("No categories found in template files.")
 
     # --- Validate --dg ---
     selected_categories = None
@@ -1648,30 +2288,31 @@ def main():
     dorkeye = DorkEyeEnhanced(config, args.output)
 
     # Determine dorks source
-    template_files = resolve_templates_argument(args.templates)
+    if args.dg:
+        template_files = resolve_templates_argument(args.templates)
 
-    console.print(
-        f"[cyan][*] Loaded template(s): {', '.join([t.name for t in template_files])}[/cyan]"
-    )
-
-    all_dorks = []
-
-    for template_file in template_files:
-        generator = DorkGenerator(str(template_file))
-
-        generated = generator.generate(
-            categories=selected_categories,
-            mode=args.mode
+        console.print(
+            f"[cyan][*] Loaded template(s): {', '.join([t.name for t in template_files])}[/cyan]"
         )
 
-        all_dorks.extend(generated)
+        all_dorks = []
 
-    dorks = all_dorks
+        for template_file in template_files:
+            generator = DorkGenerator(str(template_file))
 
-    console.print(f"[cyan][*] Generated {len(dorks)} dorks (mode: {args.mode})[/cyan]")
+            generated = generator.generate(
+                categories=selected_categories,
+                mode=args.mode
+            )
 
-    if selected_categories:
-        console.print(f"[cyan][*] Categories: {', '.join(selected_categories)}[/cyan]")
+            all_dorks.extend(generated)
+
+        dorks = all_dorks
+
+        console.print(f"[cyan][*] Generated {len(dorks)} dorks (mode: {args.mode})[/cyan]")
+
+        if selected_categories:
+            console.print(f"[cyan][*] Categories: {', '.join(selected_categories)}[/cyan]")
 
     else:
         dorks = dorkeye.process_dorks(args.dork)
