@@ -1,0 +1,48 @@
+variables:
+  domain:
+    - gov.ru
+    - com
+    - in
+
+  param:
+    - id
+    - page
+    - search
+    - user
+
+  extension:
+    - pdf
+    - doc
+    - xls
+    - json
+    - log
+
+templates:
+
+  example_search:
+    mode: soft
+    dorks:
+      - 'site:{domain} inurl:{param}'
+      - 'filetype:{extension} site:{domain}'
+
+  documents:
+    mode: soft
+    dorks:
+      - 'site:{domain} filetype:{extension}'
+      - 'filetype:pdf site:{domain}'
+      
+  directories:
+    mode: soft
+    dorks:
+      - '"index of" site:{domain}'
+      - '"parent directory" site:{domain}'
+    
+  sqli:
+    mode: aggressive
+    dorks:
+      - 'site:{domain} inurl:.php?{param}='
+      
+  sensitive:
+    mode: medium
+    dorks:
+      - '"BEGIN RSA PRIVATE KEY"'
