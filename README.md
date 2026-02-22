@@ -85,9 +85,7 @@ Generates structured Google dorks using a modular YAML template engine.
 
 ### 💾 Export Formats available
 -    `.csv .json .txt .html`
-<img width="1918" height="1013" alt="dorkeye_html_results" src="https://github.com/user-attachments/assets/ecee13e2-3581-4def-8098-52b3d96b805a" />
-<img width="1918" height="926" alt="dorkeye_html_results_vuln" src="https://github.com/user-attachments/assets/bc13d89d-5c7f-4c2a-b2a7-cfb194cfa79d" />
-
+<img width="1536" height="812" alt="de_html_report" src="https://github.com/user-attachments/assets/e9272adf-0300-49a1-8aeb-a090a2888578" />
 ---
 
 ## 🚀 Features
