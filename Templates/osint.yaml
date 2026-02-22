@@ -1,0 +1,101 @@
+variables:
+
+  domain:
+    - com
+    - net
+    - org
+    - ru
+    - in
+
+  document_types:
+    - pdf
+    - doc
+    - docx
+    - xls
+    - xlsx
+    - ppt
+    - txt
+
+  generic_usernames:
+    - admin
+    - test
+    - guest
+    - info
+    - support
+    - root
+    - webmaster
+
+  social_platforms:
+    - linkedin.com
+    - twitter.com
+    - facebook.com
+    - instagram.com
+    - github.com
+
+  paste_sites:
+    - pastebin.com
+    - ghostbin.com
+    - hastebin.com
+
+  metadata_keywords:
+    - Author:
+    - Created by
+    - Last modified by
+
+categories:
+
+  email_harvesting:
+    mode: soft
+    dorks:
+      - '"@{domain}"'
+      - 'site:.{domain} "@{domain}"'
+      - '"contact@" site:.{domain}'
+      - '"support@" site:.{domain}'
+
+  document_discovery:
+    mode: soft
+    dorks:
+      - 'site:.{domain} filetype:{document_types}'
+      - 'site:.{domain} ext:{document_types}'
+      - 'site:.{domain} intext:"{metadata_keywords}"'
+      - 'site:.{domain} intitle:"confidential" filetype:pdf'
+
+  username_enumeration:
+    mode: soft
+    dorks:
+      - '"{generic_usernames}" site:.{domain}'
+      - 'inurl:{generic_usernames} site:.{domain}'
+      - 'intitle:"profile" site:.{domain}'
+      - '"user id" site:.{domain}'
+
+  social_footprint:
+    mode: soft
+    dorks:
+      - 'site:{social_platforms} "{domain}"'
+      - '"{domain}" site:linkedin.com'
+      - '"{domain}" site:github.com'
+      - '"{domain}" site:twitter.com'
+
+  data_leaks:
+    mode: medium
+    dorks:
+      - '"{domain}" site:{paste_sites}'
+      - '"password" "{domain}"'
+      - '"database dump" "{domain}"'
+      - '"leaked" "{domain}"'
+
+  subdomain_discovery:
+    mode: soft
+    dorks:
+      - 'site:*.{domain}'
+      - 'inurl:dev.{domain}'
+      - 'inurl:test.{domain}'
+      - 'inurl:staging.{domain}'
+
+  indexed_directories:
+    mode: soft
+    dorks:
+      - '"index of" "{domain}"'
+      - '"parent directory" "{domain}"'
+      - '"backup" "{domain}"'
+      - '"internal use only" "{domain}"'

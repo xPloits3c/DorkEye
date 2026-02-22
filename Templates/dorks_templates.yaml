@@ -1,0 +1,953 @@
+# ============================================================
+#  DorkEye v4.2.6 — Default Dork Templates
+#  Author: xPloits3c | https://github.com/xPloits3c/DorkEye
+#
+#  Every category defines all three modes:
+#    soft       → safe, minimal queries, low noise
+#    medium     → balanced, standard assessment
+#    aggressive → maximum coverage, pair with --stealth
+#
+#  Note: cctv and sensitive use flat mode (mode: aggressive)
+#        all other categories use nested soft/medium/aggressive
+#
+#  Usage:
+#    --dg=sqli --mode=soft
+#    --dg=cctv --mode=aggressive --stealth
+#    --dg=all  --mode=aggressive --stealth
+# ============================================================
+
+variables:
+
+  domain:
+    - ac
+    - ad
+    - ae
+    - af
+    - ag
+    - ai
+    - al
+    - am
+    - ao
+    - aq
+    - ar
+    - as
+    - at
+    - au
+    - aw
+    - ax
+    - az
+    - ba
+    - bb
+    - bd
+    - be
+    - bf
+    - bg
+    - bh
+    - bi
+    - bj
+    - bl
+    - bm
+    - bn
+    - bo
+    - bq
+    - br
+    - bs
+    - bt
+    - bv
+    - bw
+    - by
+    - bz
+    - ca
+    - cc
+    - cd
+    - cf
+    - cg
+    - ch
+    - ci
+    - ck
+    - cl
+    - cm
+    - cn
+    - co
+    - cr
+    - cu
+    - cv
+    - cw
+    - cx
+    - cy
+    - cz
+    - de
+    - dj
+    - dk
+    - dm
+    - do
+    - dz
+    - ec
+    - ee
+    - eg
+    - er
+    - es
+    - et
+    - eu
+    - fi
+    - fj
+    - fr
+    - ga
+    - gb
+    - ge
+    - gl
+    - gr
+    - hk
+    - hr
+    - hu
+    - id
+    - ie
+    - il
+    - in
+    - io
+    - ir
+    - is
+    - it
+    - jp
+    - lt
+    - lu
+    - lv
+    - ma
+    - mx
+    - nl
+    - no
+    - pl
+    - pt
+    - ro
+    - ru
+    - se
+    - uk
+    - us
+    - za
+
+  tld:
+    - com
+    - net
+    - org
+    - info
+    - biz
+    - app
+    - dev
+    - online
+    - site
+    - web
+    - store
+    - cloud
+    - edu
+    - ac.uk
+    - edu.au
+    - edu.it
+    - edu.br
+    - uni.de
+    - ac.jp
+    - gov
+    - gov.uk
+    - gov.ru
+    - gov.au
+    - gov.br
+    - gov.it
+    - gouv.fr
+    - gob.es
+    - gob.mx
+    - mil
+    - bank
+    - finance
+    - insurance
+    - health
+    - hospital
+    - pharmacy
+    - legal
+    - law
+    - media
+    - news
+    - press
+    - university
+    - school
+    - tech
+    - security
+    - network
+    - systems
+    - solutions
+    - services
+    - software
+    - digital
+
+  param:
+    - id
+    - page
+    - cat
+    - category
+    - product
+    - item
+    - view
+    - news
+    - article
+    - post
+    - content
+    - user
+    - userid
+    - uid
+    - profile
+    - account
+    - product_id
+    - order_id
+    - invoice
+    - file
+    - filename
+    - download
+    - path
+    - dir
+    - action
+    - module
+    - component
+    - search
+    - query
+    - filter
+    - sort
+    - token
+    - session
+    - redirect
+    - next
+    - api
+    - version
+    - limit
+    - offset
+    - uuid
+    - guid
+    - hash
+    - password
+    - highlight
+    - keyword
+    - keywords
+    - term
+    - text
+    - message
+    - msg
+    - feedback
+    - destination
+    - ref
+    - referrer
+    - city
+    - address
+    - company
+    - display_name
+    - data
+    - payload
+    - options
+    - settings
+    - popup
+    - dialog
+    - modal
+    - tab
+    - section
+    - route
+    - slug
+    - country
+    - note
+    - reason
+    - rating_text
+    - name
+    - pass
+    - secret
+    - access_token
+    - refresh_token
+    - cmd
+    - inc
+    - code
+    - state
+    - client_id
+    - client_secret
+    - username
+    - member
+    - login
+    - email
+    - auth
+    - key
+    - api_key
+    - access
+    - role
+    - admin
+    - panel
+    - dashboard
+    - controller
+    - task
+    - config
+    - setting
+    - update
+    - delete
+    - edit
+    - create
+    - pid
+    - sku
+    - cart
+    - basket
+    - order
+    - price
+    - currency
+    - quantity
+    - coupon
+    - discount
+    - checkout
+    - payment
+    - post_id
+    - page_id
+    - author
+    - comment
+    - reply
+    - attachment
+    - feed
+    - category_id
+    - archive
+    - template
+    - filepath
+    - folder
+    - doc
+    - document
+    - cursor
+    - per_page
+    - size
+    - include
+    - expand
+    - fields
+    - format
+    - callback
+    - return
+    - returnUrl
+    - url
+    - target
+    - dest
+    - source
+    - continue
+    - origin
+    - reference
+    - object
+    - object_id
+    - record
+    - record_id
+    - entry
+    - entry_id
+
+  extension:
+    # Database & SQL
+    - sql
+    - sqlite
+    - sqlite3
+    - db
+    - mdb
+    - accdb
+    - dbf
+    # Backup & Temp
+    - bak
+    - old
+    - orig
+    - backup
+    - tmp
+    - swp
+    - save
+    # Credentials & Secrets
+    - env
+    - pem
+    - key
+    - ppk
+    - pfx
+    - p12
+    - htpasswd
+    - ovpn
+    - secret
+    # Log & Debug
+    - log
+    - logs
+    - debug
+    - trace
+    - audit
+    # Config
+    - yaml
+    - yml
+    - json
+    - xml
+    - ini
+    - conf
+    - config
+    - cfg
+    - properties
+    - toml
+    # Documents
+    - pdf
+    - doc
+    - docx
+    - xls
+    - xlsx
+    - xlm
+    - xlsm
+    - ppt
+    - pptx
+    - odt
+    - ods
+    - csv
+    # Archives
+    - zip
+    - tar
+    - gz
+    - tgz
+    - rar
+    - 7z
+    - bz2
+    - tar.gz
+    # Source & Script
+    - php
+    - asp
+    - aspx
+    - jsp
+    - sh
+    - bash
+    - ps1
+    - py
+    - rb
+    - go
+    # Dev & CI/CD
+    - git
+    - gitignore
+    - dockerfile
+    - tf
+    - tfstate
+    - tfvars
+    - lock
+    - htaccess
+    # Text & Dump
+    - txt
+    - md
+    - dump
+    - cache
+    - dat
+
+  sense:
+    - cv
+    - email
+    - phone
+    - address
+    - "social security number"
+    - "credit card"
+    - "bank account"
+    - password
+    - "medical records"
+    - username
+    - finance
+    - budget
+    - personal
+
+  sqli_db:
+    - "ORA-"
+    - "ODBC"
+    - "SQLite"
+    - "password"
+    - "SQLSTATE"
+    - "Warning"
+    - "SQL syntax"
+    - "PostgreSQL"
+    - "mysql_fetch"
+    - "DB_PASSWORD"
+    - "Warning: mysqli"
+    - "PostgreSQL ERROR"
+    - "SQLite3::SQLException"
+    - "Unclosed quotation mark"
+    - "BEGIN RSA PRIVATE KEY"
+    - "AWS_SECRET_ACCESS_KEY"
+    - "You have an error in your SQL syntax"
+    - "Microsoft OLE DB Provider for SQL Server"
+
+templates:
+
+  # ──────────────────────────────────────────────
+  #  SQL INJECTION
+  # ──────────────────────────────────────────────
+  sqli:
+    description: "SQL injection point discovery via GET parameters"
+    dorks:
+      soft:
+        - 'site:{domain} inurl:{param}='
+        - 'site:{domain} inurl:{param}= filetype:{extension}'
+        - 'site:{domain} inurl:{param}= intext:"error"'
+        - 'site:{domain} inurl:{param}= intext:"warning"'
+      medium:
+        - 'site:{domain} inurl:{param}= intext:"{sqli_db}"'
+        - 'site:{domain} inurl:{param}= "{sqli_db}"'
+        - 'site:{domain} inurl:{param}= filetype:{extension} intext:"error"'
+        - 'site:{domain} inurl:{param}= intext:"{sense}"'
+        - 'site:{domain} filetype:{extension} intext:"{sqli_db}"'
+        - 'site:{domain} inurl:{param} intext:"{sqli_db}"'
+      aggressive:
+        - 'site:{domain} inurl:{param}= intext:"{sqli_db}" filetype:{extension}'
+        - 'site:{domain} inurl:{param}= intext:"{sense}" filetype:{extension}'
+        - 'site:{domain} inurl:{param}= "{sqli_db}" "{sense}"'
+        - 'site:{domain} inurl:{param} intext:"{sqli_db}" intext:"{sense}"'
+        - 'site:{domain} filetype:{extension} "{sqli_db}"'
+        - 'site:{domain} inurl:{param} "{sqli_db}"'
+        - 'site:{domain} inurl:{param}= ext:{extension}'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sense}"'
+        - 'site:{domain} intext:"{sqli_db}" inurl:{param}'
+
+  # ──────────────────────────────────────────────
+  #  ADMIN PANELS
+  # ──────────────────────────────────────────────
+  admin:
+    description: "Admin panels and login interfaces"
+    dorks:
+      soft:
+        - 'site:{domain} inurl:{param}'
+        - 'site:{domain} intitle:{param}'
+        - 'site:{domain} inurl:login'
+        - 'site:{domain} intitle:"login"'
+      medium:
+        - 'site:{domain} inurl:{param} intitle:{sense}'
+        - 'site:{domain} intitle:{sense}'
+        - 'site:{domain} inurl:{param} intext:{sense}'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+        - 'site:{domain} intitle:{param} intext:{sense}'
+        - 'site:{domain} inurl:{param} "{sense}"'
+      aggressive:
+        - 'site:{domain} inurl:{param} intitle:{sense} intext:{sense}'
+        - 'site:{domain} inurl:{param} filetype:{extension} intext:{sense}'
+        - 'site:{domain} inurl:{param} "{sense}" "{param}"'
+        - 'site:{domain} filetype:{extension} intitle:{sense}'
+        - 'site:{domain} intext:{sense} inurl:{param}'
+        - 'site:{domain} intitle:{sense} filetype:{extension}'
+        - 'site:{domain} inurl:{param} ext:{extension}'
+        - 'site:{domain} inurl:{param} intext:"password"'
+        - 'site:{domain} intext:"password" inurl:{param}'
+
+  # ──────────────────────────────────────────────
+  #  BACKUP FILES
+  # ──────────────────────────────────────────────
+  backups:
+    description: "Exposed backup and archive files"
+    dorks:
+      soft:
+        - 'site:{domain} ext:{extension}'
+        - 'site:{domain} filetype:{extension}'
+        - 'site:{domain} inurl:{param} ext:{extension}'
+        - 'site:{domain} inurl:backup'
+      medium:
+        - 'site:{domain} filetype:{extension} inurl:{param}'
+        - 'site:{domain} filetype:{extension} intext:{sense}'
+        - 'site:{domain} ext:{extension} inurl:{param}'
+        - 'site:{domain} inurl:{param} "{sense}"'
+        - 'site:{domain} filetype:{extension} "{sqli_db}"'
+        - 'site:{domain} ext:{extension} intext:"backup"'
+      aggressive:
+        - 'site:{domain} filetype:{extension} "{sqli_db}" "{sense}"'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sense}"'
+        - 'site:{domain} ext:{extension} intext:{sqli_db}'
+        - 'site:{domain} ext:{extension} intext:{sense}'
+        - 'site:{domain} inurl:{param} ext:{extension} "{sqli_db}"'
+        - 'site:{domain} filetype:{extension} intext:"password"'
+        - 'site:{domain} filetype:{extension} intext:"username"'
+        - 'site:{domain} inurl:{param} "{sqli_db}"'
+        - 'site:{domain} filetype:{extension} intext:"confidential"'
+        - 'filetype:{extension} site:{domain}'
+        - 'site:{domain} inurl:{param} intext:"{sqli_db}" filetype:{extension}'
+
+  # ──────────────────────────────────────────────
+  #  DATABASES
+  # ──────────────────────────────────────────────
+  databases:
+    description: "Publicly indexed database files"
+    dorks:
+      soft:
+        - 'site:{domain} filetype:{extension}'
+        - 'site:{domain} ext:{extension}'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+        - 'site:{domain} inurl:database ext:{extension}'
+      medium:
+        - 'site:{domain} filetype:{extension} intext:"CREATE TABLE"'
+        - 'site:{domain} filetype:{extension} intext:"INSERT INTO"'
+        - 'site:{domain} filetype:{extension} intext:{sense}'
+        - 'site:{domain} ext:{extension} inurl:{param}'
+        - 'site:{domain} filetype:{extension} intext:{sqli_db}'
+        - 'site:{domain} filetype:{extension} intitle:"index of"'
+      aggressive:
+        - 'site:{domain} filetype:{extension} "CREATE TABLE" "{sense}"'
+        - 'site:{domain} filetype:{extension} "INSERT INTO" "{sense}"'
+        - 'site:{domain} ext:{extension} intext:{sense} intext:{sqli_db}'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sqli_db}"'
+        - 'site:{domain} filetype:{extension} intext:"username" intext:"password"'
+        - 'site:{domain} filetype:{extension} intext:"email" intext:"password"'
+        - 'site:{domain} filetype:{extension} "{sqli_db}" "{sense}"'
+        - 'site:{domain} ext:{extension} inurl:dump'
+        - 'site:{domain} filetype:{extension} intext:"admin"'
+
+  # ──────────────────────────────────────────────
+  #  CONFIGURATION FILES
+  # ──────────────────────────────────────────────
+  configs:
+    description: "Exposed configuration files"
+    dorks:
+      soft:
+        - 'site:{domain} ext:{extension}'
+        - 'site:{domain} filetype:{extension}'
+        - 'site:{domain} inurl:{param} ext:{extension}'
+        - 'site:{domain} inurl:config'
+      medium:
+        - 'site:{domain} ext:{extension} intext:{sense}'
+        - 'site:{domain} filetype:{extension} intext:{sense}'
+        - 'site:{domain} ext:{extension} intext:{sqli_db}'
+        - 'site:{domain} filetype:{extension} intext:"password"'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+        - 'site:{domain} filetype:{extension} "{sqli_db}"'
+      aggressive:
+        - 'site:{domain} filetype:{extension} "{sqli_db}" "{sense}"'
+        - 'site:{domain} inurl:{param} filetype:{extension} intext:{sense}'
+        - 'site:{domain} ext:{extension} intext:{sqli_db} intext:{sense}'
+        - 'site:{domain} filetype:{extension} intext:"connection"'
+        - 'site:{domain} inurl:{param} ext:{extension} "{sense}"'
+        - 'site:{domain} filetype:{extension} intext:"api_key"'
+        - 'site:{domain} filetype:{extension} intext:"secret"'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sqli_db}"'
+        - 'site:{domain} ext:{extension} intext:"credential"'
+
+  # ──────────────────────────────────────────────
+  #  CREDENTIALS
+  # ──────────────────────────────────────────────
+  credentials:
+    description: "Exposed credential and secret files"
+    dorks:
+      soft:
+        - 'site:{domain} ext:{extension}'
+        - 'site:{domain} filetype:{extension}'
+        - 'site:{domain} inurl:{param} ext:{extension}'
+        - 'site:{domain} intext:{sense}'
+      medium:
+        - 'site:{domain} ext:{extension} intext:{sense}'
+        - 'site:{domain} filetype:{extension} intext:"password"'
+        - 'site:{domain} filetype:{extension} intext:"username"'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+        - 'site:{domain} ext:{extension} intext:{sqli_db}'
+        - 'site:{domain} inurl:{param} intext:{sense}'
+      aggressive:
+        - 'site:{domain} filetype:{extension} intext:"password" intext:"username"'
+        - 'site:{domain} ext:{extension} "{sense}" "{sqli_db}"'
+        - 'site:{domain} filetype:{extension} intext:{sense} intext:{sqli_db}'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sense}"'
+        - 'site:{domain} ext:{extension} intext:"credential"'
+        - 'site:{domain} filetype:{extension} intext:"token"'
+        - 'site:{domain} ext:{extension} intext:"secret"'
+        - 'site:{domain} inurl:{param} ext:{extension} intext:"password"'
+        - 'site:{domain} filetype:{extension} "{sense}" "{param}"'
+        - 'site:{domain} inurl:".env" intext:"{sqli_db}"'
+
+  # ──────────────────────────────────────────────
+  #  DOCUMENTS
+  # ──────────────────────────────────────────────
+  documents:
+    description: "Sensitive documents indexed publicly"
+    dorks:
+      soft:
+        - 'site:{domain} filetype:{extension}'
+        - 'site:{domain} ext:{extension}'
+        - 'site:{domain} filetype:{extension} intext:{sense}'
+        - 'site:{domain} filetype:{extension} "{sense}"'
+      medium:
+        - 'site:{domain} filetype:{extension} intext:{sense} inurl:{param}'
+        - 'site:{domain} filetype:{extension} "{sense}" "{param}"'
+        - 'site:{domain} filetype:{extension} intext:"password"'
+        - 'site:{domain} filetype:{extension} intext:"confidential"'
+        - 'site:{domain} filetype:{extension} intext:{sqli_db}'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+      aggressive:
+        - 'site:{domain} filetype:{extension} "{sense}" "{param}"'
+        - 'site:{domain} filetype:{extension} "{sense}" "{sqli_db}"'
+        - 'site:{domain} filetype:{extension} intext:{sense} intext:{sqli_db}'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sense}"'
+        - 'site:{domain} filetype:{extension} intext:"username" intext:"password"'
+        - 'site:{domain} filetype:{extension} intext:"credit"'
+        - 'site:{domain} filetype:{extension} intext:"finance"'
+        - 'site:{domain} filetype:{extension} intext:"internal"'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sqli_db}"'
+
+  # ──────────────────────────────────────────────
+  #  SCRIPTS
+  # ──────────────────────────────────────────────
+  scripts:
+    description: "Exposed server-side scripts and code"
+    dorks:
+      soft:
+        - 'site:{domain} ext:{extension}'
+        - 'site:{domain} filetype:{extension}'
+        - 'site:{domain} inurl:{param} ext:{extension}'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+      medium:
+        - 'site:{domain} ext:{extension} intext:{sense}'
+        - 'site:{domain} filetype:{extension} intext:{sense}'
+        - 'site:{domain} ext:{extension} intext:{param}'
+        - 'site:{domain} inurl:{param} ext:{extension} intext:{sense}'
+        - 'site:{domain} filetype:{extension} intext:"password"'
+        - 'site:{domain} ext:{extension} intext:"upload"'
+      aggressive:
+        - 'site:{domain} ext:{extension} intext:{sqli_db}'
+        - 'site:{domain} filetype:{extension} "{sqli_db}" "{sense}"'
+        - 'site:{domain} inurl:{param} ext:{extension} "{sense}"'
+        - 'site:{domain} ext:{extension} intext:"{sense}" intext:"{param}"'
+        - 'site:{domain} filetype:{extension} intext:"cmd"'
+        - 'site:{domain} ext:{extension} intext:"exec"'
+        - 'site:{domain} ext:{extension} intext:"system"'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sqli_db}"'
+        - 'site:{domain} ext:{extension} intext:"debug"'
+        - 'site:{domain} ext:{extension}'
+
+  # ──────────────────────────────────────────────
+  #  LOG FILES
+  # ──────────────────────────────────────────────
+  logs:
+    description: "Exposed server and application log files"
+    dorks:
+      soft:
+        - 'site:{domain} ext:{extension}'
+        - 'site:{domain} inurl:log'
+        - 'site:{domain} intitle:"log"'
+        - 'site:{domain} filetype:{extension}'
+      medium:
+        - 'site:{domain} ext:{extension} intext:{sense}'
+        - 'site:{domain} ext:{extension} intext:{sqli_db}'
+        - 'site:{domain} filetype:{extension} intext:"error"'
+        - 'site:{domain} inurl:{param} ext:{extension}'
+        - 'site:{domain} filetype:{extension} intext:"exception"'
+        - 'site:{domain} filetype:{extension} "{sqli_db}"'
+      aggressive:
+        - 'site:{domain} ext:{extension} "{sqli_db}" "{sense}"'
+        - 'site:{domain} inurl:{param} ext:{extension} intext:{sense}'
+        - 'site:{domain} filetype:{extension} intext:"stack trace"'
+        - 'site:{domain} ext:{extension} intext:"fatal"'
+        - 'site:{domain} filetype:{extension} intext:"login failed"'
+        - 'site:{domain} intext:{sqli_db} ext:{extension}'
+        - 'site:{domain} filetype:{extension} "{sense}"'
+        - 'site:{domain} inurl:{param} filetype:{extension} "{sqli_db}"'
+        - 'site:{domain} ext:{extension} intext:"warning"'
+        - 'site:{domain} ext:log intext:"php_error"'
+        - 'site:{domain} ext:log intext:"{sqli_db}"'
+
+  # ──────────────────────────────────────────────
+  #  OPEN DIRECTORIES
+  # ──────────────────────────────────────────────
+  open_dirs:
+    description: "Open directory listings"
+    dorks:
+      soft:
+        - 'site:*.{tld} intitle:"index of"'
+        - 'site:{domain} intitle:"index of"'
+        - 'site:{domain} intitle:"index of /"'
+        - 'site:{domain} intitle:"directory listing"'
+        - 'site:{domain} intitle:"index of" inurl:{param}'
+      medium:
+        - 'site:{domain} intitle:"index of" intext:{extension}'
+        - 'site:{domain} intitle:"index of" intext:{sense}'
+        - 'site:*.{tld} intitle:"index of" intext:{sense}'
+        - 'site:{domain} intitle:"index of" filetype:{extension}'
+        - 'site:{domain} intitle:"index of" inurl:{param}'
+        - 'site:*.{tld} intitle:"index of" filetype:{extension}'
+        - 'site:{domain} intitle:"index of" "{sense}"'
+        - 'site:{domain} intitle:"index of" "{extension}"'
+      aggressive:
+        - 'site:*.{tld} intitle:"index of"'
+        - 'site:{domain} intitle:"index of" intext:{extension} intext:{sense}'
+        - 'site:{domain} intitle:"index of" filetype:{extension} intext:{sense}'
+        - 'site:{domain} intitle:"index of" "{sense}" "{extension}"'
+        - 'site:*.{tld} intitle:"index of" filetype:{extension}'
+        - 'site:{domain} intitle:"index of" inurl:{param} intext:{sense}'
+        - 'site:{domain} intitle:"index of" inurl:{param} filetype:{extension}'
+        - 'site:{domain} intitle:"index of" intext:{sqli_db}'
+        - 'site:*.{tld} intitle:"index of" intext:{sense}'
+        - 'site:{domain} intitle:"index of" filetype:{extension} "{sqli_db}"'
+        - 'site:{domain} intitle:"index of" intext:"password"'
+        - 'site:{domain} intitle:"index of" intext:"backup"'
+
+  # ──────────────────────────────────────────────
+  #  ERROR PAGES
+  # ──────────────────────────────────────────────
+  errors:
+    description: "Verbose error pages exposing stack traces and tech info"
+    dorks:
+      soft:
+        - 'site:{domain} intext:{sqli_db}'
+        - 'site:{domain} intext:"error"'
+        - 'site:*.{tld} intext:"fatal error"'
+        - 'site:{domain} intext:"exception"'
+        - 'site:{domain} intext:"warning"'
+      medium:
+        - 'site:{domain} intext:{sqli_db} inurl:{param}'
+        - 'site:{domain} intext:{sqli_db} filetype:{extension}'
+        - 'site:*.{tld} intext:{sqli_db}'
+        - 'site:{domain} intext:"stack trace"'
+        - 'site:{domain} intext:"fatal error"'
+        - 'site:*.{tld} intext:"stack trace"'
+        - 'site:{domain} intext:"exception" inurl:{param}'
+        - 'site:{domain} intext:"error" filetype:{extension}'
+      aggressive:
+        - 'site:{domain} intext:{sqli_db} inurl:{param} filetype:{extension}'
+        - 'site:{domain} intext:{sqli_db} intext:{sense}'
+        - 'site:*.{tld} intext:"stack trace"'
+        - 'site:{domain} intext:"stack trace" inurl:{param}'
+        - 'site:{domain} intext:"uncaught exception"'
+        - 'site:*.{tld} intext:"fatal error"'
+        - 'site:{domain} intext:"debug" intext:{sqli_db}'
+        - 'site:{domain} intext:"application error" filetype:{extension}'
+        - 'site:*.{tld} intext:{sqli_db}'
+        - 'site:{domain} intext:{sqli_db} "{sense}"'
+        - 'site:{domain} inurl:{param} intext:"fatal"'
+        - 'site:{domain} intext:{sqli_db} intext:"line"'
+
+  # ──────────────────────────────────────────────
+  #  IOT DEVICES
+  # ──────────────────────────────────────────────
+  iot:
+    description: "Exposed IoT device management interfaces"
+    dorks:
+      soft:
+        - 'site:{domain} intitle:{sense}'
+        - 'site:{domain} inurl:{param}'
+        - 'site:{domain} intitle:"login"'
+        - 'site:{domain} inurl:login'
+      medium:
+        - 'site:{domain} inurl:{param} intitle:{sense}'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+        - 'site:{domain} intitle:{sense} inurl:{param}'
+        - 'site:{domain} inurl:{param} intext:{sense}'
+        - 'site:{domain} filetype:{extension} intitle:{sense}'
+        - 'site:{domain} inurl:{param} intext:"firmware"'
+      aggressive:
+        - 'site:{domain} inurl:{param} intitle:{sense} intext:{sense}'
+        - 'site:{domain} inurl:{param} filetype:{extension} intext:{sense}'
+        - 'site:{domain} intitle:{sense} intext:"firmware"'
+        - 'site:{domain} inurl:{param} intext:"device"'
+        - 'site:{domain} filetype:{extension} intext:"device"'
+        - 'site:{domain} inurl:{param} "{sense}"'
+        - 'site:{domain} filetype:{extension} "{sense}"'
+        - 'site:{domain} inurl:{param} intext:"admin"'
+        - 'site:{domain} inurl:{param} intext:"setup"'
+
+  # ──────────────────────────────────────────────
+  #  CLOUD MISCONFIGURATIONS
+  # ──────────────────────────────────────────────
+  cloud:
+    description: "Cloud storage and service misconfigurations"
+    dorks:
+      soft:
+        - 'site:s3.amazonaws.com'
+        - 'site:blob.core.windows.net'
+        - 'site:storage.googleapis.com'
+        - 'site:s3.amazonaws.com intitle:"index of"'
+      medium:
+        - 'site:s3.amazonaws.com filetype:{extension}'
+        - 'site:blob.core.windows.net filetype:{extension}'
+        - 'site:storage.googleapis.com filetype:{extension}'
+        - 'site:s3.amazonaws.com intext:{sense}'
+        - 'site:blob.core.windows.net inurl:{param}'
+        - 'site:storage.googleapis.com intext:{sqli_db}'
+      aggressive:
+        - 'site:s3.amazonaws.com filetype:{extension} intext:{sense}'
+        - 'site:blob.core.windows.net filetype:{extension} "{sense}"'
+        - 'site:storage.googleapis.com filetype:{extension} "{sqli_db}"'
+        - 'site:s3.amazonaws.com inurl:{param} filetype:{extension}'
+        - 'site:blob.core.windows.net intext:{sense} intext:{sqli_db}'
+        - 'site:storage.googleapis.com inurl:{param} filetype:{extension}'
+        - 'site:s3.amazonaws.com filetype:{extension} "{sense}" "{sqli_db}"'
+        - 'site:blob.core.windows.net filetype:{extension} intext:"password"'
+        - 'site:storage.googleapis.com filetype:{extension} intext:"confidential"'
+
+  # ──────────────────────────────────────────────
+  #  LOGIN PAGES
+  # ──────────────────────────────────────────────
+  login:
+    description: "Login pages and authentication interfaces"
+    dorks:
+      soft:
+        - 'site:{domain} intitle:"login"'
+        - 'site:{domain} inurl:login'
+        - 'site:*.{tld} inurl:login'
+        - 'site:{domain} intitle:"authentication"'
+        - 'site:{domain} inurl:{param}'
+      medium:
+        - 'site:{domain} intitle:"login" intext:"username"'
+        - 'site:{domain} intitle:"login" intext:"password"'
+        - 'site:*.{tld} intitle:"login"'
+        - 'site:{domain} inurl:{param} intitle:"login"'
+        - 'site:*.{tld} intitle:"authentication"'
+        - 'site:{domain} inurl:{param} intext:{sense}'
+        - 'site:{domain} intitle:"authentication" inurl:{param}'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+      aggressive:
+        - 'site:{domain} intitle:"login" intext:"forgot password"'
+        - 'site:{domain} inurl:{param} intext:"username" intext:"password"'
+        - 'site:*.{tld} intitle:"login"'
+        - 'site:{domain} intitle:"authentication" intext:{sense}'
+        - 'site:{domain} inurl:{param} intitle:"login" intext:{sense}'
+        - 'site:*.{tld} inurl:login'
+        - 'site:{domain} inurl:{param} filetype:{extension} intext:{sense}'
+        - 'site:{domain} intitle:"login" "{sense}" "{param}"'
+        - 'site:{domain} inurl:{param} intext:"remember me"'
+        - 'site:*.{tld} intitle:"authentication"'
+        - 'site:{domain} intitle:"secure" inurl:{param}'
+        - 'site:{domain} inurl:{param} "{sqli_db}"'
+
+  # ──────────────────────────────────────────────
+  #  CCTV & IP CAMERAS  [flat mode — xs3c logic]
+  # ──────────────────────────────────────────────
+  cctv:
+    mode: aggressive
+    dorks:
+      - 'site:{domain} inurl:"/view/index.shtml"'
+      - 'site:{domain} intitle:"Live View / - AXIS"'
+      - 'inurl:axis-cgi/mjpg site:{domain}'
+      - 'inurl:"view/index.shtml" site:{domain}'
+      - 'site:{domain} inurl:"MultiCameraFrame?Mode=Motion"'
+      - 'site:{domain} VB Viewer inurl:/viewer/live/ja/live.html'
+      - 'site:{domain} intitle:"IP CAMERA Viewer" intext:"setting | Client setting"'
+      - 'site:{domain} intitle:"Device(" AND intext:"Network Camera" AND "language:" AND "Password"'
+      - 'intitle:"webcam 7" inurl:/gallery.html site:{domain}'
+      - 'intitle:"Yawcam" inurl:8081 site:{domain}'
+      - 'site:{domain} inurl:control/camerainfo'
+      - 'site:{domain} intitle:"webcamXP 5" -download'
+      - 'inurl:"/view/view.shtml?id=" site:{domain}'
+      - 'site:{domain} inurl:/view/viewer_index.shtml'
+      - 'intext:"powered by webcamXP 5" site:{domain}'
+      - 'intitle:"webcam 7" inurl:8080 -intext:8080 site:{domain}'
+      - 'site:{domain} intitle:"Live View / - AXIS" | inurl:view/view.shtml OR inurl:view/indexFrame.shtml'
+      - 'site:{domain} intitle:"MJPG Live Demo" | "intext:Select preset position"'
+      - 'site:{domain} allintitle:Axis 2.10 OR 2.12 OR 2.30 OR 2.31 OR 2.32 OR 2.33 OR 2.34 OR 2.40 OR 2.42 OR 2.43 "Network Camera"'
+      - 'allintitle:"Edr1680 remote viewer" site:{domain}'
+      - 'site:{domain} allintitle:"EverFocus | EDSR | EDSE400 Applet"'
+      - 'allintitle:"EDR1600 login | Welcome" site:{domain}'
+      - 'intitle:"BlueNet Video Viewer" site:{domain}'
+      - 'site:{domain} intitle:"SNC-RZ30" -demo'
+      - 'inurl:cgi-bin/guestimage.html site:{domain}'
+      - 'site:{domain} intitle:"EyeSpyFX|OptiCamFX" "go to camera"'
+      - 'site:{domain} intitle:"Veo Observer XT"'
+      - 'site:{domain} intitle:"iGuard Fingerprint Security System"'
+      - 'site:{domain} intitle:"MOBOTIX" intitle:"PDAS"'
+      - 'intitle:"Edr1680 remote viewer" site:{domain}'
+      - 'site:{domain} intitle:"NetCam Live Image" -.edu -.gov'
+      - 'intitle:"INTELLINET" intitle:"IP Camera Homepage" site:{domain}'
+      - 'site:{domain} intitle:"WEBDVR" -inurl:product -inurl:demo'
+      - 'intitle:"Live View / - AXIS" | inurl:view/view.shtml site:{domain}'
+      - 'site:{domain} intitle:"AXIS 240 Camera Server" intext:"server push"'
+      - 'site:{domain} intitle:"--- VIDEO WEB SERVER ---" intext:"Any time & Any where"'
+      - 'inurl:camctrl.cgi site:{domain}'
+      - 'site:{domain} intitle:"supervisioncam protocol"'
+
+  # ──────────────────────────────────────────────
+  #  SENSITIVE DATA  [flat mode — xs3c logic]
+  # ──────────────────────────────────────────────
+  sensitive:
+    mode: aggressive
+    dorks:
+      - 'site:{domain} intext:{sense}'
+      - 'site:{domain} intext:{sense} filetype:txt'
+      - 'site:{domain} intext:{sense} filetype:{extension}'
+      - 'site:{domain} intext:{sense} ext:txt'
+      - 'intext:password site:{domain} ext:{extension}'
+      - 'intext:"bank account" site:{domain} ext:{extension}'
+      - 'site:{domain} intext:{sense} inurl:{param}'
+      - 'filetype:{extension} intext:{sense} site:{domain}'

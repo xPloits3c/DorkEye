@@ -1,0 +1,42 @@
+variables:
+  domain:
+    - ru
+    - gov.ru
+    - il
+    - ir
+    - pk
+    - example.com
+
+  sqli_db:
+    - '"ORA-"'
+    - '"ODBC"'
+    - '"SQLite"'
+    - '"password"'
+    - '"SQLSTATE"'
+    - '"Warning:"'
+    - '"SQL syntax"'
+    - '"PostgreSQL"'
+    - '"mysql_fetch"'
+    - '"DB_PASSWORD"'
+    - '"Warning: mysqli"'
+    - '"index of" ".git"'
+    - '"PostgreSQL ERROR"'
+    - '"SQLite3::SQLException"'
+    - '"Unclosed quotation mark"'
+    - '"filetype:json "api_key"'
+    - '"BEGIN RSA PRIVATE KEY"'
+    - '"AWS_SECRET_ACCESS_KEY"'
+    - '"You have an error in your SQL syntax"'
+    - '"Microsoft OLE DB Provider for SQL Server"'
+
+  param:
+    - .php?
+
+templates:
+
+  sqli:
+    mode: aggressive
+    dorks:
+      - 'site:{domain} inurl:{param}'
+      - 'site:{domain} inurl:.php{param}'
+      - 'site:{domain} inurl:.php{param} intext:{sqli_db}'
