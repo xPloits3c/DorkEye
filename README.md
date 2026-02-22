@@ -85,6 +85,7 @@ Generates structured Google dorks using a modular YAML template engine.
 
 ### 💾 Export Formats available
 -    `.csv .json .txt .html`
+    
 ![de_html_report](https://github.com/user-attachments/assets/20259bb0-6ec4-4186-83df-78b0ac51db23)
 
 ---
