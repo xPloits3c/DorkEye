@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.2.6 | OSINT Dorking Tool
+DorkEye v4.3 | OSINT Dorking Tool
 Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
 Author: xPloits3c | https://github.com/xPloits3c/DorkEye
 """
@@ -46,7 +46,7 @@ ASCII_LOGO = """
  [bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]
  [bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow][bold yellow]    DorkEye |[bold red] OSINT Dorking Tool[/bold red][/bold yellow]
- [bold yellow] |_|[/bold yellow]  [bold white]                     v4.2.6[/bold white]
+ [bold yellow] |_|[/bold yellow]  [bold white]                     v4.3[/bold white]
  [bold yellow]  V[/bold yellow]
     \n[bold red]Legal disclaimer:[/bold red][bold yellow] attacking targets without prior mutual consent is illegal.[/bold yellow]
  [bold red][!][/bold red][bold yellow] It is the end user's responsibility to obey all applicable local, state and federal laws.[/bold yellow]
@@ -1310,7 +1310,7 @@ class DorkEyeEnhanced:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>DorkEye v4.2.6 | Report</title>
+    <title>DorkEye v4.3 | Report</title>
     <style>
         *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
