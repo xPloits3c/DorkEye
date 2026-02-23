@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DorkEye Wizard — Preview</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #00ff41;
+    --green-dim: #00aa2a;
+    --green-dark: #003300;
+    --red: #ff3333;
+    --yellow: #ffe000;
+    --cyan: #00eeff;
+    --bg: #000;
+    --panel: rgba(0,12,0,0.92);
+  }
+
+  body {
+    background: var(--bg);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--green);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 24px 16px 48px;
+    overflow-x: hidden;
+  }
+
+  /* ── Matrix canvas ── */
+  #matrix-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.18;
+    pointer-events: none;
+  }
+
+  /* ── Wrapper ── */
+  .terminal {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 780px;
+  }
+
+  /* ── ASCII logo ── */
+  .logo {
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--yellow);
+    white-space: pre;
+    text-shadow: 0 0 8px var(--yellow);
+    margin-bottom: 4px;
+    animation: fadeIn .6s ease both;
+  }
+  .logo .white  { color: #fff; }
+  .logo .red    { color: var(--red); text-shadow: 0 0 6px var(--red); }
+
+  .disclaimer {
+    font-size: 11px;
+    color: var(--red);
+    margin-bottom: 18px;
+    animation: fadeIn .8s ease both;
+  }
+
+  /* ── Welcome banner ── */
+  .welcome {
+    color: var(--cyan);
+    font-size: 13px;
+    margin-bottom: 16px;
+    text-shadow: 0 0 6px var(--cyan);
+    animation: fadeIn 1s ease both;
+  }
+
+  /* ── Wizard panel ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--green-dim);
+    border-left: 3px solid var(--green);
+    padding: 0;
+    margin-bottom: 14px;
+    box-shadow: 0 0 20px rgba(0,255,65,.08);
+    animation: slideIn .35s ease both;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    background: rgba(0,255,65,.06);
+    border-bottom: 1px solid var(--green-dark);
+    padding: 8px 16px;
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--green);
+    text-shadow: 0 0 8px var(--green);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .panel-header .blink { animation: blink 1s step-end infinite; }
+
+  .panel-body { padding: 14px 18px; }
+
+  /* ── Menu rows ── */
+  .menu-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 7px 10px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .15s;
+    border-radius: 2px;
+    margin-bottom: 3px;
+  }
+  .menu-row:hover, .menu-row.hover-demo {
+    background: rgba(0,255,65,.07);
+    border-color: var(--green-dim);
+  }
+  .menu-row.active {
+    background: rgba(0,255,65,.13);
+    border-color: var(--green);
+    box-shadow: 0 0 8px rgba(0,255,65,.15);
+  }
+
+  .num {
+    color: var(--yellow);
+    font-size: 13px;
+    min-width: 22px;
+    flex-shrink: 0;
+    text-shadow: 0 0 5px var(--yellow);
+  }
+  .label {
+    color: var(--green);
+    font-size: 13px;
+    font-weight: bold;
+  }
+  .desc {
+    color: #446644;
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .arrow-indicator {
+    margin-left: auto;
+    color: var(--green-dim);
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .menu-row:hover .arrow-indicator,
+  .menu-row.active .arrow-indicator { opacity: 1; color: var(--green); }
+
+  /* ── Sub panel (nested) ── */
+  .sub-panel {
+    background: rgba(0,8,0,0.95);
+    border: 1px solid var(--green-dark);
+    border-left: 2px solid var(--green-dim);
+    padding: 12px 16px;
+    margin-top: 8px;
+    display: none;
+  }
+  .sub-panel.visible { display: block; animation: slideIn .2s ease both; }
+
+  .sub-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .12s;
+    margin-bottom: 2px;
+    border-radius: 2px;
+  }
+  .sub-row:hover { background: rgba(0,255,65,.06); border-color: var(--green-dark); }
+  .sub-row.active { background: rgba(0,255,65,.1); border-color: var(--green-dim); }
+  .sub-row .num  { font-size: 12px; min-width: 20px; }
+  .sub-row .label { font-size: 12px; color: #00cc33; }
+  .sub-row.active .label { color: var(--green); }
+
+  /* ── Input row ── */
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 6px 10px;
+    border: 1px solid var(--green-dark);
+    background: rgba(0,20,0,.6);
+  }
+  .prompt-label { color: var(--green-dim); font-size: 12px; }
+  .fake-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--cyan);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    outline: none;
+    caret-color: var(--green);
+  }
+  .cursor-blink { display: inline-block; animation: blink .8s step-end infinite; color: var(--green); }
+
+  /* ── Toggle options (y/n checkboxes) ── */
+  .toggle-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .toggle-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border: 1px solid var(--green-dark);
+    cursor: pointer;
+    transition: all .15s;
+    font-size: 12px;
+  }
+  .toggle-item:hover { border-color: var(--green-dim); background: rgba(0,255,65,.04); }
+  .toggle-item.on  { border-color: var(--green); color: var(--green); }
+  .toggle-item.off { border-color: #222; color: #446644; }
+  .toggle-box {
+    width: 16px; height: 16px;
+    border: 1px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; flex-shrink: 0;
+  }
+
+  /* ── Output format chips ── */
+  .fmt-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .fmt-chip {
+    padding: 4px 14px;
+    border: 1px solid var(--green-dark);
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all .15s;
+    color: #446644;
+  }
+  .fmt-chip:hover { border-color: var(--green-dim); color: var(--green); }
+  .fmt-chip.active { border-color: var(--green); color: var(--green); background: rgba(0,255,65,.08); box-shadow: 0 0 6px rgba(0,255,65,.12); }
+
+  /* ── Status bar (bottom) ── */
+  .status-bar {
+    border: 1px solid var(--green-dark);
+    padding: 6px 14px;
+    font-size: 11px;
+    color: var(--green-dim);
+    letter-spacing: 1px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+  }
+  .status-bar .hint { color: #224422; }
+  .status-bar .active-path { color: var(--green); }
+
+  /* ── Breadcrumb ── */
+  .breadcrumb {
+    font-size: 11px;
+    color: #446644;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+  .breadcrumb .sep { color: var(--green-dark); margin: 0 6px; }
+  .breadcrumb .current { color: var(--green-dim); }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--green-dark);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--green-dark);
+    padding-bottom: 4px;
+  }
+
+  /* ── Animations ── */
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+
+  /* ── Navigation tabs (to switch wizard screens) ── */
+  .nav-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .nav-tab {
+    padding: 5px 16px;
+    border: 1px solid var(--green-dark);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    color: #446644;
+    background: transparent;
+    transition: all .15s;
+    text-transform: uppercase;
+  }
+  .nav-tab:hover { border-color: var(--green-dim); color: var(--green-dim); }
+  .nav-tab.active { border-color: var(--green); color: var(--green); background: rgba(0,255,65,.06); }
+
+  /* ── Screens ── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── Mode badges ── */
+  .mode-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .mode-badge {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--green-dark);
+    cursor: pointer;
+    text-align: center;
+    transition: all .15s;
+  }
+  .mode-badge .mode-name { font-size: 12px; color: #446644; }
+  .mode-badge .mode-desc { font-size: 10px; color: #223322; margin-top: 2px; }
+  .mode-badge:hover { border-color: var(--green-dim); }
+  .mode-badge:hover .mode-name { color: var(--green-dim); }
+  .mode-badge.active { border-color: var(--green); background: rgba(0,255,65,.06); }
+  .mode-badge.active .mode-name { color: var(--green); }
+  .mode-badge.active .mode-desc { color: var(--green-dark); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #000; }
+  ::-webkit-scrollbar-thumb { background: var(--green-dark); }
+</style>
+</head>
+<body>
+
+<canvas id="matrix-bg"></canvas>
+
+<div class="terminal">
+
+  <!-- ASCII Logo -->
+  <pre class="logo">     <span style="color:var(--yellow)">  ___</span>
+ <span style="color:var(--yellow)">__H__</span>  <span class="white">   xploits3c.github.io/DorkEye </span>
+ <span style="color:var(--yellow)">[</span><span style="color:var(--red)">,</span><span style="color:var(--yellow)">]</span>
+ <span style="color:var(--yellow)">[</span><span style="color:var(--red)">)</span><span style="color:var(--yellow)">]</span>
+ <span style="color:var(--yellow)">[</span><span style="color:var(--red)">;</span><span style="color:var(--yellow)">]</span><span style="color:var(--yellow)">    DorkEye |<span style="color:var(--red)"> OSINT Dorking Tool</span></span>
+ <span style="color:var(--yellow)">|_|</span>  <span class="white">                    v4.3</span>
+ <span style="color:var(--yellow)"> V</span></pre>
+  <div class="disclaimer">⚠ Legal disclaimer: attacking targets without prior mutual consent is illegal.</div>
+
+  <div class="welcome">▸ Session initialized, xPloits3c.</div>
+
+  <!-- Nav tabs = wizard screens -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showScreen('main')">① Main Menu</button>
+    <button class="nav-tab" onclick="showScreen('google')">② Google Dork</button>
+    <button class="nav-tab" onclick="showScreen('generator')">③ Dork Generator</button>
+    <button class="nav-tab" onclick="showScreen('options')">④ Run Options</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 1 — MAIN MENU
+       ══════════════════════════════════════════ -->
+  <div class="screen active" id="screen-main">
+    <div class="panel">
+      <div class="panel-header">
+        ■ DORKEYE WIZARD <span style="color:var(--green-dim)">—</span> Interactive Guided Menu
+        <span class="blink" style="margin-left:auto">█</span>
+      </div>
+      <div class="panel-body">
+        <div class="section-label">[ select an option ]</div>
+
+        <div class="menu-row" onclick="showScreen('google'); highlightTab(1)">
+          <span class="num">1)</span>
+          <div>
+            <div class="label">Google Dork Search</div>
+            <div class="desc">Search DuckDuckGo with a dork string or .txt file</div>
+          </div>
+          <span class="arrow-indicator">▶</span>
+        </div>
+
+        <div class="menu-row" onclick="showScreen('generator'); highlightTab(2)">
+          <span class="num">2)</span>
+          <div>
+            <div class="label">Dork Generator</div>
+            <div class="desc">Auto-generate dorks from YAML templates by category</div>
+          </div>
+          <span class="arrow-indicator">▶</span>
+        </div>
+
+        <div class="menu-row" id="row-config" onclick="flashRow('row-config', '✓ dorkeye_config.yaml created')">
+          <span class="num">3)</span>
+          <div>
+            <div class="label">Create sample config</div>
+            <div class="desc">Write dorkeye_config.yaml to disk</div>
+          </div>
+          <span class="arrow-indicator">▶</span>
+        </div>
+
+        <div class="menu-row" id="row-exit" onclick="flashRow('row-exit', 'Goodbye.')">
+          <span class="num">4)</span>
+          <div>
+            <div class="label" style="color:#446644">Exit</div>
+          </div>
+          <span class="arrow-indicator" style="color:#446644">▶</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span class="hint">↑↓ navigate &nbsp;|&nbsp; ENTER select &nbsp;|&nbsp; Ctrl+C abort</span>
+      <span class="active-path">MAIN</span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 2 — GOOGLE DORK SEARCH
+       ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-google">
+    <div class="breadcrumb">
+      MAIN <span class="sep">›</span> <span class="current">GOOGLE DORK SEARCH</span>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">■ GOOGLE DORK SEARCH</div>
+      <div class="panel-body">
+        <div class="section-label">[ input method ]</div>
+
+        <div class="sub-row active" id="gsub1" onclick="selectGoogleSub(1)">
+          <span class="num">1)</span>
+          <div>
+            <div class="label">Single dork</div>
+            <div class="desc" style="font-size:11px;color:#334433">Type a dork string directly</div>
+          </div>
+        </div>
+        <div class="sub-row" id="gsub2" onclick="selectGoogleSub(2)">
+          <span class="num">2)</span>
+          <div>
+            <div class="label">Load from file</div>
+            <div class="desc" style="font-size:11px;color:#334433">.txt file, one dork per line</div>
+          </div>
+        </div>
+
+        <!-- Single dork input -->
+        <div id="google-input-single" style="margin-top:12px;">
+          <div class="section-label">[ dork string ]</div>
+          <div class="input-row">
+            <span class="prompt-label">dork ▸</span>
+            <input class="fake-input" id="dork-input" placeholder='site:example.com filetype:pdf "confidential"' />
+          </div>
+        </div>
+
+        <!-- File input (hidden by default) -->
+        <div id="google-input-file" style="display:none; margin-top:12px;">
+          <div class="section-label">[ file path ]</div>
+          <div class="input-row">
+            <span class="prompt-label">path ▸</span>
+            <input class="fake-input" placeholder='/home/user/dorks.txt' />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span class="hint">Ctrl+C abort &nbsp;|&nbsp; ENTER confirm</span>
+      <span class="active-path">MAIN › GOOGLE DORK</span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 3 — DORK GENERATOR
+       ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-generator">
+    <div class="breadcrumb">
+      MAIN <span class="sep">›</span> <span class="current">DORK GENERATOR</span>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">■ TEMPLATE SELECTION</div>
+      <div class="panel-body">
+        <div class="section-label">[ template source ]</div>
+        <div class="sub-row active" id="tsub1" onclick="selectTmpl(1)"><span class="num">1)</span><div class="label">Default template</div></div>
+        <div class="sub-row" id="tsub2" onclick="selectTmpl(2)"><span class="num">2)</span><div class="label">All templates</div></div>
+        <div class="sub-row" id="tsub3" onclick="selectTmpl(3)"><span class="num">3)</span><div class="label">Specific template file</div></div>
+
+        <div id="tmpl-file-input" style="display:none; margin-top:10px;">
+          <div class="input-row">
+            <span class="prompt-label">file ▸</span>
+            <input class="fake-input" placeholder='dorks_templates_research.yaml' />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">■ CATEGORY SELECTION</div>
+      <div class="panel-body">
+        <div class="section-label">[ available categories — from template ]</div>
+        <div class="sub-row active" id="cat0" onclick="selectCat(0)"><span class="num">0)</span><div class="label">ALL categories</div></div>
+        <div class="sub-row" id="cat1" onclick="selectCat(1)"><span class="num">1)</span><div class="label">sqli</div></div>
+        <div class="sub-row" id="cat2" onclick="selectCat(2)"><span class="num">2)</span><div class="label">backups</div></div>
+        <div class="sub-row" id="cat3" onclick="selectCat(3)"><span class="num">3)</span><div class="label">credentials</div></div>
+        <div class="sub-row" id="cat4" onclick="selectCat(4)"><span class="num">4)</span><div class="label">documents</div></div>
+        <div class="sub-row" id="cat5" onclick="selectCat(5)"><span class="num">5)</span><div class="label">configs</div></div>
+        <div class="sub-row" id="cat6" onclick="selectCat(6)"><span class="num">6)</span><div class="label">cameras</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">■ GENERATION MODE</div>
+      <div class="panel-body">
+        <div class="section-label">[ choose intensity ]</div>
+        <div class="mode-row">
+          <div class="mode-badge active" id="mode-soft" onclick="selectMode('soft')">
+            <div class="mode-name">SOFT</div>
+            <div class="mode-desc">Safe, minimal footprint</div>
+          </div>
+          <div class="mode-badge" id="mode-medium" onclick="selectMode('medium')">
+            <div class="mode-name">MEDIUM</div>
+            <div class="mode-desc">Balanced coverage</div>
+          </div>
+          <div class="mode-badge" id="mode-aggressive" onclick="selectMode('aggressive')">
+            <div class="mode-name">AGGRESSIVE</div>
+            <div class="mode-desc">Maximum coverage</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span class="hint">Ctrl+C abort &nbsp;|&nbsp; continue to Run Options →</span>
+      <span class="active-path">MAIN › DORK GENERATOR</span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN 4 — RUN OPTIONS (shared)
+       ══════════════════════════════════════════ -->
+  <div class="screen" id="screen-options">
+    <div class="breadcrumb">
+      MAIN <span class="sep">›</span> … <span class="sep">›</span> <span class="current">RUN OPTIONS</span>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">■ RESULTS COUNT</div>
+      <div class="panel-body">
+        <div class="input-row">
+          <span class="prompt-label">results per dork ▸</span>
+          <input class="fake-input" value="50" style="max-width:80px;" />
+          <span style="color:#446644;font-size:11px;">(default: 50)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">■ ACTIVE OPTIONS</div>
+      <div class="panel-body">
+        <div class="section-label">[ toggle on / off ]</div>
+        <div class="toggle-grid">
+          <div class="toggle-item off" id="tog-sqli" onclick="toggleOpt('tog-sqli')">
+            <div class="toggle-box">✗</div>
+            <div>
+              <div style="font-size:12px;">SQLi Detection</div>
+              <div style="font-size:10px;color:#334433">--sqli</div>
+            </div>
+          </div>
+          <div class="toggle-item off" id="tog-stealth" onclick="toggleOpt('tog-stealth')">
+            <div class="toggle-box">✗</div>
+            <div>
+              <div style="font-size:12px;">Stealth Mode</div>
+              <div style="font-size:10px;color:#334433">--stealth</div>
+            </div>
+          </div>
+          <div class="toggle-item on" id="tog-fp" onclick="toggleOpt('tog-fp')">
+            <div class="toggle-box">✓</div>
+            <div>
+              <div style="font-size:12px;">HTTP Fingerprinting</div>
+              <div style="font-size:10px;color:#334433">enabled by default</div>
+            </div>
+          </div>
+          <div class="toggle-item on" id="tog-analyze" onclick="toggleOpt('tog-analyze')">
+            <div class="toggle-box">✓</div>
+            <div>
+              <div style="font-size:12px;">File Analysis</div>
+              <div style="font-size:10px;color:#334433">enabled by default</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">■ OUTPUT FILE</div>
+      <div class="panel-body">
+        <div class="input-row">
+          <span class="prompt-label">filename ▸</span>
+          <input class="fake-input" id="out-filename" placeholder='results  (leave blank to skip)' oninput="updateFmtVisibility()" />
+        </div>
+        <div id="fmt-selector" style="display:none; margin-top:10px;">
+          <div class="section-label">[ output format ]</div>
+          <div class="fmt-row">
+            <div class="fmt-chip active" onclick="selectFmt(this)">JSON</div>
+            <div class="fmt-chip" onclick="selectFmt(this)">CSV</div>
+            <div class="fmt-chip" onclick="selectFmt(this)">HTML</div>
+            <div class="fmt-chip" onclick="selectFmt(this)">TXT</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Launch button -->
+    <div class="panel" id="launch-panel" style="cursor:pointer;" onclick="simulateLaunch()">
+      <div class="panel-body" style="text-align:center; padding: 14px;">
+        <span style="color:var(--green);font-family:'Orbitron',monospace;font-size:13px;letter-spacing:3px;text-shadow:0 0 10px var(--green);">
+          ▶ &nbsp; LAUNCH SEARCH &nbsp; ▶
+        </span>
+      </div>
+    </div>
+
+    <!-- Simulated output -->
+    <div id="launch-output" style="display:none;">
+      <div class="panel">
+        <div class="panel-header" style="color:var(--cyan)">■ RUNNING... <span class="blink">█</span></div>
+        <div class="panel-body" id="launch-lines" style="font-size:12px;line-height:2;color:var(--green-dim);">
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span class="hint">Ctrl+C abort &nbsp;|&nbsp; ENTER to launch</span>
+      <span class="active-path" id="status-path">MAIN › … › RUN OPTIONS</span>
+    </div>
+  </div>
+
+</div><!-- /terminal -->
+
+<script>
+/* ── Matrix rain ── */
+(function(){
+  const c = document.getElementById('matrix-bg');
+  const ctx = c.getContext('2d');
+  const CH = 'ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEF';
+  const FS = 13;
+  let cols, drops;
+  function resize(){
+    c.width = window.innerWidth; c.height = window.innerHeight;
+    cols = Math.floor(c.width/FS);
+    drops = Array.from({length:cols},()=>Math.random()*-80);
+  }
+  function draw(){
+    ctx.fillStyle='rgba(0,0,0,0.05)'; ctx.fillRect(0,0,c.width,c.height);
+    for(let i=0;i<cols;i++){
+      const ch = CH[Math.floor(Math.random()*CH.length)];
+      ctx.fillStyle = Math.random()>.97?'#fff':'#00ff41';
+      ctx.font = FS+'px monospace';
+      ctx.fillText(ch, i*FS, drops[i]*FS);
+      if(drops[i]*FS>c.height && Math.random()>.975) drops[i]=0;
+      drops[i]+=.5+Math.random()*.5;
+    }
+  }
+  resize(); window.addEventListener('resize',resize); setInterval(draw,45);
+})();
+
+/* ── Screen navigation ── */
+function showScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+}
+function highlightTab(idx){
+  document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
+}
+document.querySelectorAll('.nav-tab').forEach((tab,i)=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+  });
+});
+
+/* ── Google Dork sub-selection ── */
+function selectGoogleSub(n){
+  document.getElementById('gsub1').classList.toggle('active', n===1);
+  document.getElementById('gsub2').classList.toggle('active', n===2);
+  document.getElementById('google-input-single').style.display = n===1?'block':'none';
+  document.getElementById('google-input-file').style.display   = n===2?'block':'none';
+}
+
+/* ── Template sub-selection ── */
+function selectTmpl(n){
+  [1,2,3].forEach(i=>document.getElementById('tsub'+i).classList.toggle('active',i===n));
+  document.getElementById('tmpl-file-input').style.display = n===3?'block':'none';
+}
+
+/* ── Category selection ── */
+function selectCat(n){
+  [0,1,2,3,4,5,6].forEach(i=>{
+    const el = document.getElementById('cat'+i);
+    if(el) el.classList.toggle('active', i===n);
+  });
+}
+
+/* ── Mode selection ── */
+function selectMode(m){
+  ['soft','medium','aggressive'].forEach(mm=>{
+    document.getElementById('mode-'+mm).classList.toggle('active', mm===m);
+  });
+}
+
+/* ── Toggle options ── */
+function toggleOpt(id){
+  const el = document.getElementById(id);
+  const isOn = el.classList.contains('on');
+  el.classList.toggle('on', !isOn);
+  el.classList.toggle('off', isOn);
+  el.querySelector('.toggle-box').textContent = isOn ? '✗' : '✓';
+}
+
+/* ── Output format ── */
+function updateFmtVisibility(){
+  const val = document.getElementById('out-filename').value.trim();
+  document.getElementById('fmt-selector').style.display = val ? 'block' : 'none';
+}
+function selectFmt(el){
+  document.querySelectorAll('.fmt-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+/* ── Flash row feedback ── */
+function flashRow(id, msg){
+  const row = document.getElementById(id);
+  const orig = row.querySelector('.label').textContent;
+  row.classList.add('active');
+  row.querySelector('.label').textContent = msg;
+  row.querySelector('.label').style.color = 'var(--cyan)';
+  setTimeout(()=>{
+    row.classList.remove('active');
+    row.querySelector('.label').textContent = orig;
+    row.querySelector('.label').style.color = '';
+  }, 1800);
+}
+
+/* ── Simulate launch ── */
+function simulateLaunch(){
+  document.getElementById('launch-output').style.display='block';
+  const lines = [
+    '<span style="color:var(--cyan)">[*] Search with 12 dork(s)</span>',
+    '<span style="color:var(--yellow)">[*] HTTP Fingerprinting: ENABLED</span>',
+    '',
+    '<span style="color:#00cc33">[*] Searching dork:</span> site:example.com filetype:pdf',
+    '<span style="color:var(--green-dim)">    ▸ Searching DuckDuckGo... ████████░░ 80%</span>',
+    '<span style="color:#0088ff">[+] Found 38 unique results</span>',
+    '',
+    '<span style="color:var(--green-dim)">[~] Waiting 21.4s before next dork...</span>',
+    '',
+    '<span style="color:#00cc33">[*] Searching dork:</span> inurl:admin intitle:"login"',
+    '<span style="color:var(--green-dim)">    ▸ Searching DuckDuckGo... ██████████ 100%</span>',
+    '<span style="color:#0088ff">[+] Found 50 unique results</span>',
+    '',
+    '┌─[ Search Statistics ]',
+    '│',
+    '├─> Total Results Found    <span style="color:var(--green)">88</span>',
+    '├─> Unique Results         <span style="color:var(--green)">88</span>',
+    '├─> Duplicates Removed     <span style="color:var(--green)">3</span>',
+    '└─> Execution Time         <span style="color:var(--green)">47.2s</span>',
+    '',
+    '<span style="color:var(--green)">✓ Results saved: results.html</span>',
+  ];
+  const container = document.getElementById('launch-lines');
+  container.innerHTML = '';
+  let i = 0;
+  const interval = setInterval(()=>{
+    if(i >= lines.length){ clearInterval(interval); return; }
+    const div = document.createElement('div');
+    div.innerHTML = lines[i] || '&nbsp;';
+    container.appendChild(div);
+    i++;
+  }, 120);
+}
+</script>
+</body>
+</html>
