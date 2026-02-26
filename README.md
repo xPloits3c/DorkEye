@@ -97,7 +97,6 @@ Generates structured Google dorks using a modular YAML template engine.
 - ⚡ Stealth mode & rate‑limit protection
 - 📈 Real‑time statistics
 - 🎨 Rich terminal UI
-- 📦 Automatic installation
 ---
 
 ## 📦 Quick Install
