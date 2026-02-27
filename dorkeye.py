@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DorkEye v4.4 | OSINT Dorking Tool
-Enhanced with real SQL injection detection, HTTP fingerprinting, and improved Stealth
+Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
 Author: xPloits3c | https://github.com/xPloits3c/DorkEye
 """
 
@@ -73,7 +73,7 @@ def print_banner():
         "[dim]▸ Engine[/dim]  [dim]│[/dim]  [green]DuckDuckGo[/green]\n"
         "[dim]▸ SQLi  [/dim]  [dim]│[/dim]  [green]Real detection[/green]\n"
         "[dim]▸ Stealth[/dim] [dim]│[/dim]  [green]HTTP fingerprinting[/green]\n"
-        "[dim]▸ Analyzer[/dim]  [dim]│[/dim]  [green]Extract metadata[/green]"
+        "[dim]▸ Analyzer[/dim][dim]│[/dim]  [green]Extract metadata[/green]"
     )
 
     grid = Table.grid(padding=(0, 6))
@@ -566,25 +566,31 @@ class SQLiDetector:
         """
         FIX-1 v4.4: Adaptive threshold instead of fixed 0.90.
 
-        Original problem: Similarity < 0.90 with fixed threshold.
-        Any site with dynamic content (timestamp, CSRF token, ads,
-        counters, sessions) returns slightly different responses to each
-        request, causing false positives even without a payload.
+        Measures the site's "natural noise" with _PROBE_SAMPLES identical requests
+        (without any payload) → noise_level.
+        Effective threshold: noise_level + _PROBE_NOISE_BUFFER.
+        If the site is too dynamic (noise > _PROBE_MAX_THRESHOLD) the parameter
+        is skipped: it cannot be tested reliably.
 
-        Solution:
-        1. Measure the site's "natural noise" with _PROBE_SAMPLES IDENTICAL requests (without a payload) and calculate their average similarity → noise_level.
-        2. The effective threshold becomes: noise_level + _PROBE_NOISE_BUFFER Example: noisy site with noise=0.05 → threshold=0.09 stable site with noise=0.002 → threshold=0.042
-        3. If the site is too dynamic (noise > _PROBE_MAX_THRESHOLD) the parameter is skipped: it cannot be reliably tested.
-        4. A payload is considered "interesting" only if its similarity is LOWER than the adaptive threshold (i.e., it changes more than normal).
+        FIX-7 v4.4: WAF/redirect detection via HTTP status code.
+        If the response to the probe payload '1' returns a different status code
+        than the baseline (e.g. 302, 403, 404 → WAF block or redirect), the
+        parameter is skipped: any anomalous input would be blocked and it is
+        impossible to distinguish a real vulnerability from an active security policy.
         """
         if self.circuit_breaker.is_dead(url):
             return False
 
         noise_samples: List[float] = []
-        for _ in range(_PROBE_SAMPLES):
+        baseline_status: Optional[int] = None
+
+        for i in range(_PROBE_SAMPLES):
             r = self._get(url)
             if r is None:
                 return False
+            # capture the baseline status code from the first sample
+            if i == 0:
+                baseline_status = r.status_code
             sim = difflib.SequenceMatcher(None, baseline_content, r.text).ratio()
             noise_samples.append(1.0 - sim)
             time.sleep(0.2)
@@ -599,9 +605,13 @@ class SQLiDetector:
 
         adaptive_threshold = noise_level + _PROBE_NOISE_BUFFER
 
-        test_url = self._inject_payload(url, param_name, "1'")
+        test_url  = self._inject_payload(url, param_name, "1'")
         r_payload = self._get(test_url)
         if r_payload is None:
+            return False
+
+        # FIX-7: WAF blocked or redirected the request → skip this parameter
+        if baseline_status is not None and r_payload.status_code != baseline_status:
             return False
 
         payload_noise = 1.0 - difflib.SequenceMatcher(
@@ -621,10 +631,12 @@ class SQLiDetector:
             "confidence": SQLiConfidence.NONE.value,
             "evidence":   [],
         }
+        # FIX-6: "1' OR 1=1#" removed — it does not trigger SQL errors but can cause
+        # redirects or content changes that pollute the boolean blind with false positives.
+        # Only payloads that produce unambiguous, diagnostic DB error messages are kept.
         payloads = [
             "1' AND extractvalue(0,concat(0x7e,'TEST',0x7e)) AND '1'='1",
             "1 AND 1=CAST(CONCAT(0x7e,'TEST',0x7e) as INT)",
-            "1' OR 1=1#",
             "1'; SELECT NULL#",
         ]
         for payload in payloads:
@@ -1409,11 +1421,11 @@ class DorkEyeEnhanced:
             if "sqli_test" in r and r["sqli_test"].get("tested") and not r["sqli_test"].get("vulnerable")
         )
         sqli_total = sqli_count + sqli_safe
-        cnt        = {"all": len(self.results), "doc": 0, "sqli": 0, "scripts": 0, "page": 0}
+        # cnt["sqli"] = all URLs actually tested for SQLi (vuln + safe), not just .sql files
+        cnt        = {"all": len(self.results), "doc": 0, "sqli": sqli_total, "scripts": 0, "page": 0}
         for r in self.results:
             cat = r.get("category", "unknown")
             if cat in ("documents", "archives", "backups"):    cnt["doc"]     += 1
-            elif cat in ("databases",):                        cnt["sqli"]    += 1
             elif cat in ("scripts", "configs", "credentials"): cnt["scripts"] += 1
             elif cat == "webpage":                             cnt["page"]    += 1
 
@@ -1582,15 +1594,16 @@ class DorkEyeEnhanced:
     function draw(){ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);for(let i=0;i<cols;i++){const ch=CH[Math.floor(Math.random()*CH.length)];ctx.fillStyle=Math.random()>.95?'#fff':'#00ff41';ctx.font=FS+'px monospace';ctx.fillText(ch,i*FS,drops[i]*FS);if(drops[i]*FS>c.height&&Math.random()>.975)drops[i]=0;drops[i]+=.5+Math.random()*.5;}}
     resize();window.addEventListener('resize',resize);setInterval(draw,45);
 })();
-const GROUP_CATS={"doc":["documents","archives","backups"],"sqli":["databases"],"scripts":["scripts","configs","credentials"],"page":["webpage"]};
-const SUB_PRED={"doc-all":()=>true,"doc-pdf":(r)=>r.dataset.ext===".pdf","doc-docx":(r)=>[".doc",".docx",".odt"].includes(r.dataset.ext),"doc-xlsx":(r)=>[".xls",".xlsx",".ods"].includes(r.dataset.ext),"doc-ppt":(r)=>[".ppt",".pptx"].includes(r.dataset.ext),"doc-arc":(r)=>[".zip",".rar",".tar",".gz",".7z",".bz2"].includes(r.dataset.ext),"sqli-all":()=>true,"sqli-vuln":(r)=>r.dataset.sqli==="vuln","sqli-safe":(r)=>r.dataset.sqli==="safe","scripts-all":()=>true,"scripts-php":(r)=>r.dataset.ext===".php","scripts-asp":(r)=>[".asp",".aspx"].includes(r.dataset.ext),"scripts-sh":(r)=>[".sh",".bat",".ps1"].includes(r.dataset.ext),"scripts-config":(r)=>[".conf",".config",".ini",".yaml",".yml",".json",".xml"].includes(r.dataset.ext),"scripts-creds":(r)=>[".env",".git",".svn",".htpasswd"].includes(r.dataset.ext)};
+const GROUP_CATS={"doc":["documents","archives","backups"],"scripts":["scripts","configs","credentials"],"page":["webpage"]};
+/* SQLi group is special: it filters by data-sqli attribute across ALL categories, not by category name */
+const SUB_PRED={"doc-all":()=>true,"doc-pdf":(r)=>r.dataset.ext===".pdf","doc-docx":(r)=>[".doc",".docx",".odt"].includes(r.dataset.ext),"doc-xlsx":(r)=>[".xls",".xlsx",".ods"].includes(r.dataset.ext),"doc-ppt":(r)=>[".ppt",".pptx"].includes(r.dataset.ext),"doc-arc":(r)=>[".zip",".rar",".tar",".gz",".7z",".bz2"].includes(r.dataset.ext),"sqli-all":(r)=>r.dataset.sqli==="vuln"||r.dataset.sqli==="safe","sqli-vuln":(r)=>r.dataset.sqli==="vuln","sqli-safe":(r)=>r.dataset.sqli==="safe","scripts-all":()=>true,"scripts-php":(r)=>r.dataset.ext===".php","scripts-asp":(r)=>[".asp",".aspx"].includes(r.dataset.ext),"scripts-sh":(r)=>[".sh",".bat",".ps1"].includes(r.dataset.ext),"scripts-config":(r)=>[".conf",".config",".ini",".yaml",".yml",".json",".xml"].includes(r.dataset.ext),"scripts-creds":(r)=>[".env",".git",".svn",".htpasswd"].includes(r.dataset.ext)};
 let activeGroup="all",activeSub=null;
 function closeAllSubMenus(){document.querySelectorAll('.sub-menu.open').forEach(m=>{m.classList.remove('open');m.style.maxHeight='0';m.style.opacity='0';});document.querySelectorAll('.filter-btn.has-sub').forEach(b=>b.classList.remove('active'));}
 function toggleSubMenu(g){const m=document.getElementById('sub-'+g);if(!m)return;const o=m.classList.contains('open');closeAllSubMenus();if(!o){m.classList.add('open');m.style.maxHeight='300px';m.style.opacity='1';}}
 function applyFilter(btn){const group=btn.dataset.group;if(btn.classList.contains('has-sub')){if(activeGroup===group){toggleSubMenu(group);return;}activeGroup=group;activeSub=group+'-all';document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const menu=document.getElementById('sub-'+group);if(menu){menu.querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));menu.querySelector('.sub-btn').classList.add('active');}toggleSubMenu(group);}else{closeAllSubMenus();document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');activeGroup=group;activeSub=null;}renderRows();updateInfoBar();}
 function applySubFilter(btn,groupId){btn.closest('.sub-menu').querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');activeSub=btn.dataset.sub;renderRows();updateInfoBar();}
-function renderRows(){const rows=document.querySelectorAll('#results-tbody tr');const cats=GROUP_CATS[activeGroup]||[];const pred=activeSub?(SUB_PRED[activeSub]||(()=>true)):(()=>true);rows.forEach(row=>{if(activeGroup==='all'){row.classList.remove('hidden');return;}const inGroup=cats.includes(row.dataset.category||'');if(inGroup&&pred(row))row.classList.remove('hidden');else row.classList.add('hidden');});}
-function buildSubBadges(){const rows=Array.from(document.querySelectorAll('#results-tbody tr'));const inGroup=cats=>(row)=>cats.includes(row.dataset.category||'');const docRows=rows.filter(inGroup(GROUP_CATS['doc']));const sqliRows=rows.filter(inGroup(GROUP_CATS['sqli']));const scriptsRows=rows.filter(inGroup(GROUP_CATS['scripts']));const set=(id,n)=>{const el=document.getElementById(id);if(el)el.textContent=n;};set('sbadge-doc-all',docRows.length);set('sbadge-doc-pdf',docRows.filter(r=>r.dataset.ext==='.pdf').length);set('sbadge-doc-docx',docRows.filter(r=>['.doc','.docx','.odt'].includes(r.dataset.ext)).length);set('sbadge-doc-xlsx',docRows.filter(r=>['.xls','.xlsx','.ods'].includes(r.dataset.ext)).length);set('sbadge-doc-ppt',docRows.filter(r=>['.ppt','.pptx'].includes(r.dataset.ext)).length);set('sbadge-doc-arc',docRows.filter(r=>['.zip','.rar','.tar','.gz','.7z','.bz2'].includes(r.dataset.ext)).length);set('sbadge-sqli-all',sqliRows.length);set('sbadge-sqli-vuln',sqliRows.filter(r=>r.dataset.sqli==='vuln').length);set('sbadge-sqli-safe',sqliRows.filter(r=>r.dataset.sqli==='safe').length);set('sbadge-scripts-all',scriptsRows.length);set('sbadge-scripts-php',scriptsRows.filter(r=>r.dataset.ext==='.php').length);set('sbadge-scripts-asp',scriptsRows.filter(r=>['.asp','.aspx'].includes(r.dataset.ext)).length);set('sbadge-scripts-sh',scriptsRows.filter(r=>['.sh','.bat','.ps1'].includes(r.dataset.ext)).length);set('sbadge-scripts-config',scriptsRows.filter(r=>['.conf','.config','.ini','.yaml','.yml','.json','.xml'].includes(r.dataset.ext)).length);set('sbadge-scripts-creds',scriptsRows.filter(r=>['.env','.git','.svn','.htpasswd'].includes(r.dataset.ext)).length);}
+function renderRows(){const rows=document.querySelectorAll('#results-tbody tr');const pred=activeSub?(SUB_PRED[activeSub]||(()=>true)):(()=>true);rows.forEach(row=>{if(activeGroup==='all'){row.classList.remove('hidden');return;}/* SQLi group: filter by data-sqli across all categories */if(activeGroup==='sqli'){if(pred(row))row.classList.remove('hidden');else row.classList.add('hidden');return;}const cats=GROUP_CATS[activeGroup]||[];const inGroup=cats.includes(row.dataset.category||'');if(inGroup&&pred(row))row.classList.remove('hidden');else row.classList.add('hidden');});}
+function buildSubBadges(){const rows=Array.from(document.querySelectorAll('#results-tbody tr'));const inGroup=cats=>(row)=>cats.includes(row.dataset.category||'');const docRows=rows.filter(inGroup(GROUP_CATS['doc']));/* SQLi: count from data-sqli attribute across all rows */const sqliRows=rows.filter(r=>r.dataset.sqli==="vuln"||r.dataset.sqli==="safe");const scriptsRows=rows.filter(inGroup(GROUP_CATS['scripts']));const set=(id,n)=>{const el=document.getElementById(id);if(el)el.textContent=n;};set('sbadge-doc-all',docRows.length);set('sbadge-doc-pdf',docRows.filter(r=>r.dataset.ext==='.pdf').length);set('sbadge-doc-docx',docRows.filter(r=>['.doc','.docx','.odt'].includes(r.dataset.ext)).length);set('sbadge-doc-xlsx',docRows.filter(r=>['.xls','.xlsx','.ods'].includes(r.dataset.ext)).length);set('sbadge-doc-ppt',docRows.filter(r=>['.ppt','.pptx'].includes(r.dataset.ext)).length);set('sbadge-doc-arc',docRows.filter(r=>['.zip','.rar','.tar','.gz','.7z','.bz2'].includes(r.dataset.ext)).length);set('sbadge-sqli-all',sqliRows.length);set('sbadge-sqli-vuln',sqliRows.filter(r=>r.dataset.sqli==='vuln').length);set('sbadge-sqli-safe',sqliRows.filter(r=>r.dataset.sqli==='safe').length);set('sbadge-scripts-all',scriptsRows.length);set('sbadge-scripts-php',scriptsRows.filter(r=>r.dataset.ext==='.php').length);set('sbadge-scripts-asp',scriptsRows.filter(r=>['.asp','.aspx'].includes(r.dataset.ext)).length);set('sbadge-scripts-sh',scriptsRows.filter(r=>['.sh','.bat','.ps1'].includes(r.dataset.ext)).length);set('sbadge-scripts-config',scriptsRows.filter(r=>['.conf','.config','.ini','.yaml','.yml','.json','.xml'].includes(r.dataset.ext)).length);set('sbadge-scripts-creds',scriptsRows.filter(r=>['.env','.git','.svn','.htpasswd'].includes(r.dataset.ext)).length);}
 function updateInfoBar(){const bar=document.getElementById('sub-info');if(!bar)return;const visible=document.querySelectorAll('#results-tbody tr:not(.hidden)').length;if(activeGroup==='all'||!activeSub){bar.innerHTML=`&#10142; Showing <span>${visible}</span> result(s)`;}else{const subLabel=activeSub.split('-').slice(1).join(' ').toUpperCase();const grpLabel=activeGroup.toUpperCase();bar.innerHTML=`&#10142; Filter: <span>${grpLabel}</span> &rsaquo; <span>${subLabel}</span> &mdash; <span>${visible}</span> result(s) visible`;}}
 document.addEventListener('click',(e)=>{if(!e.target.closest('.filter-group')&&!e.target.closest('.filter-btn[data-group]')){closeAllSubMenus();document.querySelectorAll('.filter-btn').forEach(b=>{if(b.dataset.group===activeGroup)b.classList.add('active');});}});
 buildSubBadges();updateInfoBar();
