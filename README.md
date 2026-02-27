@@ -56,6 +56,9 @@ It helps discover:
 
 ## What’s New
 
+### WIZARD
+Interactive menu 
+
 ### DORK GENERATOR
 Generates structured Google dorks using a modular YAML template engine.
 
@@ -127,8 +130,9 @@ rm -rf dorkeye_env
 <img width="1247" height="928" alt="start0" src="https://github.com/user-attachments/assets/af8f2234-ec3a-4ae5-8150-7c3de1af2983" />
 
 🔹 # WIZARD Mode
+```bash
 python dorkeye.py --wizard
-
+```
 🔹 # Basic search
 ```bash
 python3 dorkeye.py -d "inurl:admin" -o results.txt
