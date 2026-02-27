@@ -124,7 +124,10 @@ rm -rf dorkeye_env
 ---
 
 ## 🎯 Usage 
-<img width="1142" height="906" alt="de_run" src="https://github.com/user-attachments/assets/1968c10d-1241-4f34-bae9-411e49aaccb5" />
+<img width="1326" height="905" alt="usage" src="https://github.com/user-attachments/assets/fd078d59-eadb-4b09-ad7a-6168695a9f1a" />
+
+🔹 # WIZARD Mode
+python dorkeye.py --wizard
 
 🔹 # Basic search
 ```bash
@@ -142,6 +145,8 @@ python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
 ```bash
 python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
+<img width="998" height="755" alt="wizard" src="https://github.com/user-attachments/assets/61b4e99e-31d4-4c95-86b4-551d056068db" />
+
 ---
 
 ## 📁 Project Structure
@@ -153,10 +158,19 @@ DorkEye/
 │ ├── http_fingerprints.json
 │ ├── INSTALL.md
 │ ├── README.md
+│ ├── __init__
 │ ├── dorkeye_config.yaml
 │ /Templates/
 │    ├── dorks_templates.yaml
 │    ├── dorks_templates_research.yaml
+│ /.github/
+│    ├── CODE_OF_CONDUCT.md
+│    ├── CONTRIBUTING.md
+│    ├── SECURITY.md
+│    ├── pull_request_template.md
+│     /ISSUE_TEMPLATE/
+│        ├── bug_report.md
+│        ├── feature_request.md
 │ /Dump/
 │    ├── *.csv 
 │    ├── *.json
