@@ -111,7 +111,7 @@ pip install -r requirements.txt
 ```
 ---
 ## Test
-<img width="1468" height="896" alt="dev4 2 6_h" src="https://github.com/user-attachments/assets/9b7fb026-d052-44e2-a504-98a7ccb82d56" />
+<img width="1326" height="905" alt="usage" src="https://github.com/user-attachments/assets/7019313c-c29e-41f4-a61f-4ce498ee6811" />
 
 ```bash
 # Help:
@@ -124,7 +124,7 @@ rm -rf dorkeye_env
 ---
 
 ## 🎯 Usage 
-<img width="1326" height="905" alt="usage" src="https://github.com/user-attachments/assets/fd078d59-eadb-4b09-ad7a-6168695a9f1a" />
+<img width="1247" height="928" alt="start0" src="https://github.com/user-attachments/assets/af8f2234-ec3a-4ae5-8150-7c3de1af2983" />
 
 🔹 # WIZARD Mode
 python dorkeye.py --wizard
