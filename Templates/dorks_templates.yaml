@@ -1,5 +1,5 @@
 # ============================================================
-#  DorkEye v4.3 — Default Dork Templates
+#  DorkEye | Default Dork Templates
 #  Author: xPloits3c | https://github.com/xPloits3c/DorkEye
 #
 #  Every category defines all three modes:
@@ -427,14 +427,17 @@ variables:
 
   sense:
     - cv
+    - data
+    - secret
     - email
+    - civic
     - phone
     - address
-    - "social security number"
-    - "credit card"
-    - "bank account"
+    - social security number
+    - credit card
+    - bank account
     - password
-    - "medical records"
+    - medical records
     - username
     - finance
     - budget
@@ -469,25 +472,25 @@ templates:
     description: "SQL injection point discovery via GET parameters"
     dorks:
       soft:
-        - 'site:{domain} inurl:{param}='
-        - 'site:{domain} inurl:{param}= filetype:{extension}'
-        - 'site:{domain} inurl:{param}= intext:"error"'
-        - 'site:{domain} inurl:{param}= intext:"warning"'
+        - 'site:{domain} inurl:{param}'
+        - 'site:{domain} inurl:{param} filetype:{extension}'
+        - 'site:{domain} inurl:{param} intext:"error"'
+        - 'site:{domain} inurl:{param} intext:"warning"'
       medium:
-        - 'site:{domain} inurl:{param}= intext:"{sqli_db}"'
-        - 'site:{domain} inurl:{param}= "{sqli_db}"'
-        - 'site:{domain} inurl:{param}= filetype:{extension} intext:"error"'
-        - 'site:{domain} inurl:{param}= intext:"{sense}"'
+        - 'site:{domain} inurl:{param} intext:"{sqli_db}"'
+        - 'site:{domain} inurl:{param} "{sqli_db}"'
+        - 'site:{domain} inurl:{param} filetype:{extension} intext:"error"'
+        - 'site:{domain} inurl:{param} intext:"{sense}"'
         - 'site:{domain} filetype:{extension} intext:"{sqli_db}"'
         - 'site:{domain} inurl:{param} intext:"{sqli_db}"'
       aggressive:
-        - 'site:{domain} inurl:{param}= intext:"{sqli_db}" filetype:{extension}'
-        - 'site:{domain} inurl:{param}= intext:"{sense}" filetype:{extension}'
-        - 'site:{domain} inurl:{param}= "{sqli_db}" "{sense}"'
+        - 'site:{domain} inurl:{param} intext:"{sqli_db}" filetype:{extension}'
+        - 'site:{domain} inurl:{param} intext:"{sense}" filetype:{extension}'
+        - 'site:{domain} inurl:{param} "{sqli_db}" "{sense}"'
         - 'site:{domain} inurl:{param} intext:"{sqli_db}" intext:"{sense}"'
         - 'site:{domain} filetype:{extension} "{sqli_db}"'
         - 'site:{domain} inurl:{param} "{sqli_db}"'
-        - 'site:{domain} inurl:{param}= ext:{extension}'
+        - 'site:{domain} inurl:{param} ext:{extension}'
         - 'site:{domain} inurl:{param} filetype:{extension} "{sense}"'
         - 'site:{domain} intext:"{sqli_db}" inurl:{param}'
 
@@ -947,7 +950,4 @@ templates:
       - 'site:{domain} intext:{sense} filetype:txt'
       - 'site:{domain} intext:{sense} filetype:{extension}'
       - 'site:{domain} intext:{sense} ext:txt'
-      - 'intext:password site:{domain} ext:{extension}'
-      - 'intext:"bank account" site:{domain} ext:{extension}'
       - 'site:{domain} intext:{sense} inurl:{param}'
-      - 'filetype:{extension} intext:{sense} site:{domain}'
