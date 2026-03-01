@@ -3,13 +3,13 @@
 # Install with: pip install -r requirements.txt
 
 # Core HTTP requests management
-requests==2.32.0
+requests>=2.32.0
 
 # YAML configuration and template parsing
-PyYAML==6.0.1
+PyYAML>=6.0.1
 
 # Advanced Terminal UI and formatting
-rich==13.7.0
+rich>=13.7.0
 
 # DuckDuckGo Search API integration
 ddgs==4.0.0
