@@ -12,4 +12,4 @@ PyYAML==6.0.1
 rich==13.7.0
 
 # DuckDuckGo Search API integration
-ddgs==4.0.0
+ddgs>=4.0.0
