@@ -40,4 +40,5 @@ templates:
     mode: aggressive
     dorks:
       - 'site:{domain} inurl:{param}'
+      - 'site:{domain} intext:{sqli_db}'
       - 'site:{domain} inurl:{param} intext:{sqli_db}'
