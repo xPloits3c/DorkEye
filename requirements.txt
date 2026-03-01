@@ -3,7 +3,7 @@
 # Install with: pip install -r requirements.txt
 
 # Core HTTP requests management
-requests==2.31.0
+requests==2.32.0
 
 # YAML configuration and template parsing
 PyYAML==6.0.1
