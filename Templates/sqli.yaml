@@ -2,10 +2,6 @@ variables:
   domain:
     - ru
     - gov.ru
-    - il
-    - ir
-    - pk
-    - example.com
 
   sqli_db:
     - '"ORA-"'
@@ -23,7 +19,7 @@ variables:
     - '"PostgreSQL ERROR"'
     - '"SQLite3::SQLException"'
     - '"Unclosed quotation mark"'
-    - '"filetype:json "api_key"'
+    - '"api_key"'
     - '"BEGIN RSA PRIVATE KEY"'
     - '"AWS_SECRET_ACCESS_KEY"'
     - '"You have an error in your SQL syntax"'
@@ -31,6 +27,11 @@ variables:
 
   param:
     - .php?
+    - ?cat
+    - index.php
+    - login.php?
+    - admin.php?
+    - ?id
 
 templates:
 
@@ -38,5 +39,4 @@ templates:
     mode: aggressive
     dorks:
       - 'site:{domain} inurl:{param}'
-      - 'site:{domain} inurl:.php{param}'
-      - 'site:{domain} inurl:.php{param} intext:{sqli_db}'
+      - 'site:{domain} inurl:{param} intext:{sqli_db}'
