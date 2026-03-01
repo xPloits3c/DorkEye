@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.4 | OSINT Dorking Tool
-Enhanced with real SQL injection detection, HTTP fingerprinting, and improved stealth
+DorkEye v4.4.1 | OSINT Dorking Tool
+Enhanced SQL injection detection, HTTP fingerprinting, and improved stealth
 Author: xPloits3c | https://github.com/xPloits3c/DorkEye
 """
 
@@ -249,7 +249,11 @@ DEFAULT_CONFIG = {
     "user_agent_rotation":  True,
     "http_fingerprinting":  True,
     "request_timeout":      10,
-    "max_retries":          3
+    "max_retries":          3,
+    # ── IMPROVEMENT [3] ──────────────────────────────────────────
+    # Extended delay triggers after this many total results collected
+    # (instead of every N dorks, which was positional and dumb)
+    "extended_delay_every_n_results": 100,
 }
 
 
@@ -355,7 +359,7 @@ class CircuitBreaker:
     """
     Tracks hosts that have already failed TCP connections.
     If a host is blacklisted, any subsequent tests are skipped
-    without waiting for additional timeouts..
+    without waiting for additional timeouts.
     """
 
     def __init__(self):
@@ -379,12 +383,12 @@ class CircuitBreaker:
 #  SQLiDetector  v4.4 — False Positive Reduction
 # ══════════════════════════════════════════════════════════════
 
-_CONNECT_TIMEOUT  = 4      # seconds to establish TCP connection
-_DEFAULT_READ     = 8      # read timeout base
-_TIMEBASED_MARGIN = 2.5    # additional margin above baseline + SLEEP
-_SLEEP_DELAY      = 3      # seconds requested from DB with SLEEP()
-_BASELINE_SAMPLES = 2      # samples to measure real latency
-_MAX_BASELINE_S   = 6.0    # server too slow → time-based skip
+_CONNECT_TIMEOUT  = 4
+_DEFAULT_READ     = 8
+_TIMEBASED_MARGIN = 2.5
+_SLEEP_DELAY      = 3
+_BASELINE_SAMPLES = 2
+_MAX_BASELINE_S   = 6.0
 
 _PROBE_SAMPLES        = 3
 _PROBE_NOISE_BUFFER   = 0.04
@@ -451,7 +455,6 @@ class SQLiDetector:
         self.fingerprint_rotator = HTTPFingerprintRotator()
         self._session            = self._build_session()
 
-
     def _build_session(self) -> requests.Session:
         session = requests.Session()
         retry   = Retry(
@@ -466,10 +469,8 @@ class SQLiDetector:
         session.mount("https://", adapter)
         return session
 
-
     def _timeout(self, extra_read: float = 0) -> Tuple[int, float]:
         return (_CONNECT_TIMEOUT, self.read_timeout + extra_read)
-
 
     def _get(self, url: str, extra_read: float = 0) -> Optional[requests.Response]:
         if self.circuit_breaker.is_dead(url):
@@ -493,8 +494,6 @@ class SQLiDetector:
         except Exception:
             return None
 
-    # ── Baseline latency ────────────────────────────────────────
-
     def _measure_baseline_latency(self, url: str) -> Optional[float]:
         times = []
         for _ in range(_BASELINE_SAMPLES):
@@ -511,8 +510,6 @@ class SQLiDetector:
         if baseline > _MAX_BASELINE_S:
             return None
         return baseline
-
-    # ── Utility ─────────────────────────────────────────────────
 
     def has_query_params(self, url: str) -> bool:
         try:
@@ -541,16 +538,7 @@ class SQLiDetector:
             return None
         return (response.status_code, response.text, len(response.text))
 
-
     def _match_sql_errors(self, body: str) -> Optional[Tuple[str, str]]:
-        """
-        Look for SQL_ERROR_SIGNATURES patterns in the HTML body.
-        FIX-2: First strip the contents of <script> tags to avoid
-        false positives from JavaScript errors (console.error, SyntaxError, etc.)
-        and frontend code (React, Vue, Angular error handlers).
-
-        Returns (db_type, pattern_matched) or None.
-        """
         clean_body = _SCRIPT_TAG_RE.sub("", body)
         for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
             for pattern in patterns:
@@ -558,26 +546,7 @@ class SQLiDetector:
                     return (db_type, pattern)
         return None
 
-    # ══════════════════════════════════════════════════════════════
-    #  FIX-1: _probe_parameter with adaptive threshold
-    # ══════════════════════════════════════════════════════════════
-
     def _probe_parameter(self, url: str, param_name: str, baseline_content: str) -> bool:
-        """
-        FIX-1 v4.4: Adaptive threshold instead of fixed 0.90.
-
-        Measures the site's "natural noise" with _PROBE_SAMPLES identical requests
-        (without any payload) → noise_level.
-        Effective threshold: noise_level + _PROBE_NOISE_BUFFER.
-        If the site is too dynamic (noise > _PROBE_MAX_THRESHOLD) the parameter
-        is skipped: it cannot be tested reliably.
-
-        FIX-7 v4.4: WAF/redirect detection via HTTP status code.
-        If the response to the probe payload '1' returns a different status code
-        than the baseline (e.g. 302, 403, 404 → WAF block or redirect), the
-        parameter is skipped: any anomalous input would be blocked and it is
-        impossible to distinguish a real vulnerability from an active security policy.
-        """
         if self.circuit_breaker.is_dead(url):
             return False
 
@@ -588,7 +557,6 @@ class SQLiDetector:
             r = self._get(url)
             if r is None:
                 return False
-            # capture the baseline status code from the first sample
             if i == 0:
                 baseline_status = r.status_code
             sim = difflib.SequenceMatcher(None, baseline_content, r.text).ratio()
@@ -610,7 +578,6 @@ class SQLiDetector:
         if r_payload is None:
             return False
 
-        # FIX-7: WAF blocked or redirected the request → skip this parameter
         if baseline_status is not None and r_payload.status_code != baseline_status:
             return False
 
@@ -620,10 +587,6 @@ class SQLiDetector:
 
         return payload_noise > adaptive_threshold
 
-    # ══════════════════════════════════════════════════════════════
-    #  Test error-based
-    # ══════════════════════════════════════════════════════════════
-
     def _test_error_based(self, url: str, param_name: str) -> Dict:
         result = {
             "method":     "error_based",
@@ -631,9 +594,6 @@ class SQLiDetector:
             "confidence": SQLiConfidence.NONE.value,
             "evidence":   [],
         }
-        # FIX-6: "1' OR 1=1#" removed — it does not trigger SQL errors but can cause
-        # redirects or content changes that pollute the boolean blind with false positives.
-        # Only payloads that produce unambiguous, diagnostic DB error messages are kept.
         payloads = [
             "1' AND extractvalue(0,concat(0x7e,'TEST',0x7e)) AND '1'='1",
             "1 AND 1=CAST(CONCAT(0x7e,'TEST',0x7e) as INT)",
@@ -661,10 +621,6 @@ class SQLiDetector:
                 time.sleep(random.uniform(1.5, 3))
 
         return result
-
-    # ══════════════════════════════════════════════════════════════
-    #  FIX-3: boolean blind with mediana multi
-    # ══════════════════════════════════════════════════════════════
 
     def _test_boolean_blind(self, url: str, param_name: str, baseline_len: int) -> Dict:
         result = {
@@ -731,10 +687,6 @@ class SQLiDetector:
             )
 
         return result
-
-    # ══════════════════════════════════════════════════════════════
-    #  FIX-4: time-based blind with mandatory confirmation
-    # ══════════════════════════════════════════════════════════════
 
     def _test_time_based_blind(self, url: str, param_name: str) -> Dict:
         result = {
@@ -818,10 +770,6 @@ class SQLiDetector:
 
         return result
 
-    # ══════════════════════════════════════════════════════════════
-    #  Entry point GET
-    # ══════════════════════════════════════════════════════════════
-
     def test_sqli(self, url: str) -> Dict:
         result = {
             "url":                url,
@@ -901,10 +849,6 @@ class SQLiDetector:
 
         result["message"] = f"Tested {len(params)} parameter(s)"
         return result
-
-    # ══════════════════════════════════════════════════════════════
-    #  FIX-5: POST / JSON with structured SQL_ERROR_SIGNATURES
-    # ══════════════════════════════════════════════════════════════
 
     def test_post_sqli(self, url: str, post_data: Dict[str, str]) -> Dict:
         result = {
@@ -1196,6 +1140,10 @@ class DorkEyeEnhanced:
         self.stats       = defaultdict(int)
         self.url_hashes: Set[str]  = set()
         self.start_time  = time.time()
+        # ── IMPROVEMENT [3] ──────────────────────────────────────
+        # Tracks total results collected across all dorks so far,
+        # used to decide when to trigger extended delay.
+        self._total_results_at_last_extended_delay: int = 0
 
     def _hash_url(self, url: str) -> str:
         return hashlib.md5(url.encode()).hexdigest()
@@ -1212,6 +1160,49 @@ class DorkEyeEnhanced:
             with open(dork_input, 'r', encoding='utf-8') as f:
                 return [line.strip() for line in f if line.strip() and not line.startswith('#')]
         return [dork_input]
+
+    # ══════════════════════════════════════════════════════════════
+    #  IMPROVEMENT [1]: Adaptive delay based on result count
+    # ══════════════════════════════════════════════════════════════
+
+    def _compute_base_delay(self, results_found: int, stealth: bool) -> float:
+        """
+        Adaptive inter-dork delay.
+
+        Instead of a fixed range (16–27s), the base window scales with how
+        many results the *last* dork returned:
+          - few results (<10) → lighter load on DDG → shorter wait
+          - many results (≥10) → more aggressive crawl → longer wait
+
+        Stealth mode applies an additional multiplier on top.
+        """
+        if results_found < 10:
+            low, high = 8, 14
+        else:
+            low, high = 18, 28
+
+        delay = random.uniform(low, high)
+
+        if stealth:
+            delay *= random.uniform(1.4, 1.8)
+
+        return round(delay, 2)
+
+    # ══════════════════════════════════════════════════════════════
+    #  IMPROVEMENT [3]: Extended delay triggered by total results
+    # ══════════════════════════════════════════════════════════════
+
+    def _should_trigger_extended_delay(self) -> bool:
+        """
+        Returns True when total unique results collected since the last
+        extended delay exceeds the configured threshold.
+
+        This is smarter than the old "every 2 dorks" rule because it
+        reacts to actual crawl volume rather than dork count.
+        """
+        threshold = self.config.get("extended_delay_every_n_results", 100)
+        collected_since_last = len(self.results) - self._total_results_at_last_extended_delay
+        return collected_since_last >= threshold
 
     def search_dork(self, dork: str, count: int) -> List[Dict]:
         console.print(f"\n[bold green][*] Searching dork:[/bold green] {dork}")
@@ -1265,12 +1256,24 @@ class DorkEyeEnhanced:
                     if total_fetched >= count:
                         break
                     if attempt < max_attempts - 1 and total_fetched < count:
-                        delay = random.uniform(5, 8) if self.config.get("stealth_mode", False) else random.uniform(2, 4)
-                        time.sleep(delay)
+                        # ── IMPROVEMENT [2]: Exponential backoff on retry ──────
+                        # Old code: time.sleep(random.uniform(2, 4))  (fixed, useless under real rate-limit)
+                        # New code: 2^attempt + jitter  →  2s, 4–6s, 8–12s
+                        backoff = (2 ** attempt) + random.uniform(0, 3)
+                        console.print(
+                            f"[yellow][~] Retry {attempt + 1}/{max_attempts - 1} — "
+                            f"backing off {backoff:.1f}s[/yellow]"
+                        )
+                        time.sleep(backoff)
                 except Exception as e:
                     console.print(f"[yellow][!] Attempt {attempt + 1} failed: {str(e)}[/yellow]")
                     if attempt < max_attempts - 1:
-                        time.sleep(2)
+                        # ── IMPROVEMENT [2]: Same exponential backoff on exception ──
+                        backoff = (2 ** attempt) + random.uniform(0, 3)
+                        console.print(
+                            f"[yellow][~] Waiting {backoff:.1f}s before next attempt...[/yellow]"
+                        )
+                        time.sleep(backoff)
                     continue
 
         console.print(f"[bold blue][+] Found {len(results)} unique results for this dork[/bold blue]")
@@ -1329,22 +1332,31 @@ class DorkEyeEnhanced:
             self.results.extend(results)
             if self.output_file:
                 self.save_results()
-            if index < len(dorks):
-                delay = round(
-                    random.uniform(25, 35) if self.config.get("stealth_mode", False)
-                    else random.uniform(16, 27), 2
+
+            # ── No inter-dork delay needed after the last dork ────────────────
+            if index >= len(dorks):
+                break
+
+            # ── IMPROVEMENT [1]: Adaptive base delay ──────────────────────────
+            stealth = self.config.get("stealth_mode", False)
+            delay   = self._compute_base_delay(len(results), stealth)
+            console.print(f"[yellow][~] Waiting {delay}s before next dork...[/yellow]")
+            time.sleep(delay)
+
+            # ── IMPROVEMENT [3]: Extended delay on result-volume threshold ─────
+            if self._should_trigger_extended_delay():
+                long_delay = round(
+                    random.uniform(120, 150) if stealth
+                    else random.uniform(85, 110), 2
                 )
-                console.print(f"[yellow][~] Waiting {delay}s before next dork...[/yellow]")
-                time.sleep(delay)
-                if index % 2 == 0:
-                    long_delay = round(
-                        random.uniform(120, 150) if self.config.get("stealth_mode", False)
-                        else random.uniform(85, 110), 2
-                    )
-                    console.print(
-                        f"[bold magenta][~] Extended delay: {long_delay}s (rate limit protection)[/bold magenta]"
-                    )
-                    time.sleep(long_delay)
+                console.print(
+                    f"[bold magenta][~] Extended delay: {long_delay}s "
+                    f"({len(self.results)} total results collected — rate limit protection)"
+                    f"[/bold magenta]"
+                )
+                time.sleep(long_delay)
+                # Reset the counter so the next threshold check is relative
+                self._total_results_at_last_extended_delay = len(self.results)
 
     def save_results(self):
         if not self.output_file:
@@ -1421,7 +1433,6 @@ class DorkEyeEnhanced:
             if "sqli_test" in r and r["sqli_test"].get("tested") and not r["sqli_test"].get("vulnerable")
         )
         sqli_total = sqli_count + sqli_safe
-        # cnt["sqli"] = all URLs actually tested for SQLi (vuln + safe), not just .sql files
         cnt        = {"all": len(self.results), "doc": 0, "sqli": sqli_total, "scripts": 0, "page": 0}
         for r in self.results:
             cat = r.get("category", "unknown")
@@ -1595,15 +1606,14 @@ class DorkEyeEnhanced:
     resize();window.addEventListener('resize',resize);setInterval(draw,45);
 })();
 const GROUP_CATS={"doc":["documents","archives","backups"],"scripts":["scripts","configs","credentials"],"page":["webpage"]};
-/* SQLi group is special: it filters by data-sqli attribute across ALL categories, not by category name */
 const SUB_PRED={"doc-all":()=>true,"doc-pdf":(r)=>r.dataset.ext===".pdf","doc-docx":(r)=>[".doc",".docx",".odt"].includes(r.dataset.ext),"doc-xlsx":(r)=>[".xls",".xlsx",".ods"].includes(r.dataset.ext),"doc-ppt":(r)=>[".ppt",".pptx"].includes(r.dataset.ext),"doc-arc":(r)=>[".zip",".rar",".tar",".gz",".7z",".bz2"].includes(r.dataset.ext),"sqli-all":(r)=>r.dataset.sqli==="vuln"||r.dataset.sqli==="safe","sqli-vuln":(r)=>r.dataset.sqli==="vuln","sqli-safe":(r)=>r.dataset.sqli==="safe","scripts-all":()=>true,"scripts-php":(r)=>r.dataset.ext===".php","scripts-asp":(r)=>[".asp",".aspx"].includes(r.dataset.ext),"scripts-sh":(r)=>[".sh",".bat",".ps1"].includes(r.dataset.ext),"scripts-config":(r)=>[".conf",".config",".ini",".yaml",".yml",".json",".xml"].includes(r.dataset.ext),"scripts-creds":(r)=>[".env",".git",".svn",".htpasswd"].includes(r.dataset.ext)};
 let activeGroup="all",activeSub=null;
 function closeAllSubMenus(){document.querySelectorAll('.sub-menu.open').forEach(m=>{m.classList.remove('open');m.style.maxHeight='0';m.style.opacity='0';});document.querySelectorAll('.filter-btn.has-sub').forEach(b=>b.classList.remove('active'));}
 function toggleSubMenu(g){const m=document.getElementById('sub-'+g);if(!m)return;const o=m.classList.contains('open');closeAllSubMenus();if(!o){m.classList.add('open');m.style.maxHeight='300px';m.style.opacity='1';}}
 function applyFilter(btn){const group=btn.dataset.group;if(btn.classList.contains('has-sub')){if(activeGroup===group){toggleSubMenu(group);return;}activeGroup=group;activeSub=group+'-all';document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const menu=document.getElementById('sub-'+group);if(menu){menu.querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));menu.querySelector('.sub-btn').classList.add('active');}toggleSubMenu(group);}else{closeAllSubMenus();document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');activeGroup=group;activeSub=null;}renderRows();updateInfoBar();}
 function applySubFilter(btn,groupId){btn.closest('.sub-menu').querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');activeSub=btn.dataset.sub;renderRows();updateInfoBar();}
-function renderRows(){const rows=document.querySelectorAll('#results-tbody tr');const pred=activeSub?(SUB_PRED[activeSub]||(()=>true)):(()=>true);rows.forEach(row=>{if(activeGroup==='all'){row.classList.remove('hidden');return;}/* SQLi group: filter by data-sqli across all categories */if(activeGroup==='sqli'){if(pred(row))row.classList.remove('hidden');else row.classList.add('hidden');return;}const cats=GROUP_CATS[activeGroup]||[];const inGroup=cats.includes(row.dataset.category||'');if(inGroup&&pred(row))row.classList.remove('hidden');else row.classList.add('hidden');});}
-function buildSubBadges(){const rows=Array.from(document.querySelectorAll('#results-tbody tr'));const inGroup=cats=>(row)=>cats.includes(row.dataset.category||'');const docRows=rows.filter(inGroup(GROUP_CATS['doc']));/* SQLi: count from data-sqli attribute across all rows */const sqliRows=rows.filter(r=>r.dataset.sqli==="vuln"||r.dataset.sqli==="safe");const scriptsRows=rows.filter(inGroup(GROUP_CATS['scripts']));const set=(id,n)=>{const el=document.getElementById(id);if(el)el.textContent=n;};set('sbadge-doc-all',docRows.length);set('sbadge-doc-pdf',docRows.filter(r=>r.dataset.ext==='.pdf').length);set('sbadge-doc-docx',docRows.filter(r=>['.doc','.docx','.odt'].includes(r.dataset.ext)).length);set('sbadge-doc-xlsx',docRows.filter(r=>['.xls','.xlsx','.ods'].includes(r.dataset.ext)).length);set('sbadge-doc-ppt',docRows.filter(r=>['.ppt','.pptx'].includes(r.dataset.ext)).length);set('sbadge-doc-arc',docRows.filter(r=>['.zip','.rar','.tar','.gz','.7z','.bz2'].includes(r.dataset.ext)).length);set('sbadge-sqli-all',sqliRows.length);set('sbadge-sqli-vuln',sqliRows.filter(r=>r.dataset.sqli==='vuln').length);set('sbadge-sqli-safe',sqliRows.filter(r=>r.dataset.sqli==='safe').length);set('sbadge-scripts-all',scriptsRows.length);set('sbadge-scripts-php',scriptsRows.filter(r=>r.dataset.ext==='.php').length);set('sbadge-scripts-asp',scriptsRows.filter(r=>['.asp','.aspx'].includes(r.dataset.ext)).length);set('sbadge-scripts-sh',scriptsRows.filter(r=>['.sh','.bat','.ps1'].includes(r.dataset.ext)).length);set('sbadge-scripts-config',scriptsRows.filter(r=>['.conf','.config','.ini','.yaml','.yml','.json','.xml'].includes(r.dataset.ext)).length);set('sbadge-scripts-creds',scriptsRows.filter(r=>['.env','.git','.svn','.htpasswd'].includes(r.dataset.ext)).length);}
+function renderRows(){const rows=document.querySelectorAll('#results-tbody tr');const pred=activeSub?(SUB_PRED[activeSub]||(()=>true)):(()=>true);rows.forEach(row=>{if(activeGroup==='all'){row.classList.remove('hidden');return;}if(activeGroup==='sqli'){if(pred(row))row.classList.remove('hidden');else row.classList.add('hidden');return;}const cats=GROUP_CATS[activeGroup]||[];const inGroup=cats.includes(row.dataset.category||'');if(inGroup&&pred(row))row.classList.remove('hidden');else row.classList.add('hidden');});}
+function buildSubBadges(){const rows=Array.from(document.querySelectorAll('#results-tbody tr'));const inGroup=cats=>(row)=>cats.includes(row.dataset.category||'');const docRows=rows.filter(inGroup(GROUP_CATS['doc']));const sqliRows=rows.filter(r=>r.dataset.sqli==="vuln"||r.dataset.sqli==="safe");const scriptsRows=rows.filter(inGroup(GROUP_CATS['scripts']));const set=(id,n)=>{const el=document.getElementById(id);if(el)el.textContent=n;};set('sbadge-doc-all',docRows.length);set('sbadge-doc-pdf',docRows.filter(r=>r.dataset.ext==='.pdf').length);set('sbadge-doc-docx',docRows.filter(r=>['.doc','.docx','.odt'].includes(r.dataset.ext)).length);set('sbadge-doc-xlsx',docRows.filter(r=>['.xls','.xlsx','.ods'].includes(r.dataset.ext)).length);set('sbadge-doc-ppt',docRows.filter(r=>['.ppt','.pptx'].includes(r.dataset.ext)).length);set('sbadge-doc-arc',docRows.filter(r=>['.zip','.rar','.tar','.gz','.7z','.bz2'].includes(r.dataset.ext)).length);set('sbadge-sqli-all',sqliRows.length);set('sbadge-sqli-vuln',sqliRows.filter(r=>r.dataset.sqli==='vuln').length);set('sbadge-sqli-safe',sqliRows.filter(r=>r.dataset.sqli==='safe').length);set('sbadge-scripts-all',scriptsRows.length);set('sbadge-scripts-php',scriptsRows.filter(r=>r.dataset.ext==='.php').length);set('sbadge-scripts-asp',scriptsRows.filter(r=>['.asp','.aspx'].includes(r.dataset.ext)).length);set('sbadge-scripts-sh',scriptsRows.filter(r=>['.sh','.bat','.ps1'].includes(r.dataset.ext)).length);set('sbadge-scripts-config',scriptsRows.filter(r=>['.conf','.config','.ini','.yaml','.yml','.json','.xml'].includes(r.dataset.ext)).length);set('sbadge-scripts-creds',scriptsRows.filter(r=>['.env','.git','.svn','.htpasswd'].includes(r.dataset.ext)).length);}
 function updateInfoBar(){const bar=document.getElementById('sub-info');if(!bar)return;const visible=document.querySelectorAll('#results-tbody tr:not(.hidden)').length;if(activeGroup==='all'||!activeSub){bar.innerHTML=`&#10142; Showing <span>${visible}</span> result(s)`;}else{const subLabel=activeSub.split('-').slice(1).join(' ').toUpperCase();const grpLabel=activeGroup.toUpperCase();bar.innerHTML=`&#10142; Filter: <span>${grpLabel}</span> &rsaquo; <span>${subLabel}</span> &mdash; <span>${visible}</span> result(s) visible`;}}
 document.addEventListener('click',(e)=>{if(!e.target.closest('.filter-group')&&!e.target.closest('.filter-btn[data-group]')){closeAllSubMenus();document.querySelectorAll('.filter-btn').forEach(b=>{if(b.dataset.group===activeGroup)b.classList.add('active');});}});
 buildSubBadges();updateInfoBar();
@@ -1691,6 +1701,11 @@ stealth_mode: false
 request_timeout: 10
 max_retries: 3
 user_agent_rotation: true
+
+# [IMPROVEMENT 3] Extended delay triggers after this many total results collected.
+# Increase this value if you want longer runs before a long pause.
+# Default: 100
+extended_delay_every_n_results: 100
 """
     with open("dorkeye_config.yaml", "w") as f:
         f.write(config_yaml)
