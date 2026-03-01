@@ -1,21 +1,18 @@
 variables:
   domain:
-    - gov.ru
-    - com
-    - in
+    - ru
+    - example.com
 
   param:
-    - id
-    - page
-    - search
-    - user
+    - cv
+    - secret
+    - data
 
   extension:
     - pdf
-    - doc
     - xls
-    - json
-    - log
+    - xlsx
+    - doc
 
 templates:
 
