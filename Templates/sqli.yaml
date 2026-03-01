@@ -26,12 +26,13 @@ variables:
     - '"Microsoft OLE DB Provider for SQL Server"'
 
   param:
-    - .php?
-    - ?cat
-    - index.php
-    - login.php?
-    - admin.php?
     - ?id
+    - id=
+    - ?cat
+    - .php?
+    - index.php
+    - login.php
+    - admin.php
 
 templates:
 
