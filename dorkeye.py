@@ -395,7 +395,7 @@ _PROBE_NOISE_BUFFER   = 0.04
 _PROBE_MAX_THRESHOLD  = 0.18
 _BOOL_SAMPLES         = 3
 _TIMEBASED_CONFIRM    = 2
-_SCRIPT_TAG_RE = re.compile(r"<script[\s\S]*?</script>", re.IGNORECASE)
+_SCRIPT_TAG_RE = re.compile(r"<script[\s\S]*?</script\s*>", re.IGNORECASE)
 
 
 class SQLiDetector:
