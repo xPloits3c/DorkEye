@@ -150,7 +150,8 @@ python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
 ```bash
 python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
-<img width="998" height="755" alt="wizard" src="https://github.com/user-attachments/assets/61b4e99e-31d4-4c95-86b4-551d056068db" />
+
+<img width="962" height="933" alt="de_generator" src="https://github.com/user-attachments/assets/dd0805c7-cce5-45ff-87e6-c3c5344d82d6" />
 
 ---
 
