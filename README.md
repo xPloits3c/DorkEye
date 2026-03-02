@@ -184,7 +184,10 @@ DorkEye/
 ```
 ---
 
+## Example HTML Report:
 ![de_html_report](https://github.com/user-attachments/assets/20259bb0-6ec4-4186-83df-78b0ac51db23)
+
+## Example final Report:
 ![image](https://github.com/user-attachments/assets/20055807-2f9d-4979-b221-e0cfad32828a)
 
 ## 🧩 Roadmap
