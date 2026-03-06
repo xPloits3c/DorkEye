@@ -1,3 +1,8 @@
+# This YAML file outlines a configuration for monitoring and analyzing government and military domains, focusing on critical areas of geopolitical intelligence.
+# It specifies target domains including various national and international government sites, along with strategic keywords related to sensitive documents and agreements.
+# The file formats for reporting and logistics are defined, incorporating extensions like PDF and Excel.
+# Four distinct templates are provided, each with an aggressive mode of operation: one for monitoring official documents and potential leaks, another concentrating on diplomatic agreements, a third aimed at logistics tracking, and the last for identifying sensitive files and exposed configurations.
+# Overall, it serves as a structured approach for searching and analyzing relevant information in the geopolitical landscape.
 variables:
   # Focus on government and military domains of critical areas
   target_domains:
