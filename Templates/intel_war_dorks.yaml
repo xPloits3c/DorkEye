@@ -1,0 +1,69 @@
+variables:
+  # Focus on government and military domains of critical areas
+  target_domains:
+    - gov.il      # Israel
+    - gov.ir      # Iran
+    - gov.tr      # Turkey
+    - gov         # USA (.gov)
+    - mil         # USA (.mil)
+    - europa.eu   # European Union
+    - eeas.europa.eu # EU External Action Service
+    - nato.int    # NATO
+
+  # Strategic keywords for documents and agreements
+  intel_keywords:
+    - "classified"
+    - "confidential"
+    - "memo"
+    - "iran"
+    - "israel"
+    - "usa"
+    - "iran-israel"
+    - "war"
+    - "agreement"
+    - "deployment"
+    - "sanctions"
+    - "treaty"
+    - "bilateral"
+    - "minutes of meeting"
+    - "strategic outlook"
+
+  # File formats for reporting and logistic spreadsheets
+  doc_extensions:
+    - pdf
+    - docx
+    - xlsx
+    - pptx
+    - kml # Geographic files/maps
+
+templates:
+  # Monitoring official documents and data leaks (Soft mode for discretion)
+  geopolitical_intel:
+    mode: aggressive
+    dorks:
+      - 'site:{target_domains} filetype:{doc_extensions} "{intel_keywords}"'
+      - 'site:{target_domains} intitle:"index of" "proceedings"'
+      - 'site:{target_domains} "internal use only" filetype:pdf'
+
+  # Specific focus on agreements and timelines (Timeline)
+  diplomatic_agreements:
+    mode: aggressive
+    dorks:
+      - 'site:{target_domains} "memorandum of understanding" AFTER:2025-01-01'
+      - 'site:{target_domains} "draft agreement" (Iran OR Israel OR USA)'
+      - 'site:{target_domains} "timeline" "escalation" filetype:pdf'
+
+  # Infrastructure and logistics analysis (Medium mode)
+  logistics_tracking:
+    mode: aggressive
+    dorks:
+      - 'site:{target_domains} inurl:ftp "shipping list"'
+      - 'site:{target_domains} "vessel movement" OR "flight plan"'
+      - 'site:{target_domains} "procurement" "defense" filetype:xlsx'
+
+  # Search for sensitive files and exposed configurations
+  leaked_configs:
+    mode: aggressive
+    dorks:
+      - 'site:{target_domains} "confidential" ext:pdf "not for redistribution"'
+      - 'site:{target_domains} inurl:secure "login"'
