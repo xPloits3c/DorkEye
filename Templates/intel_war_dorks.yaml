@@ -1,28 +1,20 @@
-# This YAML file outlines a configuration for monitoring and analyzing government and military domains, focusing on critical areas of geopolitical intelligence.
-# It specifies target domains including various national and international government sites, along with strategic keywords related to sensitive documents and agreements.
-# The file formats for reporting and logistics are defined, incorporating extensions like PDF and Excel.
-# Four distinct templates are provided, each with an aggressive mode of operation: one for monitoring official documents and potential leaks, another concentrating on diplomatic agreements, a third aimed at logistics tracking, and the last for identifying sensitive files and exposed configurations.
-# Overall, it serves as a structured approach for searching and analyzing relevant information in the geopolitical landscape.
+# Configuration for Geopolitical Intelligence & OSINT Monitoring
+# Target: Government, Military, and Diplomatic domains
 variables:
-  # Focus on government and military domains of critical areas
   target_domains:
-    - gov.il      # Israel
-    - gov.ir      # Iran
-    - gov.tr      # Turkey
-    - gov         # USA (.gov)
-    - mil         # USA (.mil)
-    - europa.eu   # European Union
-    - eeas.europa.eu # EU External Action Service
-    - nato.int    # NATO
+    - gov.il
+    - gov.ir
+    - gov.tr
+    - gov
+    - mil
+    - europa.eu
+    - eeas.europa.eu
+    - nato.int
 
-  # Strategic keywords for documents and agreements
   intel_keywords:
     - "classified"
     - "confidential"
     - "memo"
-    - "iran"
-    - "israel"
-    - "usa"
     - "iran-israel"
     - "war"
     - "agreement"
@@ -31,44 +23,75 @@ variables:
     - "treaty"
     - "bilateral"
     - "minutes of meeting"
-    - "strategic outlook"
 
-  # File formats for reporting and logistic spreadsheets
   doc_extensions:
     - pdf
     - docx
     - xlsx
     - pptx
-    - kml # Geographic files/maps
+    - kml
 
 templates:
-  # Monitoring official documents and data leaks (Soft mode for discretion)
+  # Monitoring official documents and potential data leaks
   geopolitical_intel:
-    mode: aggressive
+    description: "General monitoring of sensitive government documents"
     dorks:
-      - 'site:{target_domains} filetype:{doc_extensions} "{intel_keywords}"'
-      - 'site:{target_domains} intitle:"index of" "proceedings"'
-      - 'site:{target_domains} "internal use only" filetype:pdf'
+      soft:
+        - 'site:{target_domains} filetype:{doc_extensions} "{intel_keywords}"'
+        - 'site:{target_domains} "internal use only" filetype:pdf'
+      medium:
+        - 'site:{target_domains} intitle:"index of" "proceedings"'
+        - 'site:{target_domains} intext:"not for public release" filetype:pdf'
+        - 'site:{target_domains} "strictly confidential" "{intel_keywords}"'
+      aggressive:
+        - 'site:{target_domains} "classified" OR "top secret" filetype:pdf'
+        - 'site:{target_domains} inurl:backup OR inurl:archive "intelligence"'
+        - 'site:{target_domains} "distribution statement" "proprietary"'
 
-  # Specific focus on agreements and timelines (Timeline)
+  # Specific focus on agreements, treaties and diplomatic timelines
   diplomatic_agreements:
-    mode: aggressive
+    description: "Tracking diplomatic relations and treaty drafts"
     dorks:
-      - 'site:{target_domains} "memorandum of understanding" AFTER:2025-01-01'
-      - 'site:{target_domains} "draft agreement" (Iran OR Israel OR USA)'
-      - 'site:{target_domains} "timeline" "escalation" filetype:pdf'
+      soft:
+        - 'site:{target_domains} "memorandum of understanding" AFTER:2025-01-01'
+        - 'site:{target_domains} "bilateral agreement" filetype:pdf'
+      medium:
+        - 'site:{target_domains} "draft agreement" (Iran OR Israel OR USA)'
+        - 'site:{target_domains} "timeline" "escalation" filetype:pdf'
+        - 'site:{target_domains} "joint statement" "sanctions" AFTER:2025-06-01'
+      aggressive:
+        - 'site:{target_domains} "final draft" "treaty" "confidential"'
+        - 'site:{target_domains} inurl:docs "secret agreement"'
+        - 'site:{target_domains} "minutes of meeting" "security council"'
 
-  # Infrastructure and logistics analysis (Medium mode)
+  # Infrastructure, logistics and procurement analysis
   logistics_tracking:
-    mode: aggressive
+    description: "Monitoring logistics, movements and military procurement"
     dorks:
-      - 'site:{target_domains} inurl:ftp "shipping list"'
-      - 'site:{target_domains} "vessel movement" OR "flight plan"'
-      - 'site:{target_domains} "procurement" "defense" filetype:xlsx'
+      soft:
+        - 'site:{target_domains} "procurement" "defense" filetype:xlsx'
+        - 'site:{target_domains} "vessel movement" OR "flight plan"'
+      medium:
+        - 'site:{target_domains} inurl:ftp "shipping list"'
+        - 'site:{target_domains} "supply chain" "military" filetype:pdf'
+        - 'site:{target_domains} "deployment schedule" filetype:docx'
+      aggressive:
+        - 'site:{target_domains} inurl:upload "logistics" ext:xlsx'
+        - 'site:{target_domains} "cargo manifest" "port of" (Israel OR Iran)'
+        - 'site:{target_domains} "maintenance log" "hardware" "military"'
 
-  # Search for sensitive files and exposed configurations
+  # Identifying leaked configurations and sensitive directories
   leaked_configs:
-    mode: aggressive
+    description: "Discovery of exposed technical files and login portals"
     dorks:
-      - 'site:{target_domains} "confidential" ext:pdf "not for redistribution"'
-      - 'site:{target_domains} inurl:secure "login"'
+      soft:
+        - 'site:{target_domains} inurl:secure "login"'
+        - 'site:{target_domains} intitle:"index of" "config"'
+      medium:
+        - 'site:{target_domains} "password" OR "credential" filetype:log'
+        - 'site:{target_domains} inurl:vpn "config" ext:ovpn'
+        - 'site:{target_domains} "confidential" ext:pdf "not for redistribution"'
+      aggressive:
+        - 'site:{target_domains} "sql dump" OR "database" ext:sql'
+        - 'site:{target_domains} inurl:admin "dashboard"'
+        - 'site:{target_domains} inurl:git "config" OR ".env"'
