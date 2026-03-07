@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 DorkEye v4.5 | OSINT Dorking Tool
-Enhanced SQL injection detection, HTTP fingerprinting, and improved stealth
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
