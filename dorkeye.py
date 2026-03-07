@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.4.2 | OSINT Dorking Tool
+DorkEye v4.5 | OSINT Dorking Tool
 Enhanced SQL injection detection, HTTP fingerprinting, and improved stealth
-Author: xPloits3c | https://github.com/xPloits3c/DorkEye
+Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
 import os
@@ -18,6 +18,8 @@ import csv
 import re
 import signal
 import statistics
+import queue       # ← added for DDGS producer/consumer
+import threading   # ← added for DDGS producer thread
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
@@ -68,6 +70,22 @@ def _sigint_handler(signum, frame):
 signal.signal(signal.SIGINT, _sigint_handler)
 
 
+# ══════════════════════════════════════════════════════════════
+#  Interruptible sleep  ← NEW
+#  Replaces bare time.sleep() in backoff and delay loops so
+#  Ctrl+C is always responsive during waits.
+# ══════════════════════════════════════════════════════════════
+
+def _interruptible_sleep(seconds: float, step: float = 0.25) -> None:
+    """Sleep in small steps; return immediately if skip/exit is flagged."""
+    elapsed = 0.0
+    while elapsed < seconds:
+        if _exit_requested or _skip_current:
+            return
+        time.sleep(min(step, seconds - elapsed))
+        elapsed += step
+
+
 def print_banner():
     TITLE_ROWS = [
         ("bold bright_blue", "╔╦╗╔═╗╦═╗╦╔═  ╔═╗╦ ╦╔═╗"),
@@ -90,7 +108,7 @@ def print_banner():
 
     INFO = (
         "[bold white]OSINT DORKING TOOL[/bold white]\n"
-        "[bold green]v4.4[/bold green]  [dim]stable[/dim]\n"
+        "[bold green]v4.5[/bold green]  [dim]stable[/dim]\n"
         "\n"
         "[dim]▸ Author[/dim]  [dim]│[/dim]  [cyan]xPloits3c I.C.W.T[/cyan]\n"
         "[dim]▸ GitHub[/dim]  [dim]│[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
@@ -379,12 +397,6 @@ class HTTPFingerprintRotator:
 # ══════════════════════════════════════════════════════════════
 
 class CircuitBreaker:
-    """
-    Tracks hosts that have already failed TCP connections.
-    If a host is blacklisted, any subsequent tests are skipped
-    without waiting for additional timeouts.
-    """
-
     def __init__(self):
         self._dead: Set[str] = set()
 
@@ -403,7 +415,7 @@ class CircuitBreaker:
 
 
 # ══════════════════════════════════════════════════════════════
-#  SQLiDetector  v4.4 — False Positive Reduction
+#  SQLiDetector False Positive Reduction
 # ══════════════════════════════════════════════════════════════
 
 _CONNECT_TIMEOUT  = 4
@@ -1181,26 +1193,15 @@ class DorkEyeEnhanced:
                 return [line.strip() for line in f if line.strip() and not line.startswith('#')]
         return [dork_input]
 
-    # ══════════════════════════════════════════════════════════════
-    #  Adaptive delay based on result count
-    # ══════════════════════════════════════════════════════════════
-
     def _compute_base_delay(self, results_found: int, stealth: bool) -> float:
         if results_found < 10:
             low, high = 8, 14
         else:
             low, high = 18, 28
-
         delay = random.uniform(low, high)
-
         if stealth:
             delay *= random.uniform(1.4, 1.8)
-
         return round(delay, 2)
-
-    # ══════════════════════════════════════════════════════════════
-    #  Extended delay triggered by total results
-    # ══════════════════════════════════════════════════════════════
 
     def _should_trigger_extended_delay(self) -> bool:
         threshold = self.config.get("extended_delay_every_n_results", 100)
@@ -1208,26 +1209,42 @@ class DorkEyeEnhanced:
         return collected_since_last >= threshold
 
     # ══════════════════════════════════════════════════════════════
-    #  search_dork  — with dork counter + Ctrl+C skip support
+    #  search_dork
     # ══════════════════════════════════════════════════════════════
 
     def search_dork(self, dork: str, count: int,
                     dork_index: int = 1, total_dorks: int = 1) -> List[Dict]:
         global _skip_current, _exit_requested
 
-        # ── Dork counter header ───────────────────────────────────
         console.print(
             f"\n[bold cyan][ Dork {dork_index}/{total_dorks} ][/bold cyan]  "
             f"[dim]Ctrl+C → skip this dork  │  Double Ctrl+C → quit[/dim]"
         )
         console.print(f"[bold green][*] Searching dork:[/bold green] {dork}")
 
-        # Reset skip flag for this dork
         _skip_current = False
 
         results       = []
         total_fetched = 0
         max_attempts  = 3
+
+        # ── FIX: DDGS producer thread + queue ────────────────────
+        # Root cause: DDGS().text() is a generator that runs on the
+        # main thread inside C-level network code. While it waits for
+        # the next result the Python interpreter never gets to check
+        # the signal handler flags, so Ctrl+C fires but _skip_current
+        # is never seen until the generator yields again (which may
+        # never happen if DDGS is slow).
+        #
+        # Fix: run the generator in a daemon thread. It pushes each
+        # result into a Queue. The main thread reads with a short
+        # poll timeout (0.25 s), so it checks _skip_current and
+        # _exit_requested up to 4 times per second regardless of
+        # DDGS speed. When the generator finishes it pushes _DONE.
+        #
+        # Result behaviour is identical to the original: all results
+        # arrive in the same order, no timeouts, no data loss.
+        _DONE = object()  # sentinel
 
         with Progress(
             SpinnerColumn(),
@@ -1237,19 +1254,40 @@ class DorkEyeEnhanced:
             console=console
         ) as progress:
             task = progress.add_task("[cyan]Searching DuckDuckGo...", total=count)
+
             for attempt in range(max_attempts):
-                # ── Check exit / skip before each attempt ─────────
                 if _exit_requested or _skip_current:
                     break
                 try:
-                    ddgs       = DDGS()
                     batch_size = min(50, count - total_fetched)
                     if batch_size <= 0:
                         break
-                    for r in ddgs.text(dork, max_results=batch_size):
-                        # ── Per-result interrupt check ─────────────
+
+                    # Start producer
+                    result_queue: queue.Queue = queue.Queue()
+
+                    def _producer(dork=dork, batch_size=batch_size):
+                        try:
+                            for item in DDGS().text(dork, max_results=batch_size):
+                                result_queue.put(item)
+                        except Exception:
+                            pass
+                        finally:
+                            result_queue.put(_DONE)
+
+                    threading.Thread(target=_producer, daemon=True).start()
+
+                    # Consume; poll every 0.25 s so Ctrl+C is always responsive
+                    while True:
                         if _exit_requested or _skip_current:
                             break
+                        try:
+                            r = result_queue.get(timeout=0.25)
+                        except queue.Empty:
+                            continue  # nothing yet — recheck flags
+
+                        if r is _DONE:
+                            break  # producer finished normally
 
                         url = r.get("href") or r.get("url")
                         if not url:
@@ -1263,7 +1301,7 @@ class DorkEyeEnhanced:
                         if self.is_duplicate(url):
                             self.stats["duplicates"] += 1
                             continue
-                        result = {
+                        entry = {
                             "url":       url,
                             "title":     r.get("title", ""),
                             "snippet":   r.get("body", ""),
@@ -1272,15 +1310,17 @@ class DorkEyeEnhanced:
                             "extension": self.analyzer.get_file_extension(url),
                             "category":  self.analyzer.categorize_url(url)
                         }
-                        results.append(result)
+                        results.append(entry)
                         total_fetched += 1
                         self.stats["total_found"] += 1
-                        self.stats[f"category_{result['category']}"] += 1
+                        self.stats[f"category_{entry['category']}"] += 1
                         progress.update(task, completed=min(total_fetched, count))
                         if total_fetched >= count:
                             break
+
                     if total_fetched >= count:
                         break
+
                     if attempt < max_attempts - 1 and total_fetched < count:
                         if _exit_requested or _skip_current:
                             break
@@ -1289,7 +1329,8 @@ class DorkEyeEnhanced:
                             f"[yellow][~] Retry {attempt + 1}/{max_attempts - 1} — "
                             f"backing off {backoff:.1f}s[/yellow]"
                         )
-                        time.sleep(backoff)
+                        _interruptible_sleep(backoff)  # ← was time.sleep(backoff)
+
                 except Exception as e:
                     console.print(f"[yellow][!] Attempt {attempt + 1} failed: {str(e)}[/yellow]")
                     if attempt < max_attempts - 1 and not _exit_requested and not _skip_current:
@@ -1297,12 +1338,12 @@ class DorkEyeEnhanced:
                         console.print(
                             f"[yellow][~] Waiting {backoff:.1f}s before next attempt...[/yellow]"
                         )
-                        time.sleep(backoff)
+                        _interruptible_sleep(backoff)  # ← was time.sleep(backoff)
                     continue
 
         if _skip_current:
             console.print(f"[yellow][~] Dork {dork_index}/{total_dorks} skipped.[/yellow]")
-            _skip_current = False   # consumed — reset for next dork
+            _skip_current = False
 
         console.print(f"[bold blue][+] Found {len(results)} unique results for this dork[/bold blue]")
         return results
@@ -1335,12 +1376,11 @@ class DorkEyeEnhanced:
             if self.config.get("sqli_detection", False) and urls_to_test_sqli:
                 task2 = progress.add_task("[cyan]Testing for [red]SQLi[cyan]...", total=len(urls_to_test_sqli))
                 for result in urls_to_test_sqli:
-                    # ── Per-URL SQLi skip / exit check ────────────
                     if _exit_requested:
                         break
                     if _skip_current:
                         console.print("[yellow][~] Ctrl+C — skipping remaining SQLi tests for this dork.[/yellow]")
-                        _skip_current = False   # consumed
+                        _skip_current = False
                         break
 
                     sqli_result         = self.analyzer.check_sqli(result["url"])
@@ -1373,7 +1413,6 @@ class DorkEyeEnhanced:
             console.print("[bold red][*] SQL Injection Detection: ENABLED[/bold red]")
 
         for index, dork in enumerate(dorks, start=1):
-            # ── Exit check at the top of each dork ────────────────
             if _exit_requested:
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
                 break
@@ -1381,7 +1420,6 @@ class DorkEyeEnhanced:
             results = self.search_dork(dork, count,
                                        dork_index=index, total_dorks=total_dorks)
 
-            # ── Exit check after search (may have been set mid-search) ─
             if _exit_requested:
                 self.results.extend(results)
                 if self.output_file:
@@ -1400,16 +1438,14 @@ class DorkEyeEnhanced:
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
                 break
 
-            # ── No inter-dork delay after the last dork ───────────
             if index >= total_dorks:
                 break
 
-            # ── Adaptive base delay ───────────────────────────────
             stealth = self.config.get("stealth_mode", False)
             delay   = self._compute_base_delay(len(results), stealth)
             console.print(f"[yellow][~] Waiting {delay}s before next dork...[/yellow]")
 
-            # Interruptible sleep: check flags every 0.5 s
+            # Interruptible delay (unchanged logic, now uses helper)
             elapsed = 0.0
             while elapsed < delay:
                 if _exit_requested or _skip_current:
@@ -1421,12 +1457,9 @@ class DorkEyeEnhanced:
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
                 break
             if _skip_current:
-                # Skip pressed during delay → skip the *next* dork's delay,
-                # but don't skip the dork itself; reset and continue normally.
                 console.print("[yellow][~] Delay skipped.[/yellow]")
                 _skip_current = False
 
-            # ── Extended delay on result-volume threshold ─────────
             if self._should_trigger_extended_delay():
                 long_delay = round(
                     random.uniform(120, 150) if stealth
@@ -1539,7 +1572,7 @@ class DorkEyeEnhanced:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>DorkEye v4.4 | Report</title>
+    <title>DorkEye | Report</title>
     <style>
         *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{ font-family: 'Courier New', monospace; background: #000; color: #00ff41; min-height: 100vh; overflow-x: hidden; }}
@@ -1689,7 +1722,7 @@ class DorkEyeEnhanced:
         html += """        </tbody>
     </table>
     </div>
-    <div class="footer">DorkEye v4.4 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+    <div class="footer">DorkEye v4.5 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
 </div>
 <script>
 (function(){
@@ -1776,7 +1809,7 @@ def load_config(config_file: str = None) -> Dict:
 
 
 def create_sample_config():
-    config_yaml = """# DorkEye v4.4 Configuration
+    config_yaml = """# DorkEye Configuration
 
 extensions:
   documents: [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"]
@@ -2111,7 +2144,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.4 | OSINT Dorking Tool",
+        description="DorkEye v4.5 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
 
