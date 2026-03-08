@@ -1,0 +1,83 @@
+# Configuration Notes: Epstein Files Investigation
+# This DorkEye YAML module is engineered to automate the discovery and extraction of digital assets related to the "Epstein Files" case.
+# Leveraging DorkEye’s modular architecture, it scales the investigation across three distinct levels of depth:
+#  • Soft (Surface Discovery): Targets official documents (.pdf, .docx) and indexed media files across government repositories and standard search engines.
+#  • Medium (Leaked Archives & Cloud): Focused scanning of cloud storage platforms (S3, Mega, Drive) and high-resilience international domains to recover hosted archives and leaked datasets.
+#  • Aggressive (Deep Intel & Database): Advanced lookup for exposed databases (.sql, .db), email dumps, configuration files, and sensitive directories containing raw evidence or unprotected backups.
+# The template utilizes dynamic variables to cross-reference core keywords, high-profile entities, and critical file extensions, maximizing result precision while minimizing background noise.
+variables:
+  # Core keywords for content filtering
+  target_keywords:
+    - "Epstein"
+    - "Maxwell"
+    - "Little St James"
+    - "Lolita Express"
+    - "flight logs"
+  
+  # Specific focus required
+  entities:
+    - "Trump"
+    - "Elon Musk"
+    - "Donald"
+    - "Donald J"
+    - "Zuckerberg"
+    - "Clinton"
+    - "Prince Andrew"
+    - "database"
+    - "email"
+    - "phone"
+    - "data"
+    - "secret"
+    - "legal records"
+
+  # Extensions for media files and documents
+  media_ext:
+    - jpg
+    - mp4
+    - mov
+    - png
+  
+  doc_ext:
+    - pdf
+    - xlsx
+    - docx
+    - csv
+    - sql
+
+  # Domains of interest (cloud, leak and storage)
+  cloud_domains:
+    - s3.amazonaws.com
+    - drive.google.com
+    - mega.nz
+    - gov
+    - google.com
+    - grokipedia.com
+    - pastebin.com
+    - dropbox.com
+
+templates:
+
+  # SOFT MODE: Surface search on indexed documents and media
+  surface_discovery:
+    mode: soft
+    dorks:
+      - 'site:gov "Epstein" filetype:{doc_ext}'
+      - 'intitle:"index of" "{target_keywords}" {media_ext}'
+      - '"{target_keywords}" + "{entities}" filetype:{doc_ext}'
+
+  # MEDIUM MODE: Focus on cloud archives and foreign leaks
+  leaked_archives:
+    mode: medium
+    dorks:
+      - 'site:{cloud_domains} "{target_keywords}"'
+      - 'site:drive.google.com | site:s3.amazonaws.com | site:is "{target_keywords}" {entities}'
+      - 'inurl:ftp "Epstein" (db | database | backup)'
+
+  # AGGRESSIVE MODE: Search databases, log files and exposed credentials
+  deep_intelligence:
+    mode: aggressive
+    dorks:
+      - 'filetype:sql | filetype:db | filetype:backup "{target_keywords}"'
+      - 'inurl:admin | inurl:login "Epstein" {entities}'
+      - '"index of" "emails.zip" | "mailbox.zip" "{target_keywords}"'
+      - 'allintext:"password" | "db_password" "Epstein" filetype:env'
