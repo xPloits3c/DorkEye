@@ -9,6 +9,7 @@ variables:
   # Core keywords for content filtering
   target_keywords:
     - "Epstein"
+    - "Jeffrey E"
     - "Maxwell"
     - "Little St James"
     - "Lolita Express"
