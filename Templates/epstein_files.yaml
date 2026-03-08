@@ -1,6 +1,6 @@
 # Configuration Notes: Epstein Files Investigation
 # This DorkEye YAML module is engineered to automate the discovery and extraction of digital assets related to the "Epstein Files" case.
-# Leveraging DorkEye’s modular architecture, it scales the investigation across three distinct levels of depth:
+# Leveraging DorkEye’s modular architecture, it scales the investigation across three distinct levels of depth:.
 #  • Soft (Surface Discovery): Targets official documents (.pdf, .docx) and indexed media files across government repositories and standard search engines.
 #  • Medium (Leaked Archives & Cloud): Focused scanning of cloud storage platforms (S3, Mega, Drive) and high-resilience international domains to recover hosted archives and leaked datasets.
 #  • Aggressive (Deep Intel & Database): Advanced lookup for exposed databases (.sql, .db), email dumps, configuration files, and sensitive directories containing raw evidence or unprotected backups.
