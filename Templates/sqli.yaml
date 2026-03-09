@@ -1,44 +1,61 @@
 variables:
+
   domain:
     - ru
     - gov.ru
 
-  sqli_db:
-    - '"ORA-"'
-    - '"ODBC"'
-    - '"SQLite"'
-    - '"password"'
-    - '"SQLSTATE"'
-    - '"Warning:"'
-    - '"SQL syntax"'
-    - '"PostgreSQL"'
-    - '"mysql_fetch"'
-    - '"DB_PASSWORD"'
-    - '"Warning: mysqli"'
-    - '"index of" ".git"'
-    - '"PostgreSQL ERROR"'
-    - '"SQLite3::SQLException"'
-    - '"Unclosed quotation mark"'
-    - '"api_key"'
-    - '"BEGIN RSA PRIVATE KEY"'
-    - '"AWS_SECRET_ACCESS_KEY"'
-    - '"You have an error in your SQL syntax"'
-    - '"Microsoft OLE DB Provider for SQL Server"'
+  sqli_errors:
+    - "SQL syntax"
+    - "SQL error"
+    - "database error"
+    - "mysqli"
+    - "ODBC SQL Server Driver"
+    - "Unclosed quotation mark"
+    - "PostgreSQL ERROR"
+    - "SQLite3::SQLException"
+    - "You have an error in your SQL syntax"
 
   param:
-    - ?id
     - id=
-    - ?cat
-    - .php?
-    - index.php
+    - cat=
+    - page=
+    - php?id=
+    - index.php?id=
     - login.php
     - admin.php
 
+
 templates:
 
-  sqli:
-    mode: aggressive
+  # SOFT MODE: basic SQL error discovery
+  sqli_surface:
+    mode: soft
     dorks:
       - 'site:{domain} inurl:{param}'
-      - 'site:{domain} intext:{sqli_db}'
-      - 'site:{domain} inurl:{param} intext:{sqli_db}'
+      - 'site:{domain} "{sqli_errors}"'
+      - 'site:{domain} intext:{sqli_errors}'
+
+
+  # MEDIUM MODE: typical SQL injection indicators
+  sqli_discovery:
+    mode: medium
+    dorks:
+      - 'site:{domain} inurl:{param} "{sqli_errors}"'
+      - 'site:{domain} inurl:{param} intext:{sqli_errors}'
+      - 'site:{domain} intext:{sqli_errors}'
+      - 'site:{domain} inurl:{param}'
+
+
+  # AGGRESSIVE MODE: exposed SQL errors and stack traces
+  sqli_exposed:
+    mode: aggressive
+    dorks:
+      - 'site:{domain} inurl:{param} "SQL syntax"'
+      - 'site:{domain} inurl:{param} "SQL error"'
+      - 'site:{domain} inurl:{param} "database error"'
+      - 'site:{domain} inurl:{param} "Unclosed quotation mark"'
+      - 'site:{domain} inurl:{param} "ODBC SQL Server Driver"'
+      - 'site:{domain} inurl:{param} "Microsoft OLE DB Provider for SQL Server"'
+      - 'site:{domain} inurl:{param} "Warning: mysqli"'
+      - 'site:{domain} inurl:{param} "You have an error in your SQL syntax"'
+      - 'site:{domain} "SQLite3::SQLException"'
