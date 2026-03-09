@@ -2,7 +2,7 @@ variables:
 
   domain:
     - ru
-    - gov.ru
+    - example.com
 
   sqli_errors:
     - "SQL syntax"
