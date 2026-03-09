@@ -55,14 +55,20 @@ _exit_requested: bool       = False
 
 
 def _sigint_handler(signum, frame):
+    # NOTE: sys.stderr.write() is async-signal-safe; console.print() is NOT
+    # (Rich holds a threading.Lock internally — calling it from a signal handler
+    # while the main thread already holds that lock causes a deadlock, which is
+    # more likely on Android/Termux due to its scheduler).
     global _last_interrupt_time, _skip_current, _exit_requested
     now = time.monotonic()
     if now - _last_interrupt_time < 1.5:
         _exit_requested = True
-        console.print("\n[bold red][!!] Double Ctrl+C detected — exiting...[/bold red]")
+        sys.stderr.write("\n[!!] Double Ctrl+C detected — exiting...\n")
+        sys.stderr.flush()
     else:
         _skip_current = True
-        console.print("\n[yellow][~] Ctrl+C — skipping current task...[/yellow]")
+        sys.stderr.write("\n[~] Ctrl+C — skipping current task...\n")
+        sys.stderr.flush()
     _last_interrupt_time = now
 
 
@@ -533,13 +539,15 @@ class SQLiDetector:
         for _ in range(_BASELINE_SAMPLES):
             if self.circuit_breaker.is_dead(url):
                 return None
+            if _exit_requested or _skip_current:
+                return None
             t0       = time.monotonic()
             response = self._get(url)
             elapsed  = time.monotonic() - t0
             if response is None:
                 return None
             times.append(elapsed)
-            time.sleep(0.3)
+            _interruptible_sleep(0.3)
         baseline = sum(times) / len(times)
         if baseline > _MAX_BASELINE_S:
             return None
@@ -588,6 +596,8 @@ class SQLiDetector:
         baseline_status: Optional[int] = None
 
         for i in range(_PROBE_SAMPLES):
+            if _exit_requested or _skip_current:
+                return False
             r = self._get(url)
             if r is None:
                 return False
@@ -595,7 +605,7 @@ class SQLiDetector:
                 baseline_status = r.status_code
             sim = difflib.SequenceMatcher(None, baseline_content, r.text).ratio()
             noise_samples.append(1.0 - sim)
-            time.sleep(0.2)
+            _interruptible_sleep(0.2)
 
         if not noise_samples:
             return False
@@ -636,6 +646,8 @@ class SQLiDetector:
         for payload in payloads:
             if self.circuit_breaker.is_dead(url):
                 break
+            if _exit_requested or _skip_current:
+                break
             test_url = self._inject_payload(url, param_name, payload)
             response = self._get(test_url)
             if response is None:
@@ -652,7 +664,7 @@ class SQLiDetector:
                 return result
 
             if self.stealth:
-                time.sleep(random.uniform(1.5, 3))
+                _interruptible_sleep(random.uniform(1.5, 3))
 
         return result
 
@@ -677,22 +689,26 @@ class SQLiDetector:
         for payload, payload_type in bool_payloads:
             if self.circuit_breaker.is_dead(url):
                 break
+            if _exit_requested or _skip_current:
+                break
 
             test_url = self._inject_payload(url, param_name, payload)
             samples: List[int] = []
 
             for _ in range(_BOOL_SAMPLES):
+                if _exit_requested or _skip_current:
+                    break
                 r = self._get(test_url)
                 if r is not None:
                     samples.append(len(r.text))
                 if self.stealth:
-                    time.sleep(random.uniform(0.5, 1))
+                    _interruptible_sleep(random.uniform(0.5, 1))
 
             if len(samples) >= 2:
                 (true_groups if payload_type == "true" else false_groups).append(samples)
 
             if self.stealth:
-                time.sleep(random.uniform(1, 2))
+                _interruptible_sleep(random.uniform(1, 2))
 
         if not true_groups or not false_groups:
             return result
@@ -771,6 +787,8 @@ class SQLiDetector:
             for _ in range(_TIMEBASED_CONFIRM):
                 if self.circuit_breaker.is_dead(url):
                     break
+                if _exit_requested or _skip_current:
+                    break
                 t_c      = time.monotonic()
                 r_c      = self._get(neutral_url)
                 elapsed_c = time.monotonic() - t_c
@@ -780,7 +798,7 @@ class SQLiDetector:
                 else:
                     confirm_times.append(elapsed_c)
 
-                time.sleep(0.5)
+                _interruptible_sleep(0.5)
 
             if confirm_failures > 0:
                 continue
@@ -841,6 +859,8 @@ class SQLiDetector:
             if self.circuit_breaker.is_dead(url):
                 result["message"] = "Host became unreachable during testing"
                 break
+            if _exit_requested or _skip_current:
+                break
 
             if not self._probe_parameter(url, param_name, baseline_content):
                 continue
@@ -870,7 +890,7 @@ class SQLiDetector:
                 )
 
             if self.stealth:
-                time.sleep(random.uniform(2, 4))
+                _interruptible_sleep(random.uniform(2, 4))
 
         if confidence_scores:
             avg = sum(confidence_scores) / len(confidence_scores)
@@ -905,6 +925,8 @@ class SQLiDetector:
         for param_name in post_data.keys():
             if self.circuit_breaker.is_dead(url):
                 break
+            if _exit_requested or _skip_current:
+                break
 
             payload_dict             = post_data.copy()
             payload_dict[param_name] = str(post_data[param_name]) + "'"
@@ -938,7 +960,7 @@ class SQLiDetector:
                 pass
 
             if self.stealth:
-                time.sleep(random.uniform(2, 4))
+                _interruptible_sleep(random.uniform(2, 4))
 
         if confidence_scores:
             avg = sum(confidence_scores) / len(confidence_scores)
@@ -965,6 +987,8 @@ class SQLiDetector:
 
         for key in json_data.keys():
             if self.circuit_breaker.is_dead(url):
+                break
+            if _exit_requested or _skip_current:
                 break
 
             payload_dict      = json_data.copy()
@@ -997,7 +1021,7 @@ class SQLiDetector:
                 pass
 
             if self.stealth:
-                time.sleep(random.uniform(2, 4))
+                _interruptible_sleep(random.uniform(2, 4))
 
         if confidence_scores:
             avg = sum(confidence_scores) / len(confidence_scores)
@@ -1177,7 +1201,10 @@ class DorkEyeEnhanced:
         self._total_results_at_last_extended_delay: int = 0
 
     def _hash_url(self, url: str) -> str:
-        return hashlib.md5(url.encode()).hexdigest()
+        # usedforsecurity=False: required on Python 3.9+ when OpenSSL runs in
+        # FIPS mode (some custom Android ROMs enforce this) — md5 is not used
+        # for any cryptographic purpose here, only as a fast dedup key.
+        return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()
 
     def is_duplicate(self, url: str) -> bool:
         h = self._hash_url(url)
@@ -1263,22 +1290,31 @@ class DorkEyeEnhanced:
                         break
 
                     # Start producer
+                    # NOTE: stop_event allows the consumer to signal the producer
+                    # to abort early (skip/exit/count-reached). Without this, on a
+                    # retry the previous producer thread would stay alive pushing
+                    # items into an orphaned queue — wasting RAM/CPU on Android.
                     result_queue: queue.Queue = queue.Queue()
+                    stop_event = threading.Event()
 
-                    def _producer(dork=dork, batch_size=batch_size):
+                    def _producer(dork=dork, batch_size=batch_size,
+                                  q=result_queue, stop=stop_event):
                         try:
                             for item in DDGS().text(dork, max_results=batch_size):
-                                result_queue.put(item)
+                                if stop.is_set():
+                                    break
+                                q.put(item)
                         except Exception:
                             pass
                         finally:
-                            result_queue.put(_DONE)
+                            q.put(_DONE)
 
                     threading.Thread(target=_producer, daemon=True).start()
 
                     # Consume; poll every 0.25 s so Ctrl+C is always responsive
                     while True:
                         if _exit_requested or _skip_current:
+                            stop_event.set()  # signal producer to abort
                             break
                         try:
                             r = result_queue.get(timeout=0.25)
@@ -1315,6 +1351,7 @@ class DorkEyeEnhanced:
                         self.stats[f"category_{entry['category']}"] += 1
                         progress.update(task, completed=min(total_fetched, count))
                         if total_fetched >= count:
+                            stop_event.set()  # producer no longer needed
                             break
 
                     if total_fetched >= count:
@@ -1370,7 +1407,13 @@ class DorkEyeEnhanced:
                         "status_code":  analysis["status_code"],
                     })
                     progress.advance(task1)
-                    time.sleep(random.uniform(1, 2) if self.config.get("stealth_mode", False) else 0.5)
+                    _interruptible_sleep(random.uniform(1, 2) if self.config.get("stealth_mode", False) else 0.5)
+
+                # Reset _skip_current dopo il loop file analysis per evitare che
+                # propaghi nel blocco SQLi con un messaggio fuorviante
+                if _skip_current and not _exit_requested:
+                    console.print("[yellow][~] Ctrl+C — file analysis skipped.[/yellow]")
+                    _skip_current = False
 
             if self.config.get("sqli_detection", False) and urls_to_test_sqli:
                 task2 = progress.add_task("[cyan]Testing for [red]SQLi[cyan]...", total=len(urls_to_test_sqli))
@@ -1392,7 +1435,7 @@ class DorkEyeEnhanced:
                         )
                     progress.advance(task2)
                     if self.config.get("stealth_mode", False):
-                        time.sleep(random.uniform(3, 6))
+                        _interruptible_sleep(random.uniform(3, 6))
         return results
 
     def run_search(self, dorks: List[str], count: int):
