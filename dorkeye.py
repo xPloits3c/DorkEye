@@ -26,6 +26,7 @@ from urllib.parse import urlparse, unquote, parse_qs, urlencode, quote
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
+from html.parser import HTMLParser as _HTMLParser   # FIX: needed for script-tag stripping
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -45,8 +46,6 @@ VALID_MODES = ["soft", "medium", "aggressive"]
 
 # ══════════════════════════════════════════════════════════════
 #  [7] Termux / Android auto-detection
-#  Detected once at import time; downstream constants are
-#  adjusted immediately so every subsystem picks them up.
 # ══════════════════════════════════════════════════════════════
 
 def _detect_termux_android() -> bool:
@@ -115,7 +114,6 @@ def print_banner():
         "[bold yellow]  V[/bold yellow]"
     )
 
-    # [7] Show Android badge when detected
     android_badge = (
         "\n[bold yellow]▸ Platform[/bold yellow] [dim]│[/dim]  "
         "[bold green]Android / Termux  ⚡ battery-saver active[/bold green]"
@@ -433,31 +431,99 @@ class CircuitBreaker:
 
 # ══════════════════════════════════════════════════════════════
 #  SQLiDetector — constants
-#  [7] Android/Termux: reduced timeouts and sample counts to
-#      lower CPU/battery usage on constrained hardware.
 # ══════════════════════════════════════════════════════════════
 
 _CONNECT_TIMEOUT  = 3 if TERMUX_IS_ANDROID else 4
 _DEFAULT_READ     = 6 if TERMUX_IS_ANDROID else 8
 _TIMEBASED_MARGIN = 2.5
 _SLEEP_DELAY      = 3
-_BASELINE_SAMPLES = 1 if TERMUX_IS_ANDROID else 2   # [7]
+_BASELINE_SAMPLES = 1 if TERMUX_IS_ANDROID else 2
 _MAX_BASELINE_S   = 6.0
 
-_PROBE_SAMPLES       = 2 if TERMUX_IS_ANDROID else 3    # [7]
+_PROBE_SAMPLES       = 2 if TERMUX_IS_ANDROID else 3
 _PROBE_NOISE_BUFFER  = 0.04
 _PROBE_MAX_THRESHOLD = 0.18
-_BOOL_SAMPLES        = 2 if TERMUX_IS_ANDROID else 3    # [7]
-_TIMEBASED_CONFIRM   = 1 if TERMUX_IS_ANDROID else 2    # [7]
-_UNION_COLUMNS_MAX   = 5                                 # [5]
+_BOOL_SAMPLES        = 2 if TERMUX_IS_ANDROID else 3
+_TIMEBASED_CONFIRM   = 1 if TERMUX_IS_ANDROID else 2
+_UNION_COLUMNS_MAX   = 5
 
-_SCRIPT_TAG_RE = re.compile(r"<script[\s\S]*?</script\s*>", re.IGNORECASE)
+
+# ══════════════════════════════════════════════════════════════
+#  FIX: HTMLParser-based script-tag stripper
+#
+#  The original code used a regex to strip <script> blocks before
+#  scanning response bodies for SQL error signatures:
+#
+#    _SCRIPT_TAG_RE = re.compile(r"<script[\s\S]*?</script\s*>", re.IGNORECASE)
+#
+#  CodeQL flagged this as CWE-20/116/185/186 ("Bad HTML filtering
+#  regexp") because the pattern does not match all syntactically
+#  valid closing tags that browsers accept (e.g. </script\t\n bar>,
+#  or </SCRIPT  >), making it bypassable.
+#
+#  Fix: use Python's built-in HTMLParser.  The regex is kept only as
+#  a last-resort fallback for documents so malformed that the parser
+#  itself raises an exception.
+# ══════════════════════════════════════════════════════════════
+
+class _ScriptStripper(_HTMLParser):
+    """HTMLParser subclass that removes every <script>…</script> block."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self._in_script: int = 0   # counter handles (unusual) nested script tags
+        self._parts: list   = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() == "script":
+            self._in_script += 1
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "script" and self._in_script:
+            self._in_script -= 1
+
+    def handle_data(self, data):
+        if not self._in_script:
+            self._parts.append(data)
+
+    def handle_entityref(self, name):
+        if not self._in_script:
+            self._parts.append(f"&{name};")
+
+    def handle_charref(self, name):
+        if not self._in_script:
+            self._parts.append(f"&#{name};")
+
+    def get_result(self) -> str:
+        return "".join(self._parts)
+
+
+# Fallback-only regex (used when the HTML parser itself raises an exception).
+# NOTE: this regex is intentionally NOT used as the primary path.
+_SCRIPT_TAG_RE_FALLBACK = re.compile(
+    r"<script(?:[^>]*)>[\s\S]*?</script\s*>", re.IGNORECASE
+)
+
+
+def _strip_script_tags(body: str) -> str:
+    """Return *body* with all <script> blocks removed.
+
+    Uses the built-in HTMLParser as the primary implementation to
+    correctly handle all valid (and many invalid) HTML closing-tag
+    variants that a regex cannot reliably cover.
+    """
+    stripper = _ScriptStripper()
+    try:
+        stripper.feed(body)
+        stripper.close()
+        return stripper.get_result()
+    except Exception:
+        # Malformed HTML that breaks the parser — fall back to regex
+        return _SCRIPT_TAG_RE_FALLBACK.sub("", body)
+
 
 # ══════════════════════════════════════════════════════════════
 #  [4] WAF detection signatures
-#  Keys: canonical WAF name.
-#  Values: substrings checked in response headers (keys/values)
-#          and in the first 2 KB of the response body.
 # ══════════════════════════════════════════════════════════════
 
 WAF_SIGNATURES: Dict[str, List[str]] = {
@@ -548,12 +614,11 @@ class SQLiDetector:
         ],
     }
 
-    # UNION column-count mismatch patterns (server IS processing the UNION)
     _UNION_COL_MISMATCH_RE = re.compile(
         r"(The used SELECT statements have a different number of columns"
         r"|each UNION query must have the same number of columns"
         r"|SELECTs to the left and right of UNION do not have the same number"
-        r"|ORA-01789"         # Oracle
+        r"|ORA-01789"
         r"|column count doesn.t match)",
         re.IGNORECASE,
     )
@@ -582,38 +647,7 @@ class SQLiDetector:
     def _timeout(self, extra_read: float = 0) -> Tuple[int, float]:
         return (_CONNECT_TIMEOUT, self.read_timeout + extra_read)
 
-    # ──────────────────────────────────────────────────────────
-    #  _run_interruptible
-    #
-    #  Root-cause fix for Ctrl+C not working during HTTP calls:
-    #
-    #  requests.Session.get/post() block the Python interpreter
-    #  inside C-level socket.recv().  While blocked there, the
-    #  GIL is held by the syscall — Python can never schedule
-    #  the signal-handler flag check until the call returns
-    #  (which can be up to 17-36 s in the worst case).
-    #
-    #  Fix: run every network call in a daemon thread.
-    #  The main thread polls a threading.Event every 0.1 s,
-    #  checking _skip_current/_exit_requested between polls.
-    #  Ctrl+C is therefore always acted on within ~100 ms
-    #  regardless of what the network is doing.
-    #  The in-flight daemon thread is abandoned (it will
-    #  eventually time out on its own, harmlessly).
-    # ──────────────────────────────────────────────────────────
-
-    def _run_interruptible(
-        self,
-        fn,
-        total_timeout: float,
-        on_connect_error=None,
-    ):
-        """
-        Run fn() in a daemon thread; poll every 0.1 s for skip/exit.
-        Returns fn()'s return value, or None on skip/exit/timeout.
-        on_connect_error: optional zero-arg callback called when
-        ConnectTimeout/ConnectionError is raised inside fn().
-        """
+    def _run_interruptible(self, fn, total_timeout: float, on_connect_error=None):
         _POLL = 0.1
         result_holder = [None]
         exc_holder    = [None]
@@ -632,7 +666,7 @@ class SQLiDetector:
 
         threading.Thread(target=_worker, daemon=True).start()
 
-        deadline = total_timeout + 1.0   # small grace period
+        deadline = total_timeout + 1.0
         elapsed  = 0.0
         while elapsed < deadline:
             if _exit_requested or _skip_current:
@@ -643,7 +677,7 @@ class SQLiDetector:
                 return result_holder[0]
             elapsed += _POLL
 
-        return None   # timed out (should never happen given requests timeout)
+        return None
 
     def _get(self, url: str, extra_read: float = 0) -> Optional[requests.Response]:
         if self.circuit_breaker.is_dead(url):
@@ -662,7 +696,6 @@ class SQLiDetector:
                 allow_redirects = True,
             )
 
-        # Total time the underlying request is allowed to take
         total = _CONNECT_TIMEOUT + self.read_timeout + extra_read
 
         return self._run_interruptible(
@@ -676,13 +709,6 @@ class SQLiDetector:
     # ──────────────────────────────────────────────────────────
 
     def _detect_waf(self, response: requests.Response) -> Optional[str]:
-        """
-        Return the canonical WAF name if a WAF fingerprint is found in
-        response headers or the first 2 KB of the body, else None.
-
-        A 403/406/429 with an unusually short body triggers a generic
-        'generic_waf' label even if no named WAF matches.
-        """
         headers_keys   = {k.lower() for k in response.headers}
         headers_values = " ".join(v.lower() for v in response.headers.values())
         body_snippet   = response.text[:2000].lower()
@@ -692,7 +718,6 @@ class SQLiDetector:
                 if sig in headers_keys or sig in headers_values or sig in body_snippet:
                     return waf_name
 
-        # Generic heuristic: blocked status + minimal body
         if response.status_code in (403, 406, 419, 429) and len(response.text) < 600:
             return "generic_waf"
 
@@ -745,7 +770,8 @@ class SQLiDetector:
         return (response.status_code, response.text, len(response.text))
 
     def _match_sql_errors(self, body: str) -> Optional[Tuple[str, str]]:
-        clean_body = _SCRIPT_TAG_RE.sub("", body)
+        # FIX: use HTMLParser-based stripper instead of the bypassed regex
+        clean_body = _strip_script_tags(body)
         for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
             for pattern in patterns:
                 if re.search(pattern, clean_body, re.IGNORECASE):
@@ -757,14 +783,6 @@ class SQLiDetector:
     # ──────────────────────────────────────────────────────────
 
     def _prioritize_params(self, params: Dict[str, str]) -> List[str]:
-        """
-        Return parameter names sorted by injection likelihood:
-        1. numeric value  |  known high-priority name  → HIGH
-        2. known medium-priority name                  → MEDIUM
-        3. everything else                             → LOW
-
-        Within each tier the original insertion order is preserved.
-        """
         high: List[str] = []
         medium: List[str] = []
         low: List[str] = []
@@ -780,26 +798,10 @@ class SQLiDetector:
 
         return high + medium + low
 
-    # ──────────────────────────────────────────────────────────
-    #  [2] _probe_parameter — baseline_status bug fix
-    #
-    #  Original bug: baseline_status was captured inside the
-    #  noise-sampling loop only on i==0, mixing baseline capture
-    #  with noise measurement.  If the first _get() returned None
-    #  we'd short-circuit before setting it; also, the noise loop
-    #  counted that first request both as noise sample AND as the
-    #  status baseline, making the two concerns inconsistent.
-    #
-    #  Fix: dedicate a separate request to capture baseline_status
-    #  BEFORE the noise loop.  That first response is also used as
-    #  the first noise sample (no extra network round-trip).
-    # ──────────────────────────────────────────────────────────
-
     def _probe_parameter(self, url: str, param_name: str, baseline_content: str) -> bool:
         if self.circuit_breaker.is_dead(url):
             return False
 
-        # ── Dedicated baseline request (fix for bug [2]) ──────
         r_init = self._get(url)
         if r_init is None:
             return False
@@ -807,8 +809,7 @@ class SQLiDetector:
         first_sim            = difflib.SequenceMatcher(None, baseline_content, r_init.text).ratio()
         noise_samples: List[float] = [1.0 - first_sim]
 
-        # ── Remaining noise samples ────────────────────────────
-        for _ in range(_PROBE_SAMPLES - 1):   # already have one sample
+        for _ in range(_PROBE_SAMPLES - 1):
             if _exit_requested or _skip_current:
                 return False
             r = self._get(url)
@@ -825,13 +826,11 @@ class SQLiDetector:
 
         adaptive_threshold = noise_level + _PROBE_NOISE_BUFFER
 
-        # ── Single-quote payload probe ─────────────────────────
         test_url  = self._inject_payload(url, param_name, "1'")
         r_payload = self._get(test_url)
         if r_payload is None:
             return False
 
-        # Status-code divergence → server reacted differently → interesting
         if r_payload.status_code != baseline_status:
             return False
 
@@ -847,7 +846,7 @@ class SQLiDetector:
             "vulnerable": False,
             "confidence": SQLiConfidence.NONE.value,
             "evidence":   [],
-            "waf":        None,   # [4]
+            "waf":        None,
         }
         payloads = [
             "1' AND extractvalue(0,concat(0x7e,'TEST',0x7e)) AND '1'='1",
@@ -865,7 +864,6 @@ class SQLiDetector:
             if response is None:
                 continue
 
-            # [4] WAF check — blocked response is not a real SQL error
             waf = self._detect_waf(response)
             if waf:
                 result["waf"] = waf
@@ -887,23 +885,7 @@ class SQLiDetector:
 
         return result
 
-    # ──────────────────────────────────────────────────────────
-    #  [5] UNION-based probe
-    #
-    #  Strategy:
-    #    1. For n = 1 … _UNION_COLUMNS_MAX, inject a UNION SELECT
-    #       with n NULL columns using multiple syntax variants.
-    #    2. If a column-count mismatch error appears the server IS
-    #       processing the UNION (SQLi confirmed, wrong col count).
-    #       We record the mismatch and continue to find the right n.
-    #    3. When mismatch errors stop and the response length
-    #       differs significantly from baseline, UNION succeeded.
-    #    4. A WAF block on any attempt aborts the probe early.
-    # ──────────────────────────────────────────────────────────
-
-    def _test_union_based(
-        self, url: str, param_name: str, baseline_len: int
-    ) -> Dict:
+    def _test_union_based(self, url: str, param_name: str, baseline_len: int) -> Dict:
         result = {
             "method":     "union_based",
             "vulnerable": False,
@@ -912,7 +894,7 @@ class SQLiDetector:
             "waf":        None,
         }
 
-        mismatch_at: List[int] = []   # column counts that triggered mismatch
+        mismatch_at: List[int] = []
 
         for n_cols in range(1, _UNION_COLUMNS_MAX + 1):
             if self.circuit_breaker.is_dead(url):
@@ -921,7 +903,6 @@ class SQLiDetector:
                 break
 
             null_cols = ",".join(["NULL"] * n_cols)
-            # Four syntax variants: quoted/unquoted × comment style
             payloads = [
                 f"' UNION SELECT {null_cols}--",
                 f"' UNION SELECT {null_cols}#",
@@ -938,7 +919,6 @@ class SQLiDetector:
                 if response is None:
                     continue
 
-                # [4] WAF check
                 waf = self._detect_waf(response)
                 if waf:
                     result["waf"] = waf
@@ -949,16 +929,14 @@ class SQLiDetector:
 
                 body = response.text
 
-                # Column count mismatch → server is processing the UNION
                 if self._UNION_COL_MISMATCH_RE.search(body):
                     if n_cols not in mismatch_at:
                         mismatch_at.append(n_cols)
                         result["evidence"].append(
                             f"UNION col-mismatch at n={n_cols} — server processes UNION"
                         )
-                    break  # try next column count
+                    break
 
-                # SQL error from a different cause → still confirms injection
                 sql_match = self._match_sql_errors(body)
                 if sql_match:
                     db_type, pattern = sql_match
@@ -969,7 +947,6 @@ class SQLiDetector:
                     )
                     return result
 
-                # Significant length change with 200 OK → UNION probably worked
                 len_diff = abs(len(body) - baseline_len)
                 if (response.status_code == 200
                         and len_diff > baseline_len * 0.20
@@ -985,7 +962,6 @@ class SQLiDetector:
                 if self.stealth:
                     _interruptible_sleep(random.uniform(0.5, 1.5))
 
-        # Even without full exploitation, confirmed mismatch errors → LOW confidence
         if mismatch_at:
             result["vulnerable"] = True
             result["confidence"] = SQLiConfidence.LOW.value
@@ -1107,7 +1083,6 @@ class SQLiDetector:
             if not sleep_triggered:
                 continue
 
-            # [4] WAF check on the sleep response
             if response is not None:
                 waf = self._detect_waf(response)
                 if waf:
@@ -1157,14 +1132,6 @@ class SQLiDetector:
 
         return result
 
-    # ──────────────────────────────────────────────────────────
-    #  test_sqli — orchestrator
-    #  [3] Complete confidence logic: LOW / MEDIUM / HIGH / CRITICAL
-    #  [5] UNION-based probe added to per-param loop
-    #  [6] Parameters tested in priority order
-    #  [4] WAF recorded in top-level result
-    # ──────────────────────────────────────────────────────────
-
     def test_sqli(self, url: str) -> Dict:
         result = {
             "url":                url,
@@ -1173,7 +1140,7 @@ class SQLiDetector:
             "tests":              [],
             "tested":             False,
             "message":            "",
-            "waf_detected":       None,   # [4]
+            "waf_detected":       None,
         }
 
         if not self.has_query_params(url):
@@ -1197,7 +1164,6 @@ class SQLiDetector:
 
         baseline_status, baseline_content, baseline_len = baseline
 
-        # [4] Detect WAF on clean baseline response
         baseline_resp_obj = self._get(url)
         if baseline_resp_obj is not None:
             waf_on_baseline = self._detect_waf(baseline_resp_obj)
@@ -1208,16 +1174,8 @@ class SQLiDetector:
                     f"results may have false negatives"
                 )
 
-        # [3] Per-param score accumulator
-        # Score scale per technique:
-        #   error_based HIGH → 3  |  error_based other → 2
-        #   union HIGH       → 3  |  union MEDIUM       → 2  |  union LOW → 1
-        #   bool_blind       → 2
-        #   time_based HIGH  → 3  |  time_based other   → 2
-        # Per-param total ≥ 5 → CRITICAL (two independent strong signals)
         per_param_scores: List[int] = []
 
-        # [6] Test params in priority order
         for param_name in self._prioritize_params(params):
 
             if self.circuit_breaker.is_dead(url):
@@ -1230,18 +1188,15 @@ class SQLiDetector:
 
             param_score = 0
 
-            # ── Error-based ───────────────────────────────────
             error_result = self._test_error_based(url, param_name)
             result["tests"].append(error_result)
 
-            # Propagate WAF discovery [4]
             if error_result.get("waf") and not result["waf_detected"]:
                 result["waf_detected"] = error_result["waf"]
 
             if error_result["vulnerable"]:
                 if error_result["confidence"] == SQLiConfidence.HIGH.value:
                     param_score += 3
-                    # Early return: HIGH error-based is definitive
                     result["vulnerable"]         = True
                     result["overall_confidence"] = SQLiConfidence.HIGH.value
                     result["message"]            = f"Tested {len(params)} parameter(s)"
@@ -1249,7 +1204,6 @@ class SQLiDetector:
                 else:
                     param_score += 2
 
-            # ── UNION-based [5] ───────────────────────────────
             union_result = self._test_union_based(url, param_name, baseline_len)
             result["tests"].append(union_result)
 
@@ -1261,16 +1215,14 @@ class SQLiDetector:
                     param_score += 3
                 elif union_result["confidence"] == SQLiConfidence.MEDIUM.value:
                     param_score += 2
-                else:  # LOW
+                else:
                     param_score += 1
 
-            # ── Boolean blind ─────────────────────────────────
             bool_result = self._test_boolean_blind(url, param_name, baseline_len)
             result["tests"].append(bool_result)
             if bool_result["vulnerable"]:
                 param_score += 2
 
-            # ── Time-based blind ──────────────────────────────
             time_result = self._test_time_based_blind(url, param_name)
             result["tests"].append(time_result)
             if time_result.get("vulnerable", False):
@@ -1284,23 +1236,18 @@ class SQLiDetector:
             if self.stealth:
                 _interruptible_sleep(random.uniform(2, 4))
 
-        # ── [3] Aggregate confidence across all parameters ────
         if per_param_scores:
             best  = max(per_param_scores)
             avg   = sum(per_param_scores) / len(per_param_scores)
 
             result["vulnerable"] = True
 
-            # CRITICAL: at least one param has two strong independent signals
             if best >= 5:
                 result["overall_confidence"] = SQLiConfidence.CRITICAL.value
-            # HIGH: single strong technique or consistent multi-param evidence
             elif best >= 3 or avg >= 3:
                 result["overall_confidence"] = SQLiConfidence.HIGH.value
-            # MEDIUM: moderate evidence on at least one param
             elif best >= 2 or avg >= 2:
                 result["overall_confidence"] = SQLiConfidence.MEDIUM.value
-            # LOW: weak signal (e.g. only UNION col-mismatch hinting)
             else:
                 result["overall_confidence"] = SQLiConfidence.LOW.value
 
@@ -1324,7 +1271,6 @@ class SQLiDetector:
             result["message"] = "Could not establish baseline"
             return result
 
-        # [4] WAF check on baseline
         waf = self._detect_waf(baseline_resp)
         if waf:
             result["waf_detected"] = waf
@@ -1340,7 +1286,6 @@ class SQLiDetector:
             payload_dict             = post_data.copy()
             payload_dict[param_name] = str(post_data[param_name]) + "'"
 
-            self.fingerprint_rotator.get_random()
             _hdrs    = self.fingerprint_rotator.build_headers()
             _data    = payload_dict
             _timeout = self._timeout()
@@ -1364,7 +1309,6 @@ class SQLiDetector:
                     break
                 continue
 
-            # [4] Skip WAF-blocked responses
             waf = self._detect_waf(response)
             if waf:
                 if not result["waf_detected"]:
@@ -1438,7 +1382,6 @@ class SQLiDetector:
             if response is None:
                 continue
 
-            # [4] WAF check
             waf = self._detect_waf(response)
             if waf:
                 if not result["waf_detected"]:
@@ -1484,7 +1427,6 @@ class SQLiDetector:
         if re.search(r"/\d+$", path) or re.search(r"/\w+$", path):
             response = self._get(url + "'")
             if response:
-                # [4] WAF check
                 waf = self._detect_waf(response)
                 if waf:
                     result["evidence"].append(f"WAF detected ({waf}): path-based skipped")
@@ -1674,11 +1616,6 @@ class DorkEyeEnhanced:
         collected_since_last = len(self.results) - self._total_results_at_last_extended_delay
         return collected_since_last >= threshold
 
-    # ──────────────────────────────────────────────────────────
-    #  search_dork
-    #  [1] Timestamp: human-readable "%Y-%m-%d %H:%M:%S"
-    # ──────────────────────────────────────────────────────────
-
     def search_dork(self, dork: str, count: int,
                     dork_index: int = 1, total_dorks: int = 1) -> List[Dict]:
         global _skip_current, _exit_requested
@@ -1763,7 +1700,6 @@ class DorkEyeEnhanced:
                             "title":     r.get("title", ""),
                             "snippet":   r.get("body", ""),
                             "dork":      dork,
-                            # [1] Human-readable timestamp
                             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "extension": self.analyzer.get_file_extension(url),
                             "category":  self.analyzer.categorize_url(url)
@@ -1849,7 +1785,6 @@ class DorkEyeEnhanced:
                     sqli_result         = self.analyzer.check_sqli(result["url"])
                     result["sqli_test"] = sqli_result
 
-                    # [4] Surface WAF info in console
                     if sqli_result.get("waf_detected"):
                         console.print(
                             f"[yellow][~] WAF detected "
@@ -1860,7 +1795,6 @@ class DorkEyeEnhanced:
                     if sqli_result.get("vulnerable", False):
                         self.stats["sqli_vulnerable"] += 1
                         confidence = sqli_result.get("overall_confidence", "?")
-                        # [3] CRITICAL gets a distinct visual cue
                         style = (
                             "[bold magenta]" if confidence == SQLiConfidence.CRITICAL.value
                             else "[bold red]"
@@ -1889,7 +1823,6 @@ class DorkEyeEnhanced:
             console.print("[bold magenta][*] HTTP Fingerprinting: ENABLED[/bold magenta]")
         if self.config.get("sqli_detection", False):
             console.print("[bold red][*] SQL Injection Detection: ENABLED[/bold red]")
-        # [7] Android badge in run header
         if TERMUX_IS_ANDROID:
             console.print("[bold green][*] Android/Termux mode: battery-saver constants active[/bold green]")
 
@@ -2054,7 +1987,6 @@ class DorkEyeEnhanced:
             elif cat in ("scripts", "configs", "credentials"): cnt["scripts"] += 1
             elif cat == "webpage":                             cnt["page"]    += 1
 
-        # ── Build JS-embeddable export data ───────────────────────────────
         export_rows = []
         for r in self.results:
             sqli_t = r.get("sqli_test", {})
@@ -2091,23 +2023,19 @@ class DorkEyeEnhanced:
         body {{ font-family: 'Courier New', monospace; background: #000; color: #00ff41; min-height: 100vh; overflow-x: hidden; }}
         #matrix-canvas {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.32; pointer-events: none; }}
         #content {{ position: relative; z-index: 1; padding: 28px 32px; max-width: 1400px; margin: 0 auto; }}
-        /* ── Header ── */
         .header {{ background: rgba(0,10,0,0.85); border: 1px solid #00ff41; border-left: 4px solid #00ff41; padding: 22px 28px; margin-bottom: 24px; box-shadow: 0 0 24px rgba(0,255,65,0.15); }}
         .header h1 {{ font-size: 22px; color: #00ff41; text-shadow: 0 0 10px #00ff41; letter-spacing: 2px; }}
         .header .subtitle {{ margin-top: 6px; font-size: 12px; color: #009922; letter-spacing: 1px; }}
         .header .blink {{ animation: blink 1.1s step-end infinite; }}
         @keyframes blink {{ 50% {{ opacity: 0; }} }}
-        /* ── Stats ── */
         .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }}
         .stat-card {{ background: rgba(0,10,0,0.82); border: 1px solid #00aa2a; padding: 16px 18px; }}
         .stat-card h3 {{ font-size: 11px; color: #009922; letter-spacing: 1px; text-transform: uppercase; }}
         .stat-card p {{ font-size: 26px; font-weight: bold; color: #00ff41; margin-top: 8px; text-shadow: 0 0 8px rgba(0,255,65,0.5); }}
-        /* ── Alerts ── */
         .sqli-alert {{ background: rgba(40,0,0,0.88); border: 1px solid #ff2222; border-left: 4px solid #ff2222; padding: 14px 20px; margin-bottom: 20px; color: #ff4444; }}
         .sqli-alert h2 {{ font-size: 15px; letter-spacing: 2px; margin-bottom: 6px; }}
         .sqli-alert p  {{ font-size: 13px; color: #ff6666; }}
         .waf-alert {{ background: rgba(30,20,0,0.88); border: 1px solid #ffaa00; border-left: 4px solid #ffaa00; padding: 12px 20px; margin-bottom: 14px; color: #ffcc44; font-size: 13px; }}
-        /* ── Toolbar: filter + export ── */
         .toolbar {{ display: flex; align-items: flex-start; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }}
         .filter-bar {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex: 1; position: relative; }}
         .filter-label {{ color: #009922; font-size: 12px; letter-spacing: 1px; margin-right: 4px; white-space: nowrap; }}
@@ -2127,7 +2055,6 @@ class DorkEyeEnhanced:
         .sub-btn .sub-badge {{ font-size: 9px; color: #005500; background: rgba(0,255,65,0.08); border: 1px solid #003300; padding: 1px 5px; border-radius: 2px; min-width: 22px; text-align: center; }}
         .active-sub-info {{ font-size: 11px; color: #005500; letter-spacing: 1px; margin-bottom: 10px; min-height: 16px; padding-left: 2px; }}
         .active-sub-info span {{ color: #00aa44; }}
-        /* ── Export panel ── */
         .export-wrap {{ position: relative; flex-shrink: 0; }}
         .export-toggle {{ background: rgba(0,10,0,0.7); border: 1px solid #007acc; color: #00aaff; padding: 5px 14px; font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer; letter-spacing: 2px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; transition: all .15s; white-space: nowrap; }}
         .export-toggle:hover, .export-toggle.open {{ background: rgba(0,120,200,0.15); border-color: #00aaff; color: #fff; }}
@@ -2151,9 +2078,7 @@ class DorkEyeEnhanced:
         .exp-btn.json:hover {{ background: #ffcc00; color: #000; }}
         .exp-btn.csv {{ color: #00ff99; border-color: #00ff99; }}
         .exp-btn.csv:hover {{ background: #00ff99; color: #000; }}
-        .ep-divider {{ border: none; border-top: 1px solid rgba(0,100,180,0.15); margin: 2px 0; }}
         .ep-count {{ font-size: 9px; color: #004466; margin-left: auto; letter-spacing: 1px; }}
-        /* ── Table ── */
         .table-wrap {{ background: rgba(0,8,0,0.82); border: 1px solid #00aa2a; overflow-x: auto; }}
         table {{ width: 100%; border-collapse: collapse; }}
         th {{ background: rgba(0,255,65,0.06); color: #00ff41; padding: 11px 14px; text-align: left; border-bottom: 1px solid #00aa2a; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; }}
@@ -2179,9 +2104,7 @@ class DorkEyeEnhanced:
         .url-cell {{ display: flex; align-items: center; gap: 8px; }}
         .dl-btn {{ flex-shrink: 0; background: transparent; border: 1px solid #0077bb; color: #00aaff; padding: 2px 9px; font-size: 13px; cursor: pointer; text-decoration: none; font-family: 'Courier New', monospace; transition: all .15s; }}
         .dl-btn:hover {{ background: #00aaff; color: #000; }}
-        /* ── Footer ── */
         .footer {{ margin-top: 28px; padding: 14px 0; border-top: 1px solid #002200; text-align: center; font-size: 11px; color: #004400; letter-spacing: 2px; }}
-        /* ── Toast ── */
         #toast {{ position: fixed; bottom: 28px; right: 28px; z-index: 9999; background: rgba(0,20,0,0.95); border: 1px solid #00ff41; color: #00ff41; padding: 10px 20px; font-family: 'Courier New', monospace; font-size: 12px; letter-spacing: 1px; opacity: 0; transition: opacity .3s; pointer-events: none; }}
         #toast.show {{ opacity: 1; }}
     </style>
@@ -2214,7 +2137,6 @@ class DorkEyeEnhanced:
         <div class="stat-card"><h3>&#9632; EXECUTION TIME</h3><p>{round(time.time() - self.start_time, 2)}s</p></div>
     </div>
 
-    <!-- ═══ TOOLBAR: filters + export ═══ -->
     <div class="toolbar">
       <div class="filter-bar">
         <span class="filter-label">[ FILTER ]</span>
@@ -2253,13 +2175,11 @@ class DorkEyeEnhanced:
         <button class="filter-btn" data-group="page" onclick="applyFilter(this)">PAGE <span class="badge" id="badge-page">{cnt["page"]}</span></button>
       </div>
 
-      <!-- ─ Export button + panel ─ -->
       <div class="export-wrap" id="exportWrap">
         <button class="export-toggle" id="exportToggle" onclick="toggleExportPanel()">&#11015; EXPORT <span style="font-size:8px;opacity:.7;">&#9660;</span></button>
         <div class="export-panel" id="exportPanel">
-
           <div class="ep-section">
-            <div class="ep-title">&#9632; All results &nbsp;<span id="epCntAll" style="color:#006633;font-size:9px;"></span></div>
+            <div class="ep-title">&#9632; All results</div>
             <div class="ep-row">
               <span class="ep-label">All ({len(self.results)})</span>
               <button class="exp-btn txt" onclick="doExport('txt','all')">TXT</button>
@@ -2267,7 +2187,6 @@ class DorkEyeEnhanced:
               <button class="exp-btn csv" onclick="doExport('csv','all')">CSV</button>
             </div>
           </div>
-
           <div class="ep-section">
             <div class="ep-title">&#9632; SQLi — by status</div>
             <div class="ep-row">
@@ -2289,7 +2208,6 @@ class DorkEyeEnhanced:
               <button class="exp-btn csv"  onclick="doExport('csv','sqli-safe')">CSV</button>
             </div>
           </div>
-
           <div class="ep-section">
             <div class="ep-title">&#9632; Current view (respects active filter)</div>
             <div class="ep-row">
@@ -2299,11 +2217,9 @@ class DorkEyeEnhanced:
               <button class="exp-btn csv"  onclick="doExport('csv','view')">CSV</button>
             </div>
           </div>
-
         </div>
       </div>
     </div>
-    <!-- ═══ end toolbar ═══ -->
 
     <div class="active-sub-info" id="sub-info"></div>
     <div class="table-wrap">
@@ -2359,16 +2275,12 @@ class DorkEyeEnhanced:
 
 <div id="toast"></div>
 
-<!-- ══ Embedded export data ══ -->
 <script>
 const EXPORT_DATA = {export_data_js};
 const REPORT_BASE = "{report_base}";
 </script>
 
 <script>
-/* ═══════════════════════════════════════════════
-   Matrix rain
-═══════════════════════════════════════════════ */
 (function(){{
     const c=document.getElementById('matrix-canvas'),ctx=c.getContext('2d');
     const CH='アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
@@ -2378,9 +2290,6 @@ const REPORT_BASE = "{report_base}";
     resize();window.addEventListener('resize',resize);setInterval(draw,45);
 }})();
 
-/* ═══════════════════════════════════════════════
-   Filter logic
-═══════════════════════════════════════════════ */
 const GROUP_CATS={{
   "doc":["documents","archives","backups"],
   "scripts":["scripts","configs","credentials"],
@@ -2483,9 +2392,6 @@ document.addEventListener('click',(e)=>{{
   if(!e.target.closest('#exportWrap'))closeExportPanel();
 }});
 
-/* ═══════════════════════════════════════════════
-   Export panel
-═══════════════════════════════════════════════ */
 function toggleExportPanel(){{
   const panel=document.getElementById('exportPanel');
   const toggle=document.getElementById('exportToggle');
@@ -2497,7 +2403,6 @@ function closeExportPanel(){{
   document.getElementById('exportPanel').classList.remove('open');
   document.getElementById('exportToggle').classList.remove('open');
 }}
-
 function updateExportCounts(){{
   const sqliAll  = EXPORT_DATA.filter(r=>['vuln','safe','critical'].includes(r.sqli));
   const sqliVuln = EXPORT_DATA.filter(r=>['vuln','critical'].includes(r.sqli));
@@ -2505,13 +2410,12 @@ function updateExportCounts(){{
   const viewRows = Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden)'));
   const viewIdxs = new Set(viewRows.map(r=>parseInt(r.dataset.idx)));
   const viewData = EXPORT_DATA.filter((_,i)=>viewIdxs.has(i));
-  const s=(id,n,label)=>{{const el=document.getElementById(id);if(el)el.textContent=`(${{n}})`;}}; 
+  const s=(id,n)=>{{const el=document.getElementById(id);if(el)el.textContent=`(${{n}})`;}}; 
   s('epCntSqliAll', sqliAll.length);
   s('epCntSqliVuln',sqliVuln.length);
   s('epCntSqliSafe',sqliSafe.length);
   s('epCntView',    viewData.length);
 }}
-
 function _getRows(scope){{
   if(scope==='all')       return EXPORT_DATA;
   if(scope==='sqli-all')  return EXPORT_DATA.filter(r=>['vuln','safe','critical'].includes(r.sqli));
@@ -2523,14 +2427,9 @@ function _getRows(scope){{
   }}
   return EXPORT_DATA;
 }}
-
 function _scopeLabel(scope){{
-  return {{
-    'all':'all','sqli-all':'sqli_tested','sqli-vuln':'sqli_vuln',
-    'sqli-safe':'sqli_safe','view':'view'
-  }}[scope]||scope;
+  return {{'all':'all','sqli-all':'sqli_tested','sqli-vuln':'sqli_vuln','sqli-safe':'sqli_safe','view':'view'}}[scope]||scope;
 }}
-
 function _download(content, filename, mime){{
   const blob=new Blob([content],{{type:mime}});
   const a=document.createElement('a');
@@ -2539,18 +2438,15 @@ function _download(content, filename, mime){{
   document.body.appendChild(a);a.click();
   setTimeout(()=>{{URL.revokeObjectURL(a.href);document.body.removeChild(a);}},100);
 }}
-
 function _showToast(msg){{
   const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2200);
 }}
-
 function doExport(fmt, scope){{
   const rows=_getRows(scope);
   if(!rows.length){{_showToast('No results to export for this filter.');return;}}
   const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
   const base=`${{REPORT_BASE}}_${{_scopeLabel(scope)}}_${{ts}}`;
-
   if(fmt==='txt'){{
     const lines=rows.map((r,i)=>{{
       let s=`${{i+1}}. ${{r.url}}\\n`;
@@ -2564,18 +2460,11 @@ function doExport(fmt, scope){{
     }});
     _download('DorkEye Export — '+scope.toUpperCase()+'\\nGenerated: '+ts+'\\nTotal: '+rows.length+'\\n\\n'+lines.join('\\n'), base+'.txt', 'text/plain');
     _showToast(`Exported ${{rows.length}} rows → ${{base}}.txt`);
-  }}
-
-  else if(fmt==='json'){{
-    const payload={{
-      meta:{{generated:ts,scope:scope,total:rows.length,report:REPORT_BASE}},
-      results:rows
-    }};
+  }} else if(fmt==='json'){{
+    const payload={{meta:{{generated:ts,scope:scope,total:rows.length,report:REPORT_BASE}},results:rows}};
     _download(JSON.stringify(payload,null,2), base+'.json', 'application/json');
     _showToast(`Exported ${{rows.length}} rows → ${{base}}.json`);
-  }}
-
-  else if(fmt==='csv'){{
+  }} else if(fmt==='csv'){{
     const headers=['url','title','dork','category','ext','sqli','conf','waf','timestamp'];
     const esc=v=>{{const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\\n')?'"'+s.replace(/"/g,'""')+'"':s;}};
     const csvLines=[headers.join(','),...rows.map(r=>headers.map(h=>esc(r[h]||'')).join(','))];
@@ -2583,10 +2472,6 @@ function doExport(fmt, scope){{
     _showToast(`Exported ${{rows.length}} rows → ${{base}}.csv`);
   }}
 }}
-
-/* ═══════════════════════════════════════════════
-   Init
-═══════════════════════════════════════════════ */
 buildSubBadges();updateInfoBar();updateExportCounts();
 </script>
 </body>
@@ -2673,8 +2558,6 @@ stealth_mode: false
 request_timeout: 10
 max_retries: 3
 user_agent_rotation: true
-
-# Extended delay triggers after this many total results collected.
 extended_delay_every_n_results: 100
 """
     with open("dorkeye_config.yaml", "w") as f:
@@ -3018,11 +2901,11 @@ def main():
     parser.add_argument("--sqli",            action="store_true", help="Enable SQL injection detection")
     parser.add_argument("--stealth",         action="store_true", help="Enable stealth mode (slower, safer)")
     parser.add_argument("--no-fingerprint",  action="store_true", help="Disable HTTP fingerprinting")
-    parser.add_argument("--templates",       type=str, help="Template file in Templates/ (--templates=filename.yaml or --templates=all)")
-    parser.add_argument("--dg",              action="append", nargs="?", const="all", help="Activate Dork Generator (optional: =category)")
+    parser.add_argument("--templates",       type=str, help="Template file in Templates/")
+    parser.add_argument("--dg",              action="append", nargs="?", const="all", help="Activate Dork Generator")
     parser.add_argument("--mode",            nargs="?", const="soft", default="soft", help="Generation mode: soft | medium | aggressive")
-    parser.add_argument("--blacklist",       nargs="+", help="Extensions to blacklist (e.g. .pdf .doc)")
-    parser.add_argument("--whitelist",       nargs="+", help="Extensions to whitelist (e.g. .pdf .xls)")
+    parser.add_argument("--blacklist",       nargs="+", help="Extensions to blacklist")
+    parser.add_argument("--whitelist",       nargs="+", help="Extensions to whitelist")
     parser.add_argument("--create-config",   action="store_true", help="Create sample configuration file")
 
     args = parser.parse_args()
@@ -3075,7 +2958,6 @@ def main():
     if args.blacklist:      config["blacklist"]            = args.blacklist
     if args.whitelist:      config["whitelist"]            = args.whitelist
 
-    # Default output: report_YYYYMMDD_HHMMSS.html when -o is not specified
     output_file = args.output
     if not output_file:
         output_file = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
@@ -3108,7 +2990,6 @@ def main():
         console.print("\n[red][!] Search interrupted by user![/red]")
 
     dorkeye.print_statistics()
-
     console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
 
 
