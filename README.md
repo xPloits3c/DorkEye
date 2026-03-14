@@ -6,7 +6,7 @@
 ---
 
 ```json
-"🦅 DorkEye | OSINT Dorking Tool"
+" 🦅 DorkEye | OSINT Dorking Tool "
 > I don't hack systems, i expose their secrets <
 ```
 
