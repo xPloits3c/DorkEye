@@ -106,7 +106,7 @@ It helps discover:
   cd DorkEye
 
 "Create environment:"
-python3 -m venv dorkeye_env
+  python3 -m venv dorkeye_env
 
 "Activate environment:"
   source dorkeye_env/bin/activate
