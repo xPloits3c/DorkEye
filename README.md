@@ -6,8 +6,8 @@
 ---
 
 ```json
-  "🦅 DorkEye | OSINT Dorking Tool"
-  > I don't hack systems, i expose their secrets <
+                                                 "🦅 DorkEye | OSINT Dorking Tool"
+                                          > I don't hack systems, i expose their secrets <
 ```
 
 <!-- ── Row 1: Project identity ── -->
