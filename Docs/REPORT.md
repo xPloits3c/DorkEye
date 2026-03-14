@@ -1,12 +1,12 @@
 # DorkEye — HTML Report Interface
 
-
-
 > **File:** `report_YYYYMMDD_HHMMSS.html` (generated automatically, or via `-o filename.html`)
 > **Engine:** self-contained single-file HTML — no external dependencies, no server required.
 > Open in any modern browser. All logic runs client-side.
 
 ---
+
+
 
 ## Table of Contents
 
