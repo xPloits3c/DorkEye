@@ -38,13 +38,6 @@
 
 ![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
-It helps discover:
-- Indexed directories  
-- Sensitive files  
-- Admin panels  
-- Databases & backups  
-- Misconfigurations and leaked credentials  
-
 ![image](https://github.com/user-attachments/assets/6609eed1-cb04-48b4-909a-802ec0055b96)
 
 ---
@@ -52,6 +45,7 @@ It helps discover:
 ## Why DorkEye
 
 - ✅ Bypass CAPTCHA and rate‑limiting
+- ✅ Advanced .html report interactive
 - ✅ Maintain anonymity and avoid IP blocking
 - ✅ Clean and unfiltered search results
 - ✅ Advanced analysis and automated SQLi testing
@@ -198,14 +192,6 @@ DorkEye/
 ## Example final Report:
 ![image](https://github.com/user-attachments/assets/20055807-2f9d-4979-b221-e0cfad32828a)
 
-## 🧩 Roadmap
-
-- Multi‑threaded search
-- Interactive TUI
-- Browser extension
-- Cloud integrations
-- API support
-- ML‑based dork optimization
 ---
 
 ## ⚠️  ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
