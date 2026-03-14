@@ -95,36 +95,27 @@ It helps discover:
 
 ---
 
-## 🚀 Features
-
-- 🔎 Smart single/multi‑dork execution
-- 🚫 Extension blacklist & whitelist
-- ⚡ Stealth mode & rate‑limit protection
-- 📈 Real‑time statistics
-- 🎨 Rich terminal UI
----
-
 ## 📦 Quick Install
 ```json
 "Update:"
-sudo apt update
-sudo apt install -y python3 python3-pip python3-venv git
+  sudo apt update
+  sudo apt install -y python3 python3-pip python3-venv git
 
 "Git Clone:"
-git clone https://github.com/xPloits3c/DorkEye.git
-cd DorkEye
+  git clone https://github.com/xPloits3c/DorkEye.git
+  cd DorkEye
 
 "Create environment:"
 python3 -m venv dorkeye_env
 
-"Activate environment"
-source dorkeye_env/bin/activate
+"Activate environment:"
+  source dorkeye_env/bin/activate
 
 "Install requirements:"
-pip install -r requirements.txt
+  pip install -r requirements.txt
 
 "Run DorkEye WIZARD MODE:"
-python dorkeye.py --wizard
+  python dorkeye.py --wizard
 ```
 ---
 ## Test
@@ -132,39 +123,39 @@ python dorkeye.py --wizard
 
 ```json
 "Help:"
-python dorkeye.py -h
+  python dorkeye.py -h
 
 "Deactivate environment:"
-deactivate
+  deactivate
 
 "Remove environment:"
-rm -rf dorkeye_env
+  rm -rf dorkeye_env
 ```
 ---
 
-## 🎯 Usage 
+## Usage 
 <img width="1247" height="928" alt="start0" src="https://github.com/user-attachments/assets/af8f2234-ec3a-4ae5-8150-7c3de1af2983" />
 
 
 🔹 # WIZARD Mode
 ```json
-python dorkeye.py --wizard
+  python dorkeye.py --wizard
 ```
 🔹 # Basic search
 ```json
-python3 dorkeye.py -d "inurl:admin" -o results.txt
+  python3 dorkeye.py -d "inurl:admin" -o results.txt
 ```
 🔹 # Dork Generator + Detection
 ```json
-python dorkeye.py --dg=sqli --mode=aggressive --sqli --stealth -o report.json
+  python dorkeye.py --dg=sqli --mode=aggressive --sqli --stealth -o report.json
 ```
 🔹 # SQLi + stealth
 ```json
-python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
+  python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
 ```
 🔹 # Fast scan
 ```json
-python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
+  python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
 
 <img width="962" height="933" alt="de_generator" src="https://github.com/user-attachments/assets/dd0805c7-cce5-45ff-87e6-c3c5344d82d6" />
