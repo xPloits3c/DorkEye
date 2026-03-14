@@ -5,7 +5,10 @@
 
 ---
 
-🦅 **DorkEye** `> I don't hack systems, i expose their secrets <`
+```json
+  "🦅 DorkEye | OSINT Dorking Tool"
+  > I don't hack systems, i expose their secrets <
+```
 
 <!-- ── Row 1: Project identity ── -->
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
@@ -102,25 +105,39 @@ It helps discover:
 ---
 
 ## 📦 Quick Install
-```bash
+```json
+"Update:"
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv git
+
+"Git Clone:"
 git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
+
+"Create environment:"
 python3 -m venv dorkeye_env
+
+"Activate environment"
 source dorkeye_env/bin/activate
+
+"Install requirements:"
 pip install -r requirements.txt
+
+"Run DorkEye WIZARD MODE:"
+python dorkeye.py --wizard
 ```
 ---
 ## Test
 <img width="1326" height="905" alt="usage" src="https://github.com/user-attachments/assets/7019313c-c29e-41f4-a61f-4ce498ee6811" />
 
-```bash
-# Help:
+```json
+"Help:"
 python dorkeye.py -h
-# Deactivate environment:
+
+"Deactivate environment:"
 deactivate
-# Remove environment:
+
+"Remove environment:"
 rm -rf dorkeye_env
 ```
 ---
@@ -130,23 +147,23 @@ rm -rf dorkeye_env
 
 
 🔹 # WIZARD Mode
-```bash
+```json
 python dorkeye.py --wizard
 ```
 🔹 # Basic search
-```bash
+```json
 python3 dorkeye.py -d "inurl:admin" -o results.txt
 ```
 🔹 # Dork Generator + Detection
-```bash
+```json
 python dorkeye.py --dg=sqli --mode=aggressive --sqli --stealth -o report.json
 ```
 🔹 # SQLi + stealth
-```bash
+```json
 python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
 ```
 🔹 # Fast scan
-```bash
+```json
 python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
 
