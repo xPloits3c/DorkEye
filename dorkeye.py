@@ -2107,6 +2107,10 @@ class DorkEyeEnhanced:
             box-shadow: 0 10px 40px rgba(0,120,200,0.25); min-width: 370px; }
         .rpanel.open { display: block; animation: fadeIn .15s ease; }
         @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+        .panel-close { position: absolute; top: 7px; right: 10px; background: transparent; border: none;
+            color: #004466; font-size: 14px; cursor: pointer; line-height: 1; padding: 2px 5px;
+            font-family: 'Courier New', monospace; transition: color .12s; z-index: 10; }
+        .panel-close:hover { color: #00aaff; }
         .ep-section { padding: 10px 16px; border-bottom: 1px solid rgba(0,100,180,0.2); }
         .ep-section:last-child { border-bottom: none; }
         .ep-title { font-size: 10px; color: #005588; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
@@ -2145,7 +2149,8 @@ class DorkEyeEnhanced:
         .scope-btn.active { background: rgba(0,122,204,0.3); border-color: #007acc; color: #00aaff; }
         .scope-btn:hover { border-color: #0099cc; color: #0099cc; }
         /* Files panel */
-        .files-panel { min-width: 420px; max-height: 520px; display: flex; flex-direction: column; }
+        .files-panel { min-width: 420px; max-height: 520px; flex-direction: column; }
+        .rpanel.open.files-panel { display: flex; }
         .files-hdr { padding: 10px 16px; border-bottom: 1px solid rgba(0,100,180,0.2); flex-shrink: 0; }
         .files-bulk { padding: 8px 16px; border-bottom: 1px solid rgba(0,100,180,0.2); flex-shrink: 0;
             display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -2162,21 +2167,35 @@ class DorkEyeEnhanced:
         .file-url:hover { color: #00aaff; }
         .file-cat { font-size: 9px; color: #004466; margin-top: 2px; letter-spacing: 1px; }
         .file-size { font-size: 10px; color: #005588; flex-shrink: 0; min-width: 55px; text-align: right; }
-        .file-dl { background: transparent; border: 1px solid #005588; color: #007acc; padding: 2px 7px;
-            font-family: 'Courier New', monospace; font-size: 10px; cursor: pointer; text-decoration: none;
-            letter-spacing: 1px; flex-shrink: 0; transition: all .12s; }
-        .file-dl:hover { background: #007acc; color: #000; border-color: #007acc; }
+        .file-dl { background: transparent; border: none; color: #005588; font-size: 14px;
+            cursor: pointer; text-decoration: none; flex-shrink: 0; transition: color .12s;
+            line-height: 1; padding: 0 2px; }
+        .file-dl:hover { color: #00aaff; }
         .files-empty { padding: 20px 16px; font-size: 11px; color: #004466; text-align: center; letter-spacing: 1px; }
         /* Table */
         .table-wrap { background: rgba(0,8,0,0.82); border: 1px solid #00aa2a; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        table { width: 100%; border-collapse: collapse; table-layout: auto; }
         col.c-num   { width: 36px; }
-        col.c-url   { width: auto; min-width: 200px; }
-        col.c-title { width: 170px; }
-        col.c-cat   { width: 105px; }
-        col.c-sqli  { width: 130px; }
-        col.c-waf   { width: 88px; }
-        col.c-size  { width: 66px; }
+        col.c-url   { min-width: 180px; }
+        col.c-title { min-width: 120px; width: 14%; }
+        col.c-cat   { min-width: 90px;  width: 9%; }
+        col.c-sqli  { min-width: 110px; width: 10%; }
+        col.c-waf   { min-width: 70px;  width: 7%; }
+        col.c-size  { min-width: 54px;  width: 6%; }
+        /* ── responsive breakpoints ── */
+        @media (max-width: 1100px) {
+            col.c-title { width: 130px; }
+            col.c-cat   { width: 95px; }
+            col.c-sqli  { width: 115px; }
+            col.c-waf   { width: 76px; }
+            col.c-size  { width: 58px; }
+        }
+        @media (max-width: 860px) {
+            col.c-title { display: none; }
+            col.c-waf   { display: none; }
+            td:nth-child(3), th:nth-child(3),
+            td:nth-child(6), th:nth-child(6) { display: none; }
+        }
         th { background: rgba(0,255,65,0.06); color: #00ff41; padding: 11px 10px; text-align: left;
             border-bottom: 1px solid #00aa2a; font-size: 11px; letter-spacing: 2px;
             text-transform: uppercase; white-space: nowrap; }
@@ -2204,10 +2223,10 @@ class DorkEyeEnhanced:
         .waf-label     { font-size: 10px; color: #ffaa00; border: 1px solid #ffaa00; padding: 1px 5px; letter-spacing: 1px; white-space: nowrap; }
         .url-cell { display: flex; align-items: center; gap: 6px; overflow: hidden; }
         .url-cell a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-        .dl-btn { flex-shrink: 0; background: transparent; border: 1px solid #0077bb; color: #00aaff;
-            padding: 2px 7px; font-size: 12px; cursor: pointer; text-decoration: none;
-            font-family: 'Courier New', monospace; transition: all .15s; }
-        .dl-btn:hover { background: #00aaff; color: #000; }
+        .dl-btn { flex-shrink: 0; background: transparent; border: none; color: #005588;
+            font-size: 15px; cursor: pointer; text-decoration: none; line-height: 1;
+            padding: 0; transition: color .12s; }
+        .dl-btn:hover { color: #00aaff; }
         /* Footer */
         .footer { margin-top: 28px; padding: 14px 0; border-top: 1px solid #002200;
             text-align: center; font-size: 11px; color: #004400; letter-spacing: 2px; }
@@ -2298,6 +2317,7 @@ class DorkEyeEnhanced:
         <div class="srch-wrap" id="srchWrap">
           <button class="rbt" id="srchToggle" onclick="toggleSearch()">&#128269; SEARCH</button>
           <div class="rpanel srch-panel" id="srchPanel">
+            <button class="panel-close" onclick="document.getElementById('srchPanel').classList.remove('open');document.getElementById('srchToggle').classList.remove('open')" title="Close">&#10005;</button>
             <div class="srch-inner">
               <div class="srch-title">&#9632; Search — Filter results by keyword</div>
               <div class="srch-input-wrap">
@@ -2320,6 +2340,7 @@ class DorkEyeEnhanced:
         <div class="export-wrap" id="exportWrap">
           <button class="rbt" id="exportToggle" onclick="toggleExportPanel()">&#11015; LINKS</button>
           <div class="rpanel" id="exportPanel">
+            <button class="panel-close" onclick="document.getElementById('exportPanel').classList.remove('open');document.getElementById('exportToggle').classList.remove('open')" title="Close">&#10005;</button>
             <div class="ep-section">
               <div class="ep-title">&#9632; Export Links — All results</div>
               <div class="ep-row">
@@ -2366,8 +2387,9 @@ class DorkEyeEnhanced:
         <div class="files-wrap" id="filesWrap">
           <button class="rbt" id="filesToggle" onclick="toggleFilesPanel()">&#128196; FILES</button>
           <div class="rpanel files-panel" id="filesPanel">
-            <div class="files-hdr">
+            <div class="files-hdr" style="position:relative">
               <div class="ep-title" style="margin-bottom:0">&#9632; Download Files — Accessible results</div>
+              <button class="panel-close" onclick="document.getElementById('filesPanel').classList.remove('open');document.getElementById('filesToggle').classList.remove('open')" title="Close">&#10005;</button>
             </div>
             <div class="files-bulk">
               <span class="bulk-lbl">Selected: <span id="selCount">0</span></span>
