@@ -89,7 +89,7 @@
 
 ---
 
-## 📦 Quick Install
+## Quick Install
 ```json
 "Update:"
   sudo apt update
@@ -113,7 +113,7 @@
 ```
 ---
 ## Test
-<img width="1326" height="905" alt="usage" src="https://github.com/user-attachments/assets/7019313c-c29e-41f4-a61f-4ce498ee6811" />
+<img width="1247" height="928" alt="start0" src="https://github.com/user-attachments/assets/af8f2234-ec3a-4ae5-8150-7c3de1af2983" />
 
 ```json
 "Help:"
@@ -128,8 +128,7 @@
 ---
 
 ## Usage 
-<img width="1247" height="928" alt="start0" src="https://github.com/user-attachments/assets/af8f2234-ec3a-4ae5-8150-7c3de1af2983" />
-
+<img width="1326" height="905" alt="usage" src="https://github.com/user-attachments/assets/7019313c-c29e-41f4-a61f-4ce498ee6811" />
 
 🔹 # WIZARD Mode
 ```json
