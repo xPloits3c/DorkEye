@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.6 | OSINT Dorking Tool
+DorkEye v4.7 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
@@ -36,6 +36,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from rich.table import Table
 from rich.panel import Panel
+from rich.markup import escape as _rich_escape
 from ddgs import DDGS
 import socket
 import getpass
@@ -122,7 +123,7 @@ def print_banner():
 
     INFO = (
         "[bold white]OSINT DORKING TOOL[/bold white]\n"
-        "[bold green]v4.6[/bold green]  [dim]stable[/dim]\n"
+        "[bold green]v4.7[/bold green]  [dim]stable[/dim]\n"
         "\n"
         "[dim]▸ Author[/dim]  [dim]│[/dim]  [cyan]xPloits3c I.C.W.T[/cyan]\n"
         "[dim]▸ GitHub[/dim]  [dim]│[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
@@ -195,7 +196,7 @@ def get_user_name() -> str:
 
 
 def greet_user():
-    name    = get_user_name()
+    name    = _rich_escape(get_user_name())
     message = random.choice(WELCOME_MESSAGES).format(name=name)
     color   = random.choice(WELCOME_COLORS)
     console.print(f"[bold {color}]{message}[/bold {color}]\n")
@@ -761,7 +762,11 @@ class SQLiDetector:
         if param_name not in params:
             return url
         params[param_name] = [payload]
-        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{urlencode(params, doseq=True)}"
+        new_query = urlencode(params, doseq=True)
+        rebuilt = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{new_query}"
+        if parsed.fragment:
+            rebuilt += f"#{parsed.fragment}"
+        return rebuilt
 
     def _get_baseline_response(self, url: str) -> Optional[Tuple[int, str, int]]:
         response = self._get(url)
@@ -825,6 +830,9 @@ class SQLiDetector:
             return False
 
         adaptive_threshold = noise_level + _PROBE_NOISE_BUFFER
+
+        if _exit_requested or _skip_current:
+            return False
 
         test_url  = self._inject_payload(url, param_name, "1'")
         r_payload = self._get(test_url)
@@ -950,7 +958,7 @@ class SQLiDetector:
                 len_diff = abs(len(body) - baseline_len)
                 if (response.status_code == 200
                         and len_diff > baseline_len * 0.20
-                        and n_cols in mismatch_at or mismatch_at):
+                        and (n_cols in mismatch_at or bool(mismatch_at))):
                     result["vulnerable"] = True
                     result["confidence"] = SQLiConfidence.MEDIUM.value
                     result["evidence"].append(
@@ -1164,9 +1172,10 @@ class SQLiDetector:
 
         baseline_status, baseline_content, baseline_len = baseline
 
-        baseline_resp_obj = self._get(url)
-        if baseline_resp_obj is not None:
-            waf_on_baseline = self._detect_waf(baseline_resp_obj)
+        # Second GET for WAF detection (baseline_content came from text, we need the Response obj)
+        _bl2 = self._get(url)
+        if _bl2 is not None:
+            waf_on_baseline = self._detect_waf(_bl2)
             if waf_on_baseline:
                 result["waf_detected"] = waf_on_baseline
                 result["message"] = (
@@ -1290,12 +1299,12 @@ class SQLiDetector:
             _data    = payload_dict
             _timeout = self._timeout()
 
-            def _do_post():
+            def _do_post(_d=_data, _h=_hdrs, _t=_timeout):
                 return self._session.post(
                     url,
-                    data    = _data,
-                    headers = _hdrs,
-                    timeout = _timeout,
+                    data    = _d,
+                    headers = _h,
+                    timeout = _t,
                     verify  = False,
                 )
 
@@ -1366,11 +1375,11 @@ class SQLiDetector:
             _json    = payload_dict
             _timeout = self._timeout()
 
-            def _do_json_post():
+            def _do_json_post(_j=_json, _t=_timeout):
                 return self._session.post(
                     url,
-                    json    = _json,
-                    timeout = _timeout,
+                    json    = _j,
+                    timeout = _t,
                     verify  = False,
                 )
 
@@ -1597,8 +1606,12 @@ class DorkEyeEnhanced:
 
     def process_dorks(self, dork_input: str) -> List[str]:
         if os.path.isfile(dork_input):
-            with open(dork_input, 'r', encoding='utf-8') as f:
-                return [line.strip() for line in f if line.strip() and not line.startswith('#')]
+            try:
+                with open(dork_input, 'r', encoding='utf-8') as f:
+                    return [line.strip() for line in f if line.strip() and not line.startswith('#')]
+            except Exception as e:
+                console.print(f"[red][!] Could not read dork file '{dork_input}': {e}[/red]")
+                return []
         return [dork_input]
 
     def _compute_base_delay(self, results_found: int, stealth: bool) -> float:
@@ -1626,7 +1639,7 @@ class DorkEyeEnhanced:
             f"  [dim]{_ts}[/dim]"
             f"  [dim]Ctrl+C → skip  │  ×2 → quit[/dim]"
         )
-        console.print(f"[bold green][*] Searching dork:[/bold green] {dork}")
+        console.print(f"[bold green][*] Searching dork:[/bold green] {_rich_escape(dork)}")
 
         _skip_current = False
 
@@ -1746,14 +1759,14 @@ class DorkEyeEnhanced:
     def analyze_results(self, results: List[Dict]) -> List[Dict]:
         global _skip_current, _exit_requested
 
-        if not self.config.get("analyze_files", False) and not self.config.get("sqli_detection", False):
+        if not self.config.get("analyze_files", True) and not self.config.get("sqli_detection", False):
             return results
         console.print("\n[bold yellow][*] Analyzing results...[/bold yellow]")
         files_to_analyze  = [r for r in results if r["category"] != "webpage"]
         urls_to_test_sqli = [r for r in results if self.config.get("sqli_detection", False)]
 
         with Progress(console=console) as progress:
-            if self.config.get("analyze_files", False) and files_to_analyze:
+            if self.config.get("analyze_files", True) and files_to_analyze:
                 task1 = progress.add_task("[cyan]Analyzing [yellow]files[cyan]...", total=len(files_to_analyze))
                 for result in files_to_analyze:
                     if _exit_requested or _skip_current:
@@ -1788,7 +1801,7 @@ class DorkEyeEnhanced:
                     if sqli_result.get("waf_detected"):
                         console.print(
                             f"[yellow][~] WAF detected "
-                            f"({sqli_result['waf_detected']}): {result['url']}[/yellow]"
+                            f"({sqli_result['waf_detected']}): {_rich_escape(result['url'])}[/yellow]"
                         )
                         self.stats["waf_detected"] += 1
 
@@ -1801,7 +1814,7 @@ class DorkEyeEnhanced:
                         )
                         console.print(
                             f"{style}[!] Potential SQLi found "
-                            f"({confidence}): {result['url']}[/{style[1:]}"
+                            f"({confidence}): {_rich_escape(result['url'])}[/{style[1:]}"
                         )
                     progress.advance(task2)
                     if self.config.get("stealth_mode", False):
@@ -1841,7 +1854,7 @@ class DorkEyeEnhanced:
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
                 break
 
-            if self.config.get("analyze_files", False) or self.config.get("sqli_detection", False):
+            if self.config.get("analyze_files", True) or self.config.get("sqli_detection", False):
                 results = self.analyze_results(results)
 
             self.results.extend(results)
@@ -1909,12 +1922,18 @@ class DorkEyeEnhanced:
         if not ext:
             filename += ".json"
             ext       = ".json"
-        if   ext == ".csv":  self._save_csv(filename)
-        elif ext == ".json": self._save_json(filename)
-        elif ext == ".html": self._save_html(filename)
-        elif ext == ".txt":  self._save_txt(filename)
-        else:
-            console.print(f"[red][!] Unsupported output format: {ext}[/red]")
+        try:
+            if   ext == ".csv":  self._save_csv(filename)
+            elif ext == ".json": self._save_json(filename)
+            elif ext == ".html": self._save_html(filename)
+            elif ext == ".txt":  self._save_txt(filename)
+            else:
+                console.print(f"[red][!] Unsupported output format: {ext}[/red]")
+        except Exception as _save_err:
+            import traceback as _tb
+            console.print(f"[red][!] Error saving results to {filename}[/red]")
+            console.print(f"[red]    {_save_err}[/red]")
+            console.print(f"[dim]{_tb.format_exc()}[/dim]")
 
     def _save_csv(self, filename: str):
         if not self.results:
@@ -1988,6 +2007,7 @@ class DorkEyeEnhanced:
             elif cat == "webpage":                             cnt["page"]    += 1
 
         import json as _json
+        import html as _html_mod
 
         # ── Link export rows ──────────────────────────────────────────────
         export_rows = []
@@ -2411,10 +2431,10 @@ class DorkEyeEnhanced:
                 status_color  = "#00aa44" if is_accessible else "#663333"
                 status_code   = fr.get("status_code", "?")
                 url_raw       = fr.get("url", "")
-                url_esc       = url_raw.replace('"', '&quot;')
-                url_short     = url_raw[:62] + ("..." if len(url_raw) > 62 else "")
+                url_esc       = _html_mod.escape(url_raw, quote=True)
+                url_short     = _html_mod.escape(url_raw[:62] + ("..." if len(url_raw) > 62 else ""), quote=False)
                 cat_str       = fr.get("category", "").upper()
-                ext_str       = fr.get("extension", "")
+                ext_str       = fr.get("ext", "")
                 parts.append(f"""              <div class="file-row"{opacity_style}>
                 <input class="file-chk" type="checkbox" data-fidx="{idx_f}" onchange="updateSelCount()">
                 <span style="font-size:9px;color:{status_color};flex-shrink:0" title="HTTP {status_code}">{status_icon}</span>
@@ -2455,11 +2475,11 @@ class DorkEyeEnhanced:
             category    = result.get('category', 'unknown')
             ext         = result.get('extension', '').lower()
             url         = result['url']
-            url_display = url[:70] + ('...' if len(url) > 70 else '')
+            url_display = _html_mod.escape(url[:70] + ('...' if len(url) > 70 else ''), quote=False)
             title_disp  = (result.get('title', 'N/A') or 'N/A')[:40]
-            dork_val    = result.get('dork', '').replace('"', '&quot;')
-            url_esc_td  = url.replace('"', '&quot;')
-            title_esc   = title_disp.replace('"', '&quot;')
+            dork_val    = _html_mod.escape(result.get('dork', '') or '', quote=True)
+            url_esc_td  = _html_mod.escape(url, quote=True)
+            title_esc   = _html_mod.escape(title_disp, quote=True)
 
             sqli_status = "N/A"
             sqli_class  = "sqli-untested"
@@ -2486,13 +2506,13 @@ class DorkEyeEnhanced:
 
                 waf = result["sqli_test"].get("waf_detected", "")
                 if waf:
-                    waf_label = f'<span class="waf-label">{waf}</span>'
+                    waf_label = f'<span class="waf-label">{_html_mod.escape(waf)}</span>'
 
             parts.append(f"""            <tr data-category="{category}" data-ext="{ext}" data-sqli="{sqli_data}" data-conf="{sqli_conf}"
                 data-idx="{idx-1}" data-url="{url_esc_td}" data-title="{title_esc}" data-dork="{dork_val}">
                 <td style="color:#444">{idx}</td>
                 <td><div class="url-cell"><a href="{url_esc_td}" target="_blank" title="{url_esc_td}">{url_display}</a><a class="dl-btn" href="{url_esc_td}" download>&#8681;</a></div></td>
-                <td title="{title_esc}">{title_disp}</td>
+                <td title="{title_esc}">{_html_mod.escape(title_disp)}</td>
                 <td><span class="category category-{category}">{category}</span></td>
                 <td class="{sqli_class}">{sqli_status}</td>
                 <td>{waf_label}</td>
@@ -2503,7 +2523,7 @@ class DorkEyeEnhanced:
         parts.append(f"""        </tbody>
     </table>
     </div>
-    <div class="footer">DorkEye v4.6 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+    <div class="footer">DorkEye v4.7 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
 </div>
 
 <div id="toast"></div>
@@ -2512,7 +2532,6 @@ class DorkEyeEnhanced:
 const EXPORT_DATA = {export_data_js};
 const FILE_DATA   = {file_data_js};
 const REPORT_BASE = "{report_base}";
-const TOTAL_COUNT = {len(self.results)};
 </script>
 
 <script>
@@ -2789,7 +2808,12 @@ buildSubBadges();updateInfoBar();updateExportCounts();updateSelCount();
     def _format_size(self, size):
         if size is None:
             return "N/A"
-        size = float(size)
+        try:
+            size = float(size)
+        except (TypeError, ValueError):
+            return "N/A"
+        if size < 0:
+            return "N/A"
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size < 1024:
                 return f"{size:.1f} {unit}"
@@ -3178,7 +3202,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.6 | OSINT Dorking Tool",
+        description="DorkEye v4.7 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
 
@@ -3222,11 +3246,13 @@ def main():
             console.print("[red][!] Use --templates=filename.yaml format (no spaces)[/red]")
             sys.exit(1)
 
-    template_files_for_validation = resolve_templates_argument(args.templates)
-    VALID_CATEGORIES = get_categories_from_templates(template_files_for_validation)
+    VALID_CATEGORIES: List[str] = []
+    if args.dg or args.templates:
+        template_files_for_validation = resolve_templates_argument(args.templates)
+        VALID_CATEGORIES = get_categories_from_templates(template_files_for_validation)
 
-    if not VALID_CATEGORIES:
-        parser.error("No categories found in template files.")
+        if not VALID_CATEGORIES and args.dg:
+            parser.error("No categories found in template files.")
 
     selected_categories = None
     if args.dg:
@@ -3297,7 +3323,10 @@ def main():
         console.print("\n[red][!] Search interrupted by user![/red]")
 
     dorkeye.print_statistics()
-    console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
+    if dorkeye.output_file:
+        console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
+    else:
+        console.print(f"\n[dim][~] No output file specified — results not saved to disk.[/dim]")
 
 
 if __name__ == "__main__":
