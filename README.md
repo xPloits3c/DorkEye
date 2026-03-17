@@ -38,8 +38,6 @@
 
 ![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
-![image](https://github.com/user-attachments/assets/6609eed1-cb04-48b4-909a-802ec0055b96)
-
 ---
 
 ## Why DorkEye
@@ -50,6 +48,9 @@
 - ✅ Clean and unfiltered search results
 - ✅ Advanced analysis and automated SQLi testing
 - ✅ Continue Dorking for hours, DorkEye won’t get banned.
+
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/37385827-9112-4efe-aa0a-f8941da0a2d9" />
+
 ---
 
 ## What’s New 🥇
