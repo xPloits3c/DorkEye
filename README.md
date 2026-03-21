@@ -29,7 +29,11 @@
 ---
 
 ## What is DorkEye
-**DorkEye** is an advanced and automated python script for Google Dorking to identify exposed web resources using Open Source Intelligence techniques.
+**DorkEye** is an advanced automated dorking and OSINT recon tool that leverages DuckDuckGo to discover exposed web resources through intelligent search queries.
+- It combines a powerful dork generator, a full SQL injection detection engine, a 10-step autonomous analysis pipeline, and an adaptive recursive crawler — all without requiring any external AI or cloud services.
+
+- It can identify indexed directories, sensitive files, admin panels, databases, backups, configuration files, credentials, PII data, subdomains, and technology fingerprints — efficiently and with stealth controls.
+
 ## Documents:
 
 [![INSTALL GUIDE](https://img.shields.io/badge/FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
@@ -55,38 +59,24 @@
 
 ## What’s New 🥇
 
-### WIZARD
-- Interactive menu 
-
-### DORK GENERATOR
-- Generates structured Google dorks using a modular YAML template engine.
-
-### Automated SQL Injection Testing
-- Error‑based SQLi  
-- Boolean‑based blind SQLi  
-- Time‑based blind SQLi  
-- Vulnerability confidence scoring  
-
-### Advanced Analysis
-- File metadata inspection (size, type, accessibility)
-- Intelligent deduplication
-- YAML / JSON configuration support
-
-### Stealth & Fingerprinting
-- Realistic browser fingerprint rotation
-- Dynamic delays to evade rate limits
-
-### 📊 File Categorization
-- 📄 Documents: `.pdf .doc .xls`
-- 📦 Archives: `.zip .rar .7z`
-- 🗄️ Databases: `.sql .sqlite`
-- 💾 Backups: `.bak .old`
-- ⚙️ Configs: `.conf .ini .yaml`
-- 📜 Scripts: `.php .jsp`
-- 🔑 Credentials: `.env .git`
-
-### 💾 Export Formats available
--    `.csv .json .txt .html`
+| Feature | Details |
+|---------|---------|
+| 🧙 Wizard | [Interactive guided session — all options, no CLI knowledge needed](Docs/wizard.md) |
+| ⚙️ Dork Generator | [YAML template engine with `soft` / `medium` / `aggressive` modes](Docs/dork_generator.md) |
+| 🎯 Direct SQLi Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
+| 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
+| 🔒 SQL Injection Engine | [4 methods: error-based, UNION, boolean blind, time-based — verbose output](Docs/sqli.md) |
+| 🤖 Agents v3.0 Pipeline | [10-step autonomous analysis — no external AI required](Docs/agents.md) |
+| 🛡️ HeaderIntelAgent | [Detects info leaks, missing security headers, outdated server versions](Docs/agents.md#headerintelagent) |
+| 🧬 TechFingerprintAgent | [35 technologies detected with version extraction, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
+| 📧 EmailHarvesterAgent | [Collects and categorizes emails: admin / security / info / noreply / personal](Docs/agents.md#emailharvesteragent) |
+| 🔐 PiiDetectorAgent | [Phone, IBAN, fiscal code, credit card (Luhn-validated), SSN, DOB](Docs/agents.md#piidetectoragent) |
+| 🌐 SubdomainHarvesterAgent | [Extracts subdomains and generates `site:sub.domain` follow-up dorks](Docs/agents.md#subdomainharvesteragent) |
+| 🔄 Adaptive Crawl | [Recursive multi-round dorking that refines itself automatically](Docs/crawler.md) |
+| 🔑 HTTP Fingerprinting | [22 browser/OS profiles — Chrome, Firefox, Safari, Edge, mobile](Docs/fingerprinting.md) |
+| 📊 Output Formats | [HTML interactive report, JSON, CSV, TXT — all saved to `Dump/`](Docs/output_formats.md) |
+| 🗂️ File Categories | [7 auto-detected categories with whitelist / blacklist filtering](Docs/file_categories.md) |
+| 🖥️ Full CLI Reference | [All 26 flags and every possible combination](Docs/cli.md) |
 
 ---
 
