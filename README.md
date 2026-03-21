@@ -15,6 +15,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
 ![Search](https://img.shields.io/badge/Search-DuckDuckGo-FF6600?style=flat-square&logo=duckduckgo&logoColor=white)
+![Version](https://img.shields.io/badge/Version-4.8-brightgreen?style=flat-square)
 
 <!-- ── Row 2: Live stats ── -->
 ![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=blue)
@@ -91,7 +92,7 @@
   cd DorkEye
 
 "Create environment:"
-  python3 -m venv dorkeye_env
+  python -m venv dorkeye_env
 
 "Activate environment:"
   source dorkeye_env/bin/activate
@@ -127,7 +128,7 @@
 ```
 🔹 # Basic search
 ```json
-  python3 dorkeye.py -d "inurl:admin" -o results.txt
+  python dorkeye.py -d "inurl:admin" -o results.txt
 ```
 🔹 # Dork Generator + Detection
 ```json
@@ -135,11 +136,19 @@
 ```
 🔹 # SQLi + stealth
 ```json
-  python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
+  python dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
 ```
 🔹 # Fast scan
 ```json
-  python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
+  python dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
+```
+🔹 # Direct SQLi test on a URL
+  ```json
+python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o result.json
+```
+🔹 # Re-process a saved result file
+```json
+  python dorkeye.py -f Dump/results.json --sqli --analyze -o retest.html
 ```
 
 <img width="962" height="933" alt="de_generator" src="https://github.com/user-attachments/assets/dd0805c7-cce5-45ff-87e6-c3c5344d82d6" />
@@ -149,8 +158,11 @@
 ## 📁 Project Structure
 ```
 DorkEye/
-│ ├── dorkeye.py
-│ ├── dork_generator.py
+│ ├── dorkeye.py          ← DorkEye Engine
+│ ├── dork_generator.py          ← Dork Generator Queries
+│ ├── dorkeye_agents.py          ← Agents v3.0 pipeline
+│ ├── dorkeye_patterns.py        ← pattern library condivisa
+│ ├── dorkeye_analyze.py         ← standalone analysis CLI
 │ ├── requirements.txt
 │ ├── http_fingerprints.json
 │ ├── INSTALL.md
@@ -173,6 +185,19 @@ DorkEye/
 │    ├── *.json
 │    ├── *.txt
 │    └── *.html
+│ /Docs/
+│    ├── cli.md
+│    ├── wizard.md
+│    ├── sqli.md
+│    ├── agents.md
+│    ├── crawler.md
+│    ├── fingerprinting.md
+│    ├── output_formats.md
+│    ├── file_categories.md
+│    ├── INSTALL.md
+│    ├── REPORT_HTML.md
+│    ├── USAGE.md
+│    └── DDGSEE.md
 ```
 ---
 
