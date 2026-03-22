@@ -1,4 +1,6 @@
 """
+DorkEye Patterns v1.0
+======================
 dorkeye_patterns.py — Shared pattern library for DorkEye
 ===============================================================
 Centralises patterns, constants and helpers that were duplicated between
