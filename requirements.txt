@@ -15,4 +15,5 @@ PyYAML>=6.0.2,<7.0.0
 rich>=13.7.0,<14.0.0
 
 # DuckDuckGo Search API integration
+# Pinned to v4.x — stable API, avoids breaking changes introduced in v5.x
 ddgs>=4.0.0,<5.0.0
