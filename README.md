@@ -40,6 +40,7 @@
 | Install | [`GUIDE`](Docs/INSTALL.md) |
 | DorkGen | [`GUIDE`](Docs/dork_generator.md) |
 | Full | [`USAGE`](Docs/USAGE.md)
+
 ![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
 ---
