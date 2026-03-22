@@ -138,8 +138,8 @@ def print_banner():
     SYRINGE = (
         "[bold yellow] ___[/bold yellow]\n"
         "[bold yellow]__H__[/bold yellow]\n"
-        "[bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]\n"
-        "[bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]\n"
+        "[bold yellow] [[/bold yellow][bold red]d[/bold red][bold yellow]][/bold yellow]\n"
+        "[bold yellow] [[/bold yellow][bold red]e[/bold red][bold yellow]][/bold yellow]\n"
         "[bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow]\n"
         "[bold yellow] |_|[/bold yellow]\n"
         "[bold yellow]  V[/bold yellow]"
