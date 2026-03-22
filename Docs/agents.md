@@ -1,4 +1,5 @@
-# Agents v3.0 — DorkEye v4.8
+# Agents v3.1
+# DorkEye Project
 
 The Agents pipeline runs automatically after a dork search when `--analyze` is active (or when the output file is `.json`). It requires no external AI — every step uses regex, heuristics, and structural analysis only.
 
