@@ -35,12 +35,11 @@
 
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, configuration files, credentials, PII data, subdomains, and technology fingerprints — efficiently and with stealth controls.
 
-## Documents:
-
-[![INSTALL GUIDE](https://img.shields.io/badge/FULL-INSTALL%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/INSTALL.md)
-[![USAGE](https://img.shields.io/badge/FULL-USAGE%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/USAGE.md)
-[![DORKS_GENERATOR](https://img.shields.io/badge/Dork-Generator%20GUIDE-blue?style=for-the-badge)](https://xploits3c.github.io/DorkEye/Docs/DORK_GENERATOR.md)
-
+| Docs | READ |
+|---------|---------|
+| Install | [`GUIDE`](Docs/INSTALL.md) |
+| DorkGen | [`GUIDE`](Docs/dork_generator.md) |
+| Full | [`USAGE`](Docs/USAGE.md)
 ![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
 ---
