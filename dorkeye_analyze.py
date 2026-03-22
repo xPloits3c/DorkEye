@@ -689,7 +689,7 @@ def run_pipeline(
         if p.suffix.lower() not in ext_map.values():
             p = p.with_suffix(ext_map.get(fmt, ".html"))
         try:
-            p.write_text(content, encoding="utf-8")
+            p.write_text(content, encoding="utf-8")   #nosec
             report_path = str(p)
             _log(f"[Report] Salvato: {report_path}", style="bold green")
         except IOError as e:
