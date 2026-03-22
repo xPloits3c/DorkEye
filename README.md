@@ -54,7 +54,7 @@
 - ✅ Advanced analysis and automated SQLi testing
 - ✅ Continue Dorking for hours, DorkEye won’t get banned.
 
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/37385827-9112-4efe-aa0a-f8941da0a2d9" />
+<img width="1437" height="652" alt="564558417-37385827-9112-4efe-aa0a-f8941da0a2d9" src="https://github.com/user-attachments/assets/df21ead3-dd90-4692-9eab-259c6582ae86" />
 
 ---
 
@@ -120,7 +120,9 @@
 ---
 
 ## Usage 
-<img width="1326" height="905" alt="usage" src="https://github.com/user-attachments/assets/7019313c-c29e-41f4-a61f-4ce498ee6811" />
+<img width="1322" height="967" alt="h1" src="https://github.com/user-attachments/assets/6f5be8c5-4a71-4187-988d-6eb301789a1c" />
+<img width="852" height="626" alt="examples" src="https://github.com/user-attachments/assets/ee40a6b9-949d-4a2d-a97f-209a194e7214" />
+
 
 🔹 # WIZARD Mode
 ```json
@@ -202,10 +204,14 @@ DorkEye/
 ---
 
 ## Example HTML Report:
-![de_html_report](https://github.com/user-attachments/assets/20259bb0-6ec4-4186-83df-78b0ac51db23)
+<img width="1682" height="847" alt="report" src="https://github.com/user-attachments/assets/b35069a4-b457-4cd4-8158-84caddf9b658" />
+
 
 ## Example final Report:
 ![image](https://github.com/user-attachments/assets/20055807-2f9d-4979-b221-e0cfad32828a)
+
+## Example USAGE:
+<img width="852" height="626" alt="examples" src="https://github.com/user-attachments/assets/27525c33-db4d-43c1-a53d-2410f5f3e190" />
 
 ---
 
