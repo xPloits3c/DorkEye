@@ -1,20 +1,20 @@
 """
 dorkeye_patterns.py — Shared pattern library for DorkEye v4.8+
 ===============================================================
-Centralizza pattern, costanti e helper che erano duplicati tra
-dorkeye_agents.py e dorkeye_analyze.py:
+Centralizes patterns, constants and helpers that were duplicated between
+dorkeye_agents.py and dorkeye_analyze.py:
 
-  - TRIAGE_RULES       — scoring regex per classificazione priorità OSINT
-  - SECRET_RULES       — pattern di rilevamento credenziali/secrets (+ hash)
-  - SECRET_SEVERITY    — mappa tipo → severity (CRITICAL/HIGH/MEDIUM/LOW)
-  - PII_RULES          — pattern PII (email, phone, IBAN, CF, CC, SSN, DOB)
-  - SCORE_TO_LABEL     — soglie score → label (CRITICAL/HIGH/MEDIUM/LOW/SKIP)
-  - FETCH_UA           — User-Agent condiviso per il fetch pagine
-  - FETCH_UA_POOL      — pool UA per rotazione
-  - SKIP_EXTENSIONS    — estensioni binarie da non scaricare
-  - label_from_score() — funzione di conversione score → label
-  - censor()           — mascheratura parziale valori sensibili
-  - luhn_check()       — validazione numero carta di credito (Luhn)
+  - TRIAGE_RULES       — scoring regex for OSINT priority classification
+  - SECRET_RULES       — credential/secret detection patterns (+ hashes)
+  - SECRET_SEVERITY    — type → severity map (CRITICAL/HIGH/MEDIUM/LOW)
+  - PII_RULES          — PII patterns (email, phone, IBAN, CF, CC, SSN, DOB)
+  - SCORE_TO_LABEL     — score thresholds → label (CRITICAL/HIGH/MEDIUM/LOW/SKIP)
+  - FETCH_UA           — shared User-Agent for page fetching
+  - FETCH_UA_POOL      — UA pool for rotation
+  - SKIP_EXTENSIONS    — binary extensions to skip during fetch
+  - label_from_score() — score → label conversion function
+  - censor()           — partial masking of sensitive values
+  - luhn_check()       — credit card number validation (Luhn algorithm)
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ SCORE_TO_LABEL: List[Tuple[int, str]] = [
 
 
 def label_from_score(score: int) -> str:
-    """Converte uno score 0-100 nell'etichetta di priorità corrispondente."""
+    """Converts a score 0-100 into the corresponding priority label."""
     for threshold, lbl in SCORE_TO_LABEL:
         if score >= threshold:
             return lbl
@@ -51,13 +51,13 @@ def label_from_score(score: int) -> str:
 #  FETCH CONSTANTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-# User-Agent condiviso per il download delle pagine.
+# Shared User-Agent for page downloads.
 FETCH_UA: str = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 
-# Pool di UA per la rotazione (PageFetchAgent+)
+# UA pool for rotation (PageFetchAgent+)
 FETCH_UA_POOL: list = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -66,8 +66,8 @@ FETCH_UA_POOL: list = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
 ]
 
-# Estensioni binarie/non-testo: queste URL vengono skippate durante il fetch.
-# Versione unificata: superset delle due liste precedenti.
+# Binary/non-text extensions: these URLs are skipped during fetch.
+# Unified version: superset of the two previous lists.
 SKIP_EXTENSIONS: frozenset = frozenset({
     ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
     ".odt", ".ods",
@@ -83,10 +83,10 @@ SKIP_EXTENSIONS: frozenset = frozenset({
 # ══════════════════════════════════════════════════════════════════════════════
 
 def censor(value: str, show: int = 4) -> str:
-    """Censura parzialmente un valore sensibile lasciando visibili 'show' caratteri
-    all'inizio e alla fine.
+    """Partially masks a sensitive value leaving 'show' characters
+    visible at the start and end.
 
-    Esempi:
+    Examples:
         censor("sk-abc123xyz456")  → "sk-a…x456"
         censor("ab12")             → "****"
     """
@@ -99,9 +99,9 @@ def censor(value: str, show: int = 4) -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 #  TRIAGE PATTERNS
 # ══════════════════════════════════════════════════════════════════════════════
-# Ogni entry: (pattern, score_bonus, descrizione)
-# Fonte autorevole: dorkeye_analyze.py (19 regole vs 12 di agents.py).
-# I punteggi sono stati allineati alla versione analyze.py.
+# Each entry: (pattern, score_bonus, description)
+# Authoritative source: dorkeye_analyze.py (19 rules vs 12 in agents.py).
+# Scores have been aligned to the analyze.py version.
 
 TRIAGE_RULES: List[Tuple[re.Pattern, int, str]] = [
     (re.compile(r"\.(env|git|svn|htpasswd|bak|backup|sql|db|sqlite|dump)(\b|$)", re.I), 38, "config/backup exposed"),
@@ -124,7 +124,7 @@ TRIAGE_RULES: List[Tuple[re.Pattern, int, str]] = [
     (re.compile(r"phpinfo|server-status|server-info",                             re.I), 20, "server info exposed"),
     (re.compile(r"swagger|openapi|api-docs|redoc",                                re.I), 16, "api docs exposed"),
     (re.compile(r"login|signin|logon",                                            re.I),  8, "login page"),
-    # nuove regole v4.8
+    # new rules v4.8
     (re.compile(r"jenkins|gitlab|github|bitbucket|sonarqube",                    re.I), 18, "devops panel"),
     (re.compile(r"kibana|grafana|prometheus|splunk|elasticsearch",                re.I), 22, "monitoring/log panel"),
     (re.compile(r"docker|kubernetes|k8s|helm|rancher",                            re.I), 16, "container infra"),
@@ -139,10 +139,10 @@ TRIAGE_RULES: List[Tuple[re.Pattern, int, str]] = [
 # ══════════════════════════════════════════════════════════════════════════════
 #  SECRET PATTERNS
 # ══════════════════════════════════════════════════════════════════════════════
-# Fonte autorevole: dorkeye_analyze.py (42 regole vs 18 di agents.py).
-# Ogni entry: (category, compiled_pattern, description, has_capture_group)
-# has_capture_group=True  → usare match.group(1) per il valore
-# has_capture_group=False → usare match.group(0) per il valore
+# Authoritative source: dorkeye_analyze.py (42 rules vs 18 in agents.py).
+# Each entry: (category, compiled_pattern, description, has_capture_group)
+# has_capture_group=True  → use match.group(1) for the value
+# has_capture_group=False → use match.group(0) for the value
 
 SECRET_RULES: List[SecretRule] = [
     # ── API Keys ──────────────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ SECRET_RULES: List[SecretRule] = [
     ("HASH_SHA512", re.compile(r"\b([a-fA-F0-9]{128})\b"),                                                        "SHA-512 hash",          False),
     ("HASH_NTLM",   re.compile(r"\b([a-fA-F0-9]{32}):[a-fA-F0-9]{32}\b"),                                        "NTLM hash pair",        False),
 
-    # ── Cloud / SaaS aggiuntivi (v4.8) ───────────────────────────────────────
+    # ── Additional Cloud / SaaS (v4.8) ───────────────────────────────────────
     ("TWILIO_KEY",  re.compile(r"SK[a-zA-Z0-9]{32}"),                                                             "Twilio API Key",        False),
     ("SENDGRID",    re.compile(r"SG\.[a-zA-Z0-9\-_]{22}\.[a-zA-Z0-9\-_]{43}"),                                   "SendGrid API Key",      False),
     ("MAILGUN",     re.compile(r"key-[a-zA-Z0-9]{32}"),                                                           "Mailgun API Key",       False),
@@ -310,7 +310,7 @@ PII_RULES: List[PiiRule] = [
 # ══════════════════════════════════════════════════════════════════════════════
 
 def luhn_check(number: str) -> bool:
-    """Valida un numero di carta di credito con l'algoritmo di Luhn."""
+    """Validates a credit card number using the Luhn algorithm."""
     import re as _re
     digits = [int(d) for d in _re.sub(r"\D", "", number)]
     if len(digits) < 13:

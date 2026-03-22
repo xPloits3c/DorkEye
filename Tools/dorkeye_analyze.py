@@ -2,26 +2,26 @@
 """
 DorkEye Analyzer v1.0
 ======================
-Analisi post-ricerca completamente autonoma — zero AI, zero Ollama.
+Fully autonomous post-search analysis — zero AI, zero Ollama.
 
-Funziona con solo Python + requests + rich (gia' in requirements.txt).
-Legge i risultati salvati da DorkEye (-o results.json) e produce:
+Works with Python + requests + rich only (already in requirements.txt).
+Reads results saved by DorkEye (-o results.json) and produces:
 
-  1. Triage    — classifica ogni risultato con score 0-100 (puro regex)
-  2. Fetch     — scarica il contenuto reale delle pagine prioritarie
-  3. Secrets   — scansione credenziali e dati sensibili (40+ pattern regex)
-  4. Report    — HTML con dark theme / Markdown / JSON / testo
+  1. Triage    — classifies each result with score 0-100 (pure regex)
+  2. Fetch     — downloads the real content of priority pages
+  3. Secrets   — scans for credentials and sensitive data (40+ regex patterns)
+  4. Report    — HTML with dark theme / Markdown / JSON / text
 
-Uso diretto su file:
+Direct file usage:
     python dorkeye_analyze.py Dump/results.json
     python dorkeye_analyze.py Dump/results.json --fetch --fmt=html --out=report.html
     python dorkeye_analyze.py Dump/results.json --fetch --fetch-max=30 --fmt=md
 
-Integrato in dorkeye.py con --analyze-local:
+Integrated in dorkeye.py with --analyze-local:
     python dorkeye.py --dg=all -o results.html --analyze-local
     python dorkeye.py -d dorks.txt --analyze-local --analyze-local-fetch --analyze-local-fmt=html
 
-Autore: DorkEye Project
+Author: DorkEye Project
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ import urllib3
 import requests
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ── Rich (opzionale ma gia' presente in requirements.txt) ────────────────────
+# ── Rich (optional but already present in requirements.txt) ──────────────────
 try:
     from rich.console  import Console
     from rich.panel    import Panel
@@ -95,11 +95,11 @@ def _censor(value: str, show: int = 4) -> str:
 
 
 class _ScriptStyleStripper(_HTMLParser):
-    """HTMLParser che rimuove blocchi <script> e <style> in modo sicuro.
+    """HTMLParser that safely removes <script> and <style> blocks.
 
-    Sostituisce la regex bypassabile (CWE-20/116) con il parser built-in
-    che gestisce correttamente tutte le varianti sintattiche valide del
-    tag di chiusura (es. </script  >, </SCRIPT\\n>, ecc.).
+    Replaces the bypassable regex (CWE-20/116) with the built-in parser
+    that correctly handles all syntactically valid variants of the
+    closing tag (e.g. </script  >, </SCRIPT\\n>, etc.).
     """
 
     def __init__(self):
@@ -132,16 +132,16 @@ class _ScriptStyleStripper(_HTMLParser):
         return "".join(self._parts)
 
 
-# Fallback regex — usato SOLO se l'HTMLParser lancia eccezione su HTML
-# gravemente malformato. Non è il percorso principale.
+# Fallback regex — used ONLY if HTMLParser throws an exception on severely
+# malformed HTML. This is not the primary path.
 #
 # FIX CWE-20/116/185/186 ("Bad HTML filtering regexp"):
-#   - Apertura : `(?:[^>]*)` invariato (gestisce attributi senza `>` non quotato)
-#   - Chiusura : sostituito `\s*>` con `[^>]*>` per coprire varianti browser-accettate
-#               come `</script anything>` o `</  script  foo>` (spazi dopo `</`
-#               gestiti da `\s*` aggiunto prima del nome tag).
-# Questo percorso è intenzionalmente un last-resort: il path primario usa
-# _ScriptStyleStripper (HTMLParser built-in) che è immune a queste varianti.
+#   - Opening : `(?:[^>]*)` unchanged (handles attributes without unquoted `>`)
+#   - Closing : replaced `\s*>` with `[^>]*>` to cover browser-accepted variants
+#               like `</script anything>` or `</  script  foo>` (spaces after `</`
+#               handled by `\s*` added before the tag name).
+# This path is intentionally a last-resort: the primary path uses
+# _ScriptStyleStripper (built-in HTMLParser) which is immune to these variants.
 _SCRIPT_STYLE_RE_FALLBACK = re.compile(  # noqa: S608
     r"<(?:script|style)(?:[^>]*)>[\s\S]*?</\s*(?:script|style)[^>]*>",
     re.IGNORECASE,
@@ -149,11 +149,11 @@ _SCRIPT_STYLE_RE_FALLBACK = re.compile(  # noqa: S608
 
 
 def _strip_html(text: str) -> str:
-    """Rimuove tag HTML e comprime gli spazi.
+    """Removes HTML tags and compresses whitespace.
 
-    Usa HTMLParser per lo stripping di <script>/<style> (sicuro contro
-    varianti bypassabili del tag di chiusura) e regex solo per i
-    restanti tag generici, commenti ed entità HTML.
+    Uses HTMLParser for stripping <script>/<style> (safe against
+    bypassable closing tag variants) and regex only for the
+    remaining generic tags, comments and HTML entities.
     """
     stripper = _ScriptStyleStripper()
     try:
@@ -171,7 +171,7 @@ def _strip_html(text: str) -> str:
 
 
 def _dedup_secrets(secrets: List[dict]) -> List[dict]:
-    """Deduplicazione per (type, value)."""
+    """Deduplication by (type, value)."""
     seen, out = set(), []
     for s in secrets:
         key = (s.get("type",""), s.get("value",""))
@@ -187,11 +187,11 @@ def _dedup_secrets(secrets: List[dict]) -> List[dict]:
 
 def triage_results(results: List[dict]) -> List[dict]:
     """
-    Classifica ogni risultato con score 0-100 usando solo regex.
-    Aggiunge: triage_score, triage_label, triage_reasons.
-    Ordina per score decrescente.
+    Classifies each result with score 0-100 using only regex.
+    Adds: triage_score, triage_label, triage_reasons.
+    Sorts by descending score.
     """
-    _log("[Triage] Classificazione risultati...", style="bold cyan")
+    _log("[Triage] Classifying results...", style="bold cyan")
 
     for r in results:
         text   = " ".join(filter(None, [r.get("url",""), r.get("title",""), r.get("snippet","")]))
@@ -206,7 +206,7 @@ def triage_results(results: List[dict]) -> List[dict]:
         score = min(bonus, 100)
         r["triage_score"]   = score
         r["triage_label"]   = _label(score)
-        r["triage_reasons"] = list(dict.fromkeys(reasons))  # dedup mantenendo ordine
+        r["triage_reasons"] = list(dict.fromkeys(reasons))  # dedup preserving order
 
     results.sort(key=lambda x: x.get("triage_score", 0), reverse=True)
 
@@ -238,8 +238,8 @@ def fetch_pages(
     delay_s:   float = 1.2,
 ) -> List[dict]:
     """
-    Scarica il contenuto HTML reale delle pagine prioritarie.
-    Aggiunge 'page_content' (str) ai risultati processati.
+    Downloads the real HTML content of priority pages.
+    Adds 'page_content' (str) to processed results.
     """
     _label_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "SKIP": 0}
     min_rank    = _label_rank.get(min_label.upper(), 3)
@@ -251,11 +251,11 @@ def fetch_pages(
     ][:max_pages]
 
     if not targets:
-        _log("[Fetch] Nessuna pagina da scaricare.", style="dim")
+        _log("[Fetch] No pages to download.", style="dim")
         return results
 
     _log(
-        f"[Fetch] Download {len(targets)} pagine "
+        f"[Fetch] Downloading {len(targets)} pages "
         f"(min={min_label}, timeout={timeout}s, delay={delay_s}s)...",
         style="bold cyan"
     )
@@ -266,7 +266,7 @@ def fetch_pages(
         if not url:
             continue
 
-        # Salta estensioni binarie
+        # Skip binary extensions
         ext = Path(urlparse(url).path).suffix.lower()
         if ext in _SKIP_EXT:
             r["page_content"] = ""
@@ -291,7 +291,7 @@ def fetch_pages(
                 _log(f"[Fetch] {resp.status_code} — {url[:70]}", style="dim")
                 continue
 
-            # Leggi al massimo max_chars*3 byte
+            # Read at most max_chars*3 bytes
             raw = b""
             for chunk in resp.iter_content(chunk_size=4096):
                 raw += chunk
@@ -317,13 +317,13 @@ def fetch_pages(
         except Exception as e:
             r["page_content"] = ""
             r["fetch_error"]  = str(e)[:80]
-            _log(f"[Fetch] Errore — {url[:60]}: {e}", style="yellow")
+            _log(f"[Fetch] Error — {url[:60]}: {e}", style="yellow")
 
         if idx < len(targets) - 1:
             time.sleep(delay_s)
 
     _log(
-        f"[Fetch] Completato: {fetched}/{len(targets)} pagine scaricate.",
+        f"[Fetch] Done: {fetched}/{len(targets)} pages downloaded.",
         style="green"
     )
     return results
@@ -335,13 +335,13 @@ def fetch_pages(
 
 def scan_secrets(results: List[dict]) -> Tuple[List[dict], List[dict]]:
     """
-    Scansione regex su page_content (se disponibile) o snippet.
-    Aggiunge 'secrets' (lista) a ogni risultato con findings.
+    Regex scan on page_content (if available) or snippet.
+    Adds 'secrets' (list) to each result with findings.
 
     Returns:
-        (results_aggiornati, lista_globale_secrets)
+        (updated_results, global_secrets_list)
     """
-    _log("[Secrets] Avvio scan regex...", style="bold cyan")
+    _log("[Secrets] Starting regex scan...", style="bold cyan")
 
     total_found   = 0
     all_secrets_g = []
@@ -353,7 +353,7 @@ def scan_secrets(results: List[dict]) -> Tuple[List[dict], List[dict]]:
     ]
 
     if not candidates:
-        _log("[Secrets] Nessun contenuto disponibile.", style="dim")
+        _log("[Secrets] No content available.", style="dim")
         return results, []
 
     for r in candidates:
@@ -371,7 +371,7 @@ def scan_secrets(results: List[dict]) -> Tuple[List[dict], List[dict]]:
                 if not raw_val or len(raw_val) < 4:
                     continue
 
-                # Contesto: 70 caratteri attorno al match
+                # Context: 70 characters around the match
                 s_ctx   = max(0, match.start() - 70)
                 e_ctx   = min(len(content), match.end() + 70)
                 context = content[s_ctx:e_ctx].replace("\n", " ").strip()
@@ -385,7 +385,7 @@ def scan_secrets(results: List[dict]) -> Tuple[List[dict], List[dict]]:
                     "source":     url,
                 })
 
-        # Dedup per (type, value)
+        # Dedup by (type, value)
         findings = _dedup_secrets(findings)
 
         if findings:
@@ -393,18 +393,18 @@ def scan_secrets(results: List[dict]) -> Tuple[List[dict], List[dict]]:
             total_found += len(findings)
             all_secrets_g.extend(findings)
             _log(
-                f"[Secrets] {len(findings):>2} trovati "
+                f"[Secrets] {len(findings):>2} found "
                 f"[{r.get('triage_label','?')}] {url[:70]}",
                 style="bold red"
             )
 
     _log(
-        f"[Secrets] Scan completato: {total_found} segreti in {len(candidates)} risultati.",
+        f"[Secrets] Scan complete: {total_found} secrets in {len(candidates)} results.",
         style="bold green" if total_found == 0 else "bold red"
     )
 
     if total_found > 0 and HAS_RICH:
-        # Tabella riepilogo per tipo
+        # Summary table by type
         by_type = defaultdict(int)
         for s in all_secrets_g:
             by_type[s["type"]] += 1
@@ -429,7 +429,7 @@ def build_report(
     fmt:        str  = "html",
 ) -> str:
     """
-    Genera il report nel formato scelto.
+    Generates the report in the chosen format.
     fmt: "html" | "md" | "json" | "txt"
     """
     now    = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -488,7 +488,7 @@ def _report_html(results, all_secrets, counts, top, target, now) -> str:
     )
 
     return f"""<!DOCTYPE html>
-<html lang="it"><head><meta charset="UTF-8">
+<html lang="en"><head><meta charset="UTF-8">
 <title>DorkEye Analyzer — {target or 'Report'}</title>
 <style>
 :root{{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--text:#c9d1d9;--acc:#58a6ff;--brd:#30363d}}
@@ -647,26 +647,26 @@ def run_pipeline(
     target:     str  = "",
 ) -> dict:
     """
-    Esegue l'intera pipeline: triage → [fetch] → secrets → report.
+    Runs the full pipeline: triage → [fetch] → secrets → report.
 
     Args:
-        results:         lista dict risultati DorkEye
-        do_fetch:        True = scarica pagine reali
-        fetch_max:       max pagine da scaricare
-        fetch_min_label: label minima per scaricare (HIGH / MEDIUM)
-        fmt:             formato report ("html" | "md" | "json" | "txt")
-        out:             path output (None = non salva)
-        target:          descrizione target per il report
+        results:         list of DorkEye result dicts
+        do_fetch:        True = download real pages
+        fetch_max:       max pages to download
+        fetch_min_label: minimum label threshold for download (HIGH / MEDIUM)
+        fmt:             report format ("html" | "md" | "json" | "txt")
+        out:             output path (None = do not save)
+        target:          target description for the report
 
     Returns:
-        dict con: triaged, all_secrets, report_path, counts
+        dict with: triaged, all_secrets, report_path, counts
     """
     _rule(" DorkEye Analyzer v1.0 — no AI required ", style="bold cyan")
 
     # 1. Triage
     results = triage_results(results)
 
-    # 2. Fetch (opzionale)
+    # 2. Fetch (optional)
     if do_fetch:
         results = fetch_pages(
             results,
@@ -678,12 +678,12 @@ def run_pipeline(
     results, all_secrets = scan_secrets(results)
 
     # 4. Report
-    _log(f"[Report] Generazione report (fmt={fmt})...", style="bold cyan")
+    _log(f"[Report] Generating report (fmt={fmt})...", style="bold cyan")
     content = build_report(results, all_secrets, target=target, fmt=fmt)
 
     report_path = None
     if out:
-        # Aggiusta estensione
+        # Fix extension
         ext_map = {"html": ".html", "md": ".md", "json": ".json", "txt": ".txt"}
         p = Path(out)
         if p.suffix.lower() not in ext_map.values():
@@ -691,16 +691,16 @@ def run_pipeline(
         try:
             p.write_text(content, encoding="utf-8")
             report_path = str(p)
-            _log(f"[Report] Salvato: {report_path}", style="bold green")
+            _log(f"[Report] Saved: {report_path}", style="bold green")
         except IOError as e:
-            _log(f"[Report] Errore salvataggio: {e}", style="red")
+            _log(f"[Report] Save error: {e}", style="red")
 
     counts = defaultdict(int)
     for r in results:
         counts[r.get("triage_label", "LOW")] += 1
 
-    # Riepilogo finale
-    _rule(" Analisi Completata ", style="bold green")
+    # Final summary
+    _rule(" Analysis Complete ", style="bold green")
     _log(
         f"CRITICAL:{counts['CRITICAL']}  HIGH:{counts['HIGH']}  "
         f"MEDIUM:{counts['MEDIUM']}  LOW:{counts['LOW']}  "
@@ -719,38 +719,38 @@ def run_pipeline(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  INTEGRAZIONE CLI dorkeye.py
-#  Queste funzioni vengono importate da dorkeye.py
+#  CLI INTEGRATION dorkeye.py
+#  These functions are imported by dorkeye.py
 # ══════════════════════════════════════════════════════════════════════════════
 
 def add_local_analyze_args(parser) -> object:
     """
-    Aggiunge i flag --analyze-local-* al parser CLI di dorkeye.py.
-    Non richiede --llm.
+    Adds --analyze-local-* flags to the dorkeye.py CLI parser.
+    Does not require --llm.
     """
     g = parser.add_argument_group(
-        "Local Analysis (no AI — pure regex, non richiede --llm)"
+        "Local Analysis (no AI — pure regex, does not require --llm)"
     )
     g.add_argument(
         "--analyze-local",
         action="store_true",
-        help="Analisi post-ricerca: triage + secrets scan (regex, no AI)",
+        help="Post-search analysis: triage + secrets scan (regex, no AI)",
     )
     g.add_argument(
         "--analyze-local-fetch",
         action="store_true",
-        help="Scarica il contenuto reale delle pagine HIGH/CRITICAL",
+        help="Download the real content of HIGH/CRITICAL pages",
     )
     g.add_argument(
         "--analyze-local-fetch-max",
         type=int, default=20,
-        help="Max pagine da scaricare (default: 20)",
+        help="Max pages to download (default: 20)",
     )
     g.add_argument(
         "--analyze-local-fmt",
         choices=["html", "md", "json", "txt"],
         default="html",
-        help="Formato report: html | md | json | txt (default: html)",
+        help="Report format: html | md | json | txt (default: html)",
     )
     g.add_argument(
         "--analyze-local-out",
@@ -762,8 +762,8 @@ def add_local_analyze_args(parser) -> object:
 
 def run_local_analysis(results: List[dict], args, target: str = "") -> dict:
     """
-    Entry point per dorkeye.py — chiamato se --analyze-local e' attivo.
-    Non richiede llm_plugin.
+    Entry point for dorkeye.py — called when --analyze-local is active.
+    Does not require llm_plugin.
     """
     fmt = getattr(args, "analyze_local_fmt", "html")
     out = getattr(args, "analyze_local_out", None)
@@ -787,48 +787,48 @@ def run_local_analysis(results: List[dict], args, target: str = "") -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="DorkEye Analyzer v1.0 — Analisi post-ricerca senza AI",
+        description="DorkEye Analyzer v1.0 — Post-search analysis without AI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""Esempi:
+        epilog="""Examples:
 
-  # Analisi base (triage + secrets regex)
+  # Basic analysis (triage + secrets regex)
     python dorkeye_analyze.py Dump/results.json
 
-  # Con download pagine + report HTML
+  # With page download + HTML report
     python dorkeye_analyze.py Dump/results.json --fetch --fmt=html --out=report.html
 
-  # Report Markdown con contesto target
+  # Markdown report with target context
     python dorkeye_analyze.py results.json --target "gov.it admin panels" --fmt=md
 
-  # Download fino a 40 pagine (piu' accurato per secrets)
+  # Download up to 40 pages (more accurate for secrets)
     python dorkeye_analyze.py results.json --fetch --fetch-max=40 --fmt=html
 
-  # Output JSON machine-readable
-    python dorkeye_analyze.py results.json --fmt=json --out=analisi.json
+  # Machine-readable JSON output
+    python dorkeye_analyze.py results.json --fmt=json --out=analysis.json
 """,
     )
 
-    parser.add_argument("results_file",    help="File JSON risultati DorkEye")
-    parser.add_argument("--target",        default="", help="Descrizione target (opzionale)")
-    parser.add_argument("--fetch",         action="store_true", help="Scarica pagine HIGH/CRITICAL")
-    parser.add_argument("--fetch-max",     type=int,  default=20,   help="Max pagine da scaricare (default: 20)")
-    parser.add_argument("--fetch-label",   default="HIGH",          help="Label minima per fetch (default: HIGH)")
-    parser.add_argument("--fmt",           choices=["html","md","json","txt"], default="html", help="Formato report")
-    parser.add_argument("--out",           default=None, help="Path output report")
-    parser.add_argument("--no-report",     action="store_true", help="Non genera file report, solo output a console")
+    parser.add_argument("results_file",    help="DorkEye JSON results file")
+    parser.add_argument("--target",        default="", help="Target description (optional)")
+    parser.add_argument("--fetch",         action="store_true", help="Download HIGH/CRITICAL pages")
+    parser.add_argument("--fetch-max",     type=int,  default=20,   help="Max pages to download (default: 20)")
+    parser.add_argument("--fetch-label",   default="HIGH",          help="Minimum label for fetch (default: HIGH)")
+    parser.add_argument("--fmt",           choices=["html","md","json","txt"], default="html", help="Report format")
+    parser.add_argument("--out",           default=None, help="Report output path")
+    parser.add_argument("--no-report",     action="store_true", help="Do not generate report file, output to console only")
 
     args = parser.parse_args()
 
-    # Carica risultati
+    # Load results
     p = Path(args.results_file)
     if not p.exists():
-        print(f"[!] File non trovato: {p}", file=sys.stderr)
+        print(f"[!] File not found: {p}", file=sys.stderr)
         sys.exit(1)
 
     try:
         raw = json.loads(p.read_text(encoding="utf-8"))
     except Exception as e:
-        print(f"[!] Errore lettura file: {e}", file=sys.stderr)
+        print(f"[!] Error reading file: {e}", file=sys.stderr)
         sys.exit(1)
 
     if isinstance(raw, list):
@@ -839,15 +839,15 @@ def main() -> None:
         results = []
 
     if not results:
-        print(f"[!] Nessun risultato in '{p}'.", file=sys.stderr)
-        print("    Salva i risultati DorkEye con: -o results.json", file=sys.stderr)
+        print(f"[!] No results in '{p}'.", file=sys.stderr)
+        print("    Save DorkEye results with: -o results.json", file=sys.stderr)
         sys.exit(1)
 
-    _log(f"[*] Caricati {len(results)} risultati da '{p.name}'", style="bold cyan")
+    _log(f"[*] Loaded {len(results)} results from '{p.name}'", style="bold cyan")
     if args.target:
         _log(f"[*] Target: {args.target}", style="cyan")
 
-    # Determina path output
+    # Determine output path
     out = None
     if not args.no_report:
         out = args.out
