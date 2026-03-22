@@ -1,7 +1,15 @@
-# 🐲 DorkEye — Advanced Usage (Flag-by-Flag)
+# DorkEye — Advanced Usage (Flag-by-Flag)
 
 This document explains **every available flag in detail**, including behavior, examples, and recommended combinations.
-
+```
+ ___
+__H__       xploits3c.github.io/DorkEye
+ [d]
+ [e]
+ [;]    DorkEye | USAGE
+ |_|
+  V
+```
 ---
 
 ## 📌 Basic Syntax
