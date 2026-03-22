@@ -1,15 +1,18 @@
 # 🦅 DorkEye Requirements
-# Professionally pinned dependencies for stability and security
 # Install with: pip install -r requirements.txt
 
 # Core HTTP requests management
-requests>=2.32.0
+# urllib3 is also listed explicitly because it is imported directly
+# in dorkeye.py and Tools/dorkeye_analyze.py (not only as a transitive dep)
+requests>=2.32.3,<3.0.0
+urllib3>=2.2.0,<3.0.0
 
 # YAML configuration and template parsing
-PyYAML==6.0.1
+# 6.0.2+ fixes a yaml.load() security issue present in 6.0.1
+PyYAML>=6.0.2,<7.0.0
 
 # Advanced Terminal UI and formatting
-rich==13.7.0
+rich>=13.7.0,<14.0.0
 
 # DuckDuckGo Search API integration
-ddgs>=4.0.0
+ddgs>=4.0.0,<5.0.0
