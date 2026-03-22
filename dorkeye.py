@@ -31,8 +31,18 @@ from html.parser import HTMLParser as _HTMLParser   # FIX: needed for script-tag
 import requests
 import urllib3
 from requests.adapters import HTTPAdapter
-from dork_generator import DorkGenerator
 from urllib3.util.retry import Retry
+
+# ── Tools sub-package path injection ─────────────────────────────────────────
+# dork_generator, dorkeye_agents, dorkeye_analyze and dorkeye_patterns live in
+# the Tools/ sub-folder.  Adding it to sys.path lets every import below (and
+# inside those modules) work without any further change.
+_TOOLS_DIR = Path(__file__).parent / "Tools"
+if str(_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TOOLS_DIR))
+# ─────────────────────────────────────────────────────────────────────────────
+
+from dork_generator import DorkGenerator
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -138,8 +148,8 @@ def print_banner():
     SYRINGE = (
         "[bold yellow] ___[/bold yellow]\n"
         "[bold yellow]__H__[/bold yellow]\n"
-        "[bold yellow] [[/bold yellow][bold red]d[/bold red][bold yellow]][/bold yellow]\n"
-        "[bold yellow] [[/bold yellow][bold red]e[/bold red][bold yellow]][/bold yellow]\n"
+        "[bold yellow] [[/bold yellow][bold red],[/bold red][bold yellow]][/bold yellow]\n"
+        "[bold yellow] [[/bold yellow][bold red])[/bold red][bold yellow]][/bold yellow]\n"
         "[bold yellow] [[/bold yellow][bold red];[/bold red][bold yellow]][/bold yellow]\n"
         "[bold yellow] |_|[/bold yellow]\n"
         "[bold yellow]  V[/bold yellow]"
