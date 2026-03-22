@@ -16,7 +16,7 @@ MODE_HIERARCHY = {
 
 class DorkGenerator:
 
-    def __init__(self, yaml_file: str, max_combinations: int = 800):
+    def __init__(self, yaml_file: str, max_combinations: int = 10000):
         self.yaml_file = Path(yaml_file)
         self.max_combinations = max_combinations
         self.variables = {}
