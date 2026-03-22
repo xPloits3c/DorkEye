@@ -116,8 +116,6 @@
 ## Usage 
 
 <img width="1322" height="967" alt="h1" src="https://github.com/user-attachments/assets/6f5be8c5-4a71-4187-988d-6eb301789a1c" />
-<img width="852" height="626" alt="examples" src="https://github.com/user-attachments/assets/ee40a6b9-949d-4a2d-a97f-209a194e7214" />
-
 
 🔹 # WIZARD Mode
 ```json
