@@ -153,20 +153,22 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
 ## 📁 Project Structure
 ```
 DorkEye/
-│ ├── dorkeye.py          ← DorkEye Engine
-│ ├── dork_generator.py          ← Dork Generator Queries
-│ ├── dorkeye_agents.py          ← Agents v3.0 pipeline
-│ ├── dorkeye_patterns.py        ← pattern library condivisa
-│ ├── dorkeye_analyze.py         ← standalone analysis CLI
+│ ├── dorkeye.py               ← DorkEye Engine
 │ ├── requirements.txt
 │ ├── http_fingerprints.json
-│ ├── INSTALL.md
 │ ├── README.md
-│ ├── __init__
-│ ├── dorkeye_config.yaml
+│ /Tools/
+│    ├── dork_generator.py     ← Dork Generator Queries
+│    ├── dorkeye_agents.py     ← Agents v3.0 pipeline
+│    ├── dorkeye_patterns.py   ← Shared pattern library
+│    └── dorkeye_analyze.py    ← Standalone analysis CLI
 │ /Templates/
 │    ├── dorks_templates.yaml
-│    ├── dorks_templates_research.yaml
+│    ├── sqli.yaml
+│    ├── osint.yaml
+│    ├── intel_dorks.yaml
+│    ├── epstein_files.yaml
+│    └── example.yaml
 │ /.github/
 │    ├── CODE_OF_CONDUCT.md
 │    ├── CONTRIBUTING.md
@@ -174,9 +176,9 @@ DorkEye/
 │    ├── pull_request_template.md
 │     /ISSUE_TEMPLATE/
 │        ├── bug_report.md
-│        ├── feature_request.md
+│        └── feature_request.md
 │ /Dump/
-│    ├── *.csv 
+│    ├── *.csv
 │    ├── *.json
 │    ├── *.txt
 │    └── *.html
@@ -189,6 +191,7 @@ DorkEye/
 │    ├── fingerprinting.md
 │    ├── output_formats.md
 │    ├── file_categories.md
+│    ├── dork_generator.md
 │    ├── INSTALL.md
 │    ├── REPORT_HTML.md
 │    ├── USAGE.md
