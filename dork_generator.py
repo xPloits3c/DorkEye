@@ -72,7 +72,7 @@ class DorkGenerator:
         templates (dict):        Category name -> template data mapping.
     """
 
-    def __init__(self, yaml_file: str, max_combinations: int = 800):
+    def __init__(self, yaml_file: str, max_combinations: int = 4500):
         """Initialise the generator and immediately load the template file.
 
         Args:
