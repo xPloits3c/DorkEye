@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.7 | OSINT Dorking Tool
+DorkEye v4.8 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
@@ -29,9 +29,37 @@ from enum import Enum
 from html.parser import HTMLParser as _HTMLParser   # FIX: needed for script-tag stripping
 
 import requests
+import urllib3
 from requests.adapters import HTTPAdapter
 from dork_generator import DorkGenerator
 from urllib3.util.retry import Retry
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# ── Agents — integrated post-search analysis pipeline (autonomous, no external AI) ──
+try:
+    from dorkeye_agents import (
+        run_analysis_pipeline as _run_agents_pipeline,
+        add_crawler_args,
+        run_crawl,
+        TriageAgent,
+        PageFetchAgent,
+        SecretsAgent,
+        ReportAgent,
+        DorkCrawlerAgent,
+    )
+    _ANALYZE_AVAILABLE = True
+except ImportError:
+    _ANALYZE_AVAILABLE = False
+    def _run_agents_pipeline(*a, **kw):  # type: ignore[misc]
+        """Fallback stub: run the full post-search agents pipeline (triage, fetch, secrets, report)."""
+        return {"triaged": None, "all_secrets": [], "report_path": None}
+    def add_crawler_args(parser):        # type: ignore[misc]
+        """Fallback stub: register --crawl-* CLI arguments onto the given argparse parser."""
+        return parser
+    def run_crawl(*a, **kw):             # type: ignore[misc]
+        """Fallback stub: run the DorkCrawlerAgent and return a summary dict."""
+        return {"results": [], "rounds": 0, "stop_reason": "unavailable"}
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from rich.table import Table
@@ -69,6 +97,7 @@ _exit_requested: bool       = False
 
 
 def _sigint_handler(signum, frame):
+    """Handle SIGINT (Ctrl+C). Single press skips the current task; double press within 1.5 s exits."""
     global _last_interrupt_time, _skip_current, _exit_requested
     now = time.monotonic()
     if now - _last_interrupt_time < 1.5:
@@ -96,6 +125,7 @@ def _interruptible_sleep(seconds: float, step: float = 0.25) -> None:
 
 
 def print_banner():
+    """Print the ASCII art banner, version info, and legal disclaimer to the terminal."""
     TITLE_ROWS = [
         ("bold bright_blue", "╔╦╗╔═╗╦═╗╦╔═  ╔═╗╦ ╦╔═╗"),
         ("bold blue",        " ║║║ ║╠╦╝╠╩╗  ║╣ ╚╦╝║╣"),
@@ -123,7 +153,7 @@ def print_banner():
 
     INFO = (
         "[bold white]OSINT DORKING TOOL[/bold white]\n"
-        "[bold green]v4.7[/bold green]  [dim]stable[/dim]\n"
+        "[bold green]v4.8[/bold green]  [dim]stable[/dim]\n"
         "\n"
         "[dim]▸ Author[/dim]  [dim]│[/dim]  [cyan]xPloits3c I.C.W.T[/cyan]\n"
         "[dim]▸ GitHub[/dim]  [dim]│[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
@@ -186,6 +216,7 @@ WELCOME_COLORS = [
 
 
 def get_user_name() -> str:
+    """Return the current OS username; fall back to hostname, then "friend"."""
     try:
         return getpass.getuser()
     except Exception:
@@ -196,6 +227,7 @@ def get_user_name() -> str:
 
 
 def greet_user():
+    """Print a random welcome message with a random colour using the OS username."""
     name    = _rich_escape(get_user_name())
     message = random.choice(WELCOME_MESSAGES).format(name=name)
     color   = random.choice(WELCOME_COLORS)
@@ -207,6 +239,7 @@ def greet_user():
 # ══════════════════════════════════════════════════════════════
 
 class SQLiConfidence(Enum):
+    """Confidence levels for SQL injection findings (none → low → medium → high → critical)."""
     NONE     = "none"
     LOW      = "low"
     MEDIUM   = "medium"
@@ -216,6 +249,7 @@ class SQLiConfidence(Enum):
 
 @dataclass
 class HTTPFingerprint:
+    """Immutable snapshot of a browser HTTP fingerprint used to build realistic request headers."""
     browser:         str
     os:              str
     user_agent:      str
@@ -234,6 +268,7 @@ class HTTPFingerprint:
 # ══════════════════════════════════════════════════════════════
 
 def load_http_fingerprints() -> Dict:
+    """Load http_fingerprints.json and return a dict tagged with _mode (legacy | advanced | disabled)."""
     fingerprint_file = Path(__file__).parent / "http_fingerprints.json"
     try:
         with open(fingerprint_file, "r", encoding="utf-8") as f:
@@ -256,6 +291,7 @@ def load_http_fingerprints() -> Dict:
 
 
 def resolve_reference(value: str, common_headers: Dict) -> str:
+    """Resolve a @reference token to its value in common_headers, or return value unchanged."""
     if isinstance(value, str) and value.startswith("@"):
         key = value[1:]
         return common_headers.get(key, "")
@@ -263,6 +299,7 @@ def resolve_reference(value: str, common_headers: Dict) -> str:
 
 
 def resolve_accept_language(fp_headers: Dict, language_profiles: Dict) -> str:
+    """Pick a random language profile from fp_headers and return the matching Accept-Language string."""
     profiles = fp_headers.get("accept_language_profiles")
     if not profiles:
         return ""
@@ -319,13 +356,23 @@ DEFAULT_CONFIG = {
 # ══════════════════════════════════════════════════════════════
 
 class HTTPFingerprintRotator:
+    """
+Rotates browser fingerprint profiles on every request to make traffic look like real users.
+
+    Supports two JSON schema modes:
+      legacy   — flat dict of fingerprint objects
+      advanced — shared header references + language profiles
+
+"""
     def __init__(self):
+        """Load raw fingerprints from JSON and build the fingerprint list."""
         self.raw_fingerprints    = load_http_fingerprints()
         self.fingerprints        = self._build_fingerprints()
         self.current_index       = 0
         self.current_fingerprint = None
 
     def _build_fingerprints(self) -> List[HTTPFingerprint]:
+        """Parse raw fingerprint data into a list of HTTPFingerprint dataclass instances."""
         fingerprints: List[HTTPFingerprint] = []
         mode = self.raw_fingerprints.get("_mode")
 
@@ -376,10 +423,12 @@ class HTTPFingerprintRotator:
         return fingerprints
 
     def get_random(self) -> Optional[HTTPFingerprint]:
+        """Select and store a random fingerprint from the pool; return it."""
         self.current_fingerprint = random.choice(self.fingerprints) if self.fingerprints else None
         return self.current_fingerprint
 
     def get_next(self) -> Optional[HTTPFingerprint]:
+        """Select and store the next fingerprint in round-robin order; return it."""
         if not self.fingerprints:
             return None
         self.current_fingerprint = self.fingerprints[self.current_index]
@@ -387,6 +436,7 @@ class HTTPFingerprintRotator:
         return self.current_fingerprint
 
     def build_headers(self, referer: str = "") -> Dict[str, str]:
+        """Build and return an HTTP headers dict from the current fingerprint. Adds Referer if provided."""
         if not self.current_fingerprint:
             return {"User-Agent": "Mozilla/5.0", "Accept": "*/*", "Connection": "keep-alive"}
         headers = {
@@ -413,20 +463,26 @@ class HTTPFingerprintRotator:
 # ══════════════════════════════════════════════════════════════
 
 class CircuitBreaker:
+    """Tracks unreachable hosts and short-circuits further requests to them within a session."""
     def __init__(self):
+        """Initialise with an empty dead-host set."""
         self._dead: Set[str] = set()
 
     def _key(self, url: str) -> str:
+        """Return the scheme+netloc key for the given URL (host-level granularity)."""
         p = urlparse(url)
         return f"{p.scheme}://{p.netloc}"
 
     def is_dead(self, url: str) -> bool:
+        """Return True if the host of url has been marked dead."""
         return self._key(url) in self._dead
 
     def mark_dead(self, url: str) -> None:
+        """Mark the host of url as dead so future requests are skipped immediately."""
         self._dead.add(self._key(url))
 
     def reset(self) -> None:
+        """Clear the dead-host set, re-enabling all hosts."""
         self._dead.clear()
 
 
@@ -471,31 +527,38 @@ class _ScriptStripper(_HTMLParser):
     """HTMLParser subclass that removes every <script>…</script> block."""
 
     def __init__(self):
+        """Initialise state: script depth counter and text-part accumulator."""
         super().__init__(convert_charrefs=False)
         self._in_script: int = 0   # counter handles (unusual) nested script tags
         self._parts: list   = []
 
     def handle_starttag(self, tag, attrs):
+        """Increment the nesting counter when a <script> opening tag is encountered."""
         if tag.lower() == "script":
             self._in_script += 1
 
     def handle_endtag(self, tag):
+        """Decrement the nesting counter when a </script> closing tag is encountered."""
         if tag.lower() == "script" and self._in_script:
             self._in_script -= 1
 
     def handle_data(self, data):
+        """Append text to the result only when not inside a <script> block."""
         if not self._in_script:
             self._parts.append(data)
 
     def handle_entityref(self, name):
+        """Append HTML entity references (&name;) when not inside a <script> block."""
         if not self._in_script:
             self._parts.append(f"&{name};")
 
     def handle_charref(self, name):
+        """Append numeric character references (&#N;) when not inside a <script> block."""
         if not self._in_script:
             self._parts.append(f"&#{name};")
 
     def get_result(self) -> str:
+        """Return the accumulated clean text with all <script> blocks removed."""
         return "".join(self._parts)
 
 
@@ -567,6 +630,23 @@ _MEDIUM_PRIORITY_PARAMS: frozenset = frozenset({
 
 class SQLiDetector:
 
+    """
+    Multi-method SQL injection detector that tests GET/POST/JSON/path parameters.
+
+        Detection methods (run in order per parameter):
+          1. error_based    — injects payloads that trigger DB error signatures
+          2. union_based     — probes column count and detects UNION response anomalies
+          3. boolean_blind   — compares response sizes for true/false condition pairs
+          4. time_based_blind — measures SLEEP()-induced response delays
+
+        Parameters are prioritised by attack surface before testing:
+          high   — numeric values or known high-risk names (id, page, cat, …)
+          medium — search/filter names (q, search, lang, …)
+          low    — everything else
+
+        A CircuitBreaker skips further requests to hosts that became unreachable.
+
+    """
     SQL_ERROR_SIGNATURES = {
         "mysql": [
             r"You have an error in your SQL syntax",
@@ -625,6 +705,7 @@ class SQLiDetector:
     )
 
     def __init__(self, stealth: bool = False, timeout: int = _DEFAULT_READ):
+        """Initialise the detector with stealth flag, timeout, fingerprint rotator, and circuit breaker."""
         self.stealth             = stealth
         self.read_timeout        = timeout
         self.circuit_breaker     = CircuitBreaker()
@@ -632,6 +713,7 @@ class SQLiDetector:
         self._session            = self._build_session()
 
     def _build_session(self) -> requests.Session:
+        """Build and return a requests.Session with a retry adapter (backoff on 429/5xx)."""
         session = requests.Session()
         retry   = Retry(
             total            = 2,
@@ -646,15 +728,26 @@ class SQLiDetector:
         return session
 
     def _timeout(self, extra_read: float = 0) -> Tuple[int, float]:
+        """Return a (connect_timeout, read_timeout + extra_read) tuple for use in requests calls."""
         return (_CONNECT_TIMEOUT, self.read_timeout + extra_read)
 
     def _run_interruptible(self, fn, total_timeout: float, on_connect_error=None):
+        """
+    Run fn() in a daemon thread; return its result or None on timeout or interrupt.
+
+            Args:
+                fn:               Zero-argument callable that performs the HTTP request.
+                total_timeout:    Wall-clock deadline in seconds.
+                on_connect_error: Optional callback invoked when a connection-level exception fires.
+
+    """
         _POLL = 0.1
         result_holder = [None]
         exc_holder    = [None]
         done_event    = threading.Event()
 
         def _worker():
+            """Worker thread: call fn() and store result or exception, then set done_event."""
             try:
                 result_holder[0] = fn()
             except (requests.exceptions.ConnectTimeout,
@@ -681,6 +774,7 @@ class SQLiDetector:
         return None
 
     def _get(self, url: str, extra_read: float = 0) -> Optional[requests.Response]:
+        """Perform a GET request with the current fingerprint; return the Response or None on failure."""
         if self.circuit_breaker.is_dead(url):
             return None
 
@@ -689,6 +783,7 @@ class SQLiDetector:
         timeout = self._timeout(extra_read)
 
         def _do():
+            """Execute the actual requests.get call inside the worker thread."""
             return self._session.get(
                 url,
                 headers         = headers,
@@ -710,6 +805,7 @@ class SQLiDetector:
     # ──────────────────────────────────────────────────────────
 
     def _detect_waf(self, response: requests.Response) -> Optional[str]:
+        """Scan response headers and body for known WAF signatures; return the WAF name or None."""
         headers_keys   = {k.lower() for k in response.headers}
         headers_values = " ".join(v.lower() for v in response.headers.values())
         body_snippet   = response.text[:2000].lower()
@@ -725,6 +821,7 @@ class SQLiDetector:
         return None
 
     def _measure_baseline_latency(self, url: str) -> Optional[float]:
+        """Measure average response latency over _BASELINE_SAMPLES requests; return it or None."""
         times = []
         for _ in range(_BASELINE_SAMPLES):
             if self.circuit_breaker.is_dead(url):
@@ -744,12 +841,14 @@ class SQLiDetector:
         return baseline
 
     def has_query_params(self, url: str) -> bool:
+        """Return True if the URL contains at least one GET query parameter."""
         try:
             return bool(parse_qs(urlparse(url).query))
         except Exception:
             return False
 
     def _extract_query_params(self, url: str) -> Dict[str, str]:
+        """Parse and return all GET query parameters as a flat {name: first_value} dict."""
         try:
             params = parse_qs(urlparse(url).query)
             return {k: v[0] if isinstance(v, list) else v for k, v in params.items()}
@@ -757,6 +856,7 @@ class SQLiDetector:
             return {}
 
     def _inject_payload(self, url: str, param_name: str, payload: str) -> str:
+        """Return a copy of url with param_name replaced by payload. Preserves the URL fragment."""
         parsed = urlparse(url)
         params = parse_qs(parsed.query)
         if param_name not in params:
@@ -769,13 +869,15 @@ class SQLiDetector:
         return rebuilt
 
     def _get_baseline_response(self, url: str) -> Optional[Tuple[int, str, int]]:
+        """Fetch the baseline response for url; return (status_code, body_text, body_len) or None."""
         response = self._get(url)
         if response is None:
             return None
         return (response.status_code, response.text, len(response.text))
 
     def _match_sql_errors(self, body: str) -> Optional[Tuple[str, str]]:
-        # FIX: use HTMLParser-based stripper instead of the bypassed regex
+        """Strip <script> blocks then scan the body for SQL error signatures; return (db, pattern) or None."""
+        # Use HTMLParser-based stripper instead of the bypassed regex (CWE-20/116/185/186 fix)
         clean_body = _strip_script_tags(body)
         for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
             for pattern in patterns:
@@ -788,6 +890,7 @@ class SQLiDetector:
     # ──────────────────────────────────────────────────────────
 
     def _prioritize_params(self, params: Dict[str, str]) -> List[str]:
+        """Sort params into high / medium / low priority lists and return them concatenated."""
         high: List[str] = []
         medium: List[str] = []
         low: List[str] = []
@@ -804,6 +907,13 @@ class SQLiDetector:
         return high + medium + low
 
     def _probe_parameter(self, url: str, param_name: str, baseline_content: str) -> bool:
+        """
+    Return True if the parameter shows meaningful response variation when injected with a quote.
+
+            Measures natural noise first, then checks whether the 1-quote payload pushes the
+            response delta above the adaptive threshold derived from that noise.
+
+    """
         if self.circuit_breaker.is_dead(url):
             return False
 
@@ -849,6 +959,7 @@ class SQLiDetector:
         return payload_noise > adaptive_threshold
 
     def _test_error_based(self, url: str, param_name: str) -> Dict:
+        """Inject error-based payloads and look for DB error signatures in the response body."""
         result = {
             "method":     "error_based",
             "vulnerable": False,
@@ -894,6 +1005,7 @@ class SQLiDetector:
         return result
 
     def _test_union_based(self, url: str, param_name: str, baseline_len: int) -> Dict:
+        """Probe UNION SELECT column counts and look for mismatch errors or abnormal response sizes."""
         result = {
             "method":     "union_based",
             "vulnerable": False,
@@ -980,6 +1092,7 @@ class SQLiDetector:
         return result
 
     def _test_boolean_blind(self, url: str, param_name: str, baseline_len: int) -> Dict:
+        """Send true/false boolean pairs and detect statistically significant response-size differences."""
         result = {
             "method":     "boolean_blind",
             "vulnerable": False,
@@ -1050,6 +1163,7 @@ class SQLiDetector:
         return result
 
     def _test_time_based_blind(self, url: str, param_name: str) -> Dict:
+        """Inject SLEEP payloads and detect delays above baseline + margin as time-based blind SQLi."""
         result = {
             "method":     "time_based_blind",
             "vulnerable": False,
@@ -1141,6 +1255,7 @@ class SQLiDetector:
         return result
 
     def test_sqli(self, url: str) -> Dict:
+        """Run the full GET-parameter SQLi test suite on url; return a structured result dict."""
         result = {
             "url":                url,
             "vulnerable":         False,
@@ -1264,6 +1379,7 @@ class SQLiDetector:
         return result
 
     def test_post_sqli(self, url: str, post_data: Dict[str, str]) -> Dict:
+        """Test all POST parameters for SQL injection using error-based detection."""
         result = {
             "url": url, "vulnerable": False,
             "overall_confidence": SQLiConfidence.NONE.value,
@@ -1300,6 +1416,7 @@ class SQLiDetector:
             _timeout = self._timeout()
 
             def _do_post(_d=_data, _h=_hdrs, _t=_timeout):
+                """Execute the POST request with the current payload dict inside the worker thread."""
                 return self._session.post(
                     url,
                     data    = _d,
@@ -1350,6 +1467,7 @@ class SQLiDetector:
         return result
 
     def test_json_sqli(self, url: str, json_data: Dict[str, str]) -> Dict:
+        """Test all JSON body parameters for SQL injection using error-based detection."""
         result = {
             "url": url, "vulnerable": False,
             "overall_confidence": SQLiConfidence.NONE.value,
@@ -1376,6 +1494,7 @@ class SQLiDetector:
             _timeout = self._timeout()
 
             def _do_json_post(_j=_json, _t=_timeout):
+                """Execute the JSON POST request inside the worker thread."""
                 return self._session.post(
                     url,
                     json    = _j,
@@ -1423,6 +1542,7 @@ class SQLiDetector:
         return result
 
     def test_path_based_sqli(self, url: str) -> Dict:
+        """Test path-based SQL injection by appending a quote to numeric/word path segments."""
         result = {
             "method":     "path_based",
             "vulnerable": False,
@@ -1457,14 +1577,18 @@ class SQLiDetector:
 # ══════════════════════════════════════════════════════════════
 
 class UserAgentRotator:
+    """Rotates User-Agent strings across Chrome, Firefox, Safari, and Edge profiles."""
     def __init__(self):
+        """Flatten all UA strings from USER_AGENTS into a single list; initialise the round-robin index."""
         self.agents        = [a for lst in USER_AGENTS.values() for a in lst]
         self.current_index = 0
 
     def get_random(self) -> str:
+        """Return a random User-Agent string from the pool."""
         return random.choice(self.agents)
 
     def get_next(self) -> str:
+        """Return the next User-Agent string in round-robin order."""
         agent              = self.agents[self.current_index]
         self.current_index = (self.current_index + 1) % len(self.agents)
         return agent
@@ -1475,7 +1599,15 @@ class UserAgentRotator:
 # ══════════════════════════════════════════════════════════════
 
 class FileAnalyzer:
+    """
+Performs HEAD-request file analysis and optional SQLi checking on discovered URLs.
+
+    Categorises URLs by file extension, respects blacklist/whitelist filters, checks
+    HTTP accessibility, and delegates SQLi testing to the embedded SQLiDetector.
+
+"""
     def __init__(self, config: Dict, ua_rotator: UserAgentRotator, fp_rotator: HTTPFingerprintRotator):
+        """Initialise with config, UA rotator, fingerprint rotator; build extension map and HTTP session."""
         self.config        = config
         self.ua_rotator    = ua_rotator
         self.fp_rotator    = fp_rotator
@@ -1487,6 +1619,7 @@ class FileAnalyzer:
         self.session = self._create_session()
 
     def _create_session(self) -> requests.Session:
+        """Build and return a requests.Session with retry logic for 429/5xx responses."""
         session = requests.Session()
         retry   = Retry(
             total            = self.config.get("max_retries", 3),
@@ -1500,6 +1633,7 @@ class FileAnalyzer:
         return session
 
     def _flatten_extensions(self) -> Dict[str, str]:
+        """Build and return a flat {extension: category} dict from the extensions config block."""
         ext_map = {}
         for category, extensions in self.config["extensions"].items():
             for ext in extensions:
@@ -1507,6 +1641,7 @@ class FileAnalyzer:
         return ext_map
 
     def get_file_extension(self, url: str) -> str:
+        """Extract and return the lowercased file extension from url, or "" if none."""
         try:
             path = unquote(urlparse(url).path)
             ext  = os.path.splitext(path)[1].lower()
@@ -1515,22 +1650,26 @@ class FileAnalyzer:
             return ""
 
     def categorize_url(self, url: str) -> str:
+        """Return the category name for url based on its file extension, or "webpage" if unrecognised."""
         ext = self.get_file_extension(url)
         if not ext:
             return "webpage"
         return self.extension_map.get(ext, "other")
 
     def is_blacklisted(self, url: str) -> bool:
+        """Return True if url's extension is in the configured blacklist."""
         if not self.config["blacklist"]:
             return False
         return self.get_file_extension(url) in self.config["blacklist"]
 
     def is_whitelisted(self, url: str) -> bool:
+        """Return True if url's extension passes the whitelist (always True when whitelist is empty)."""
         if not self.config["whitelist"]:
             return True
         return self.get_file_extension(url) in self.config["whitelist"]
 
     def analyze_file(self, url: str) -> Dict:
+        """Perform a HEAD request on url and return a dict with size, content_type, accessible, status_code."""
         result = {
             "url":          url,
             "extension":    self.get_file_extension(url),
@@ -1572,6 +1711,7 @@ class FileAnalyzer:
         return result
 
     def check_sqli(self, url: str) -> Dict:
+        """Run SQLi detection on url if sqli_detection is enabled in config; return the result dict."""
         if not self.config.get("sqli_detection", False):
             return {"tested": False}
         return self.sqli_detector.test_sqli(url)
@@ -1582,7 +1722,15 @@ class FileAnalyzer:
 # ══════════════════════════════════════════════════════════════
 
 class DorkEyeEnhanced:
+    """
+Main orchestrator: runs dork searches, file analysis, SQLi testing, and result persistence.
+
+    Owns the deduplication hash set, statistics counters, and all output-format savers.
+    Delegates HTTP work to FileAnalyzer and SQLiDetector.
+
+"""
     def __init__(self, config: Dict, output_file: str = None):
+        """Initialise with config and optional output filename; set up rotators, analyzer, and counters."""
         self.config      = config
         self.output_file = output_file
         self.ua_rotator  = UserAgentRotator()
@@ -1595,9 +1743,11 @@ class DorkEyeEnhanced:
         self._total_results_at_last_extended_delay: int = 0
 
     def _hash_url(self, url: str) -> str:
+        """Return an MD5 hex digest of url for use as a deduplication key."""
         return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()
 
     def is_duplicate(self, url: str) -> bool:
+        """Return True if url has already been seen this session; record it if not."""
         h = self._hash_url(url)
         if h in self.url_hashes:
             return True
@@ -1605,6 +1755,7 @@ class DorkEyeEnhanced:
         return False
 
     def process_dorks(self, dork_input: str) -> List[str]:
+        """Return a list of dork strings from a plain string or a .txt file (one dork per line)."""
         if os.path.isfile(dork_input):
             try:
                 with open(dork_input, 'r', encoding='utf-8') as f:
@@ -1615,6 +1766,7 @@ class DorkEyeEnhanced:
         return [dork_input]
 
     def _compute_base_delay(self, results_found: int, stealth: bool) -> float:
+        """Compute the inter-dork delay based on result count and whether stealth mode is active."""
         if results_found < 10:
             low, high = 8, 14
         else:
@@ -1625,12 +1777,18 @@ class DorkEyeEnhanced:
         return round(delay, 2)
 
     def _should_trigger_extended_delay(self) -> bool:
+        """Return True when enough new results have accumulated to trigger an extended rate-limit pause."""
         threshold = self.config.get("extended_delay_every_n_results", 100)
         collected_since_last = len(self.results) - self._total_results_at_last_extended_delay
         return collected_since_last >= threshold
 
     def search_dork(self, dork: str, count: int,
                     dork_index: int = 1, total_dorks: int = 1) -> List[Dict]:
+        """Search DuckDuckGo for one dork via a daemon producer thread; return a list of result dicts.
+
+        Retries up to max_attempts times with exponential backoff. Deduplicates, filters
+        blacklist/whitelist, and respects the global interrupt flags throughout.
+        """
         global _skip_current, _exit_requested
 
         _ts = datetime.now().strftime("%H:%M:%S")
@@ -1645,7 +1803,7 @@ class DorkEyeEnhanced:
 
         results       = []
         total_fetched = 0
-        max_attempts  = 3
+        max_attempts  = 4  # 1 initial attempt + 3 retries
 
         _DONE = object()
 
@@ -1671,6 +1829,7 @@ class DorkEyeEnhanced:
 
                     def _producer(dork=dork, batch_size=batch_size,
                                   q=result_queue, stop=stop_event):
+                        """Producer thread: iterate DDGS results and push them onto the shared queue; sentinel when done."""
                         try:
                             for item in DDGS().text(dork, max_results=batch_size):
                                 if stop.is_set():
@@ -1757,6 +1916,7 @@ class DorkEyeEnhanced:
         return results
 
     def analyze_results(self, results: List[Dict]) -> List[Dict]:
+        """Run file analysis and/or SQLi testing on a batch of result dicts; return the updated list."""
         global _skip_current, _exit_requested
 
         if not self.config.get("analyze_files", True) and not self.config.get("sqli_detection", False):
@@ -1816,12 +1976,33 @@ class DorkEyeEnhanced:
                             f"{style}[!] Potential SQLi found "
                             f"({confidence}): {_rich_escape(result['url'])}[/{style[1:]}"
                         )
+                        # ── Detail: print method + evidence for each positive test ──
+                        for _t in sqli_result.get("tests", []):
+                            if _t.get("vulnerable"):
+                                _method = _t.get("method", "unknown")
+                                _ev_list = _t.get("evidence", [])
+                                _ev_str = " | ".join(_ev_list[:2]) if _ev_list else ""
+                                _param = _t.get("parameter", "")
+                                _param_str = f" [param: {_param}]" if _param else ""
+                                console.print(
+                                    f"[dim]    ↳ method: [yellow]{_method}[/yellow]"
+                                    f"{_param_str}"
+                                    + (f"  evidence: [italic]{_rich_escape(_ev_str[:120])}[/italic]" if _ev_str else "")
+                                    + "[/dim]"
+                                )
                     progress.advance(task2)
                     if self.config.get("stealth_mode", False):
                         _interruptible_sleep(random.uniform(3, 6))
         return results
 
     def run_search(self, dorks: List[str], count: int):
+        """
+    Iterate over dorks, search each one, analyse results, and apply inter-dork delays.
+
+            Respects the global _skip_current and _exit_requested interrupt flags throughout.
+            Saves incrementally after each dork if an output file is configured.
+
+    """
         global _skip_current, _exit_requested
 
         total_dorks = len(dorks)
@@ -1872,12 +2053,7 @@ class DorkEyeEnhanced:
             delay   = self._compute_base_delay(len(results), stealth)
             console.print(f"[yellow][~] Waiting {delay}s before next dork...[/yellow]")
 
-            elapsed = 0.0
-            while elapsed < delay:
-                if _exit_requested or _skip_current:
-                    break
-                time.sleep(0.5)
-                elapsed += 0.5
+            _interruptible_sleep(delay)
 
             if _exit_requested:
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
@@ -1896,12 +2072,7 @@ class DorkEyeEnhanced:
                     f"({len(self.results)} total results collected — rate limit protection)"
                     f"[/bold magenta]"
                 )
-                elapsed = 0.0
-                while elapsed < long_delay:
-                    if _exit_requested or _skip_current:
-                        break
-                    time.sleep(0.5)
-                    elapsed += 0.5
+                _interruptible_sleep(long_delay)
 
                 if _exit_requested:
                     console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
@@ -1913,6 +2084,7 @@ class DorkEyeEnhanced:
                 self._total_results_at_last_extended_delay = len(self.results)
 
     def save_results(self):
+        """Persist self.results to disk in the format determined by the output file extension."""
         if not self.output_file:
             return
         downloads_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Dump")
@@ -1936,6 +2108,7 @@ class DorkEyeEnhanced:
             console.print(f"[dim]{_tb.format_exc()}[/dim]")
 
     def _save_csv(self, filename: str):
+        """Write results to a CSV file with all metadata columns."""
         if not self.results:
             return
         fieldnames = [
@@ -1955,6 +2128,7 @@ class DorkEyeEnhanced:
                 writer.writerow(row)
 
     def _save_json(self, filename: str):
+        """Write results plus session metadata to a structured JSON file."""
         data = {
             "metadata": {
                 "total_results":               len(self.results),
@@ -1973,6 +2147,7 @@ class DorkEyeEnhanced:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     def _save_txt(self, filename: str):
+        """Write results to a plain-text numbered list with per-result details."""
         if not self.results:
             return
         with open(filename, "w", encoding="utf-8") as f:
@@ -1992,6 +2167,7 @@ class DorkEyeEnhanced:
                 f.write("\n")
 
     def _save_html(self, filename: str):
+        """Build and write the full interactive dark-theme HTML report to filename."""
         sqli_count = self.stats.get("sqli_vulnerable", 0)
         sqli_safe  = sum(
             1 for r in self.results
@@ -2247,6 +2423,25 @@ class DorkEyeEnhanced:
             font-size: 15px; cursor: pointer; text-decoration: none; line-height: 1;
             padding: 0; transition: color .12s; }
         .dl-btn:hover { color: #00aaff; }
+        /* Info popup */
+        .info-btn { flex-shrink: 0; background: transparent; border: none; color: #004455;
+            font-size: 13px; cursor: pointer; line-height: 1; padding: 0 1px;
+            transition: color .12s; font-family: 'Courier New', monospace; }
+        .info-btn:hover { color: #00ccff; }
+        .info-popup { display: none; position: fixed; z-index: 9000;
+            background: rgba(0,4,12,0.98); border: 1px solid #007acc;
+            border-top: 2px solid #00aaff; box-shadow: 0 10px 40px rgba(0,120,200,0.3);
+            min-width: 360px; max-width: 520px; font-size: 11px; padding: 14px 16px; }
+        .info-popup.open { display: block; animation: fadeIn .15s ease; }
+        .info-popup-title { font-size: 10px; color: #005588; letter-spacing: 2px;
+            text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid rgba(0,100,180,0.2);
+            padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .info-close { background: transparent; border: none; color: #004466; cursor: pointer;
+            font-size: 14px; font-family: 'Courier New', monospace; padding: 0 3px; transition: color .12s; }
+        .info-close:hover { color: #00aaff; }
+        .info-row { display: flex; gap: 8px; margin-bottom: 5px; align-items: flex-start; }
+        .info-lbl { color: #005588; min-width: 90px; flex-shrink: 0; letter-spacing: 1px; }
+        .info-val { color: #00aaff; word-break: break-all; }
         /* Footer */
         .footer { margin-top: 28px; padding: 14px 0; border-top: 1px solid #002200;
             text-align: center; font-size: 11px; color: #004400; letter-spacing: 2px; }
@@ -2487,6 +2682,40 @@ class DorkEyeEnhanced:
             sqli_conf   = ""
             waf_label   = ""
 
+            # ── Build info payload for ⓘ popup ───────────────────────────────
+            _sqli_t   = result.get("sqli_test", {})
+            _vuln_str = ""
+            _payload_str = ""
+            if _sqli_t.get("tested"):
+                _vuln_str = "VULNERABLE" if _sqli_t.get("vulnerable") else "SAFE"
+                _conf_str = _sqli_t.get("overall_confidence", "")
+                if _conf_str:
+                    _vuln_str += f" ({_conf_str})"
+                # collect method + evidence
+                _details = []
+                for _tt in _sqli_t.get("tests", []):
+                    if _tt.get("vulnerable"):
+                        _m   = _tt.get("method", "")
+                        _evs = " | ".join(_tt.get("evidence", [])[:2])
+                        _param = _tt.get("parameter", "")
+                        _details.append(f"{_m}" + (f"[{_param}]" if _param else "") + (f": {_evs[:80]}" if _evs else ""))
+                _payload_str = " ↳ ".join(_details[:3])
+            _waf_info = _sqli_t.get("waf_detected", "") or ""
+
+            _info_obj = _json.dumps({
+                "url":       url,
+                "title":     result.get("title", "") or "",
+                "snippet":   (result.get("snippet", "") or "")[:200],
+                "dork":      result.get("dork", "") or "",
+                "category":  category,
+                "ext":       ext,
+                "ts":        result.get("timestamp", "") or "",
+                "sqli":      _vuln_str,
+                "payload":   _payload_str,
+                "waf":       _waf_info,
+                "size":      size,
+            }, ensure_ascii=False).replace("'", "&#39;").replace("</", "<\\/")
+
             if "sqli_test" in result and result["sqli_test"].get("tested", False):
                 conf      = result["sqli_test"].get("overall_confidence", "none")
                 sqli_conf = conf
@@ -2511,22 +2740,31 @@ class DorkEyeEnhanced:
             parts.append(f"""            <tr data-category="{category}" data-ext="{ext}" data-sqli="{sqli_data}" data-conf="{sqli_conf}"
                 data-idx="{idx-1}" data-url="{url_esc_td}" data-title="{title_esc}" data-dork="{dork_val}">
                 <td style="color:#444">{idx}</td>
-                <td><div class="url-cell"><a href="{url_esc_td}" target="_blank" title="{url_esc_td}">{url_display}</a><a class="dl-btn" href="{url_esc_td}" download>&#8681;</a></div></td>
+                <td><div class="url-cell"><a href="{url_esc_td}" target="_blank" title="{url_esc_td}">{url_display}</a><a class="dl-btn" href="{url_esc_td}" download>&#8681;</a><button class="info-btn" onclick="showInfo(this)" data-info='{_info_obj}' title="Details">&#9432;</button></div></td>
                 <td title="{title_esc}">{_html_mod.escape(title_disp)}</td>
                 <td><span class="category category-{category}">{category}</span></td>
                 <td class="{sqli_class}">{sqli_status}</td>
                 <td>{waf_label}</td>
                 <td>{size}</td>
             </tr>
-""")
+""")  
 
         parts.append(f"""        </tbody>
     </table>
     </div>
-    <div class="footer">DorkEye v4.7 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+    <div class="footer">DorkEye v4.8 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
 </div>
 
 <div id="toast"></div>
+
+<!-- ⓘ Info popup -->
+<div class="info-popup" id="infoPopup">
+  <div class="info-popup-title">
+    <span>&#9432; RESULT DETAILS</span>
+    <button class="info-close" onclick="closeInfo()">&#10005;</button>
+  </div>
+  <div id="infoBody"></div>
+</div>
 
 <script>
 const EXPORT_DATA = {export_data_js};
@@ -2796,6 +3034,37 @@ document.addEventListener('click',(e)=>{{
 
 /* INIT */
 buildSubBadges();updateInfoBar();updateExportCounts();updateSelCount();
+
+/* ⓘ INFO POPUP */
+let _infoOpen=false;
+function showInfo(btn){{
+  const d=JSON.parse(btn.getAttribute('data-info'));
+  const sqliColor=d.sqli&&d.sqli.startsWith('VULN')?'#ff3333':d.sqli==='SAFE'?'#00ff41':d.sqli.startsWith('VULNERABLE')?'#ff00ff':'#444';
+  let rows='';
+  const row=(lbl,val,color)=>val?`<div class="info-row"><span class="info-lbl">${{lbl}}</span><span class="info-val" style="color:${{color||'#00aaff'}}">${{val}}</span></div>`:'';
+  rows+=row('URL',d.url.length>80?d.url.slice(0,80)+'…':d.url);
+  rows+=row('Title',d.title);
+  rows+=row('Category',d.category,'#00cc88');
+  rows+=row('Extension',d.ext,'#ffaa00');
+  rows+=row('Size',d.size,'#009922');
+  rows+=row('Timestamp',d.ts,'#666');
+  rows+=row('Dork',d.dork&&d.dork.length>80?d.dork.slice(0,80)+'…':d.dork,'#cc88ff');
+  rows+=row('Snippet',d.snippet&&d.snippet.length>120?d.snippet.slice(0,120)+'…':d.snippet,'#777');
+  if(d.sqli)rows+=row('SQLi Status',d.sqli,sqliColor);
+  if(d.payload)rows+=row('Method/Payload',d.payload.length>100?d.payload.slice(0,100)+'…':d.payload,'#ff6666');
+  if(d.waf)rows+=row('WAF','⚠ '+d.waf,'#ffaa00');
+  document.getElementById('infoBody').innerHTML=rows||'<span style="color:#444">No details.</span>';
+  const popup=document.getElementById('infoPopup');
+  const rect=btn.getBoundingClientRect();
+  let top=rect.bottom+window.scrollY+4;
+  let left=rect.left+window.scrollX-300;
+  if(left<8)left=8;
+  if(left+520>window.innerWidth)left=window.innerWidth-528;
+  popup.style.top=top+'px';popup.style.left=left+'px';
+  popup.classList.add('open');_infoOpen=true;
+}}
+function closeInfo(){{document.getElementById('infoPopup').classList.remove('open');_infoOpen=false;}}
+document.addEventListener('click',(e)=>{{if(_infoOpen&&!e.target.closest('#infoPopup')&&!e.target.classList.contains('info-btn'))closeInfo();}});
 </script>
 </body>
 </html>""")
@@ -2806,6 +3075,7 @@ buildSubBadges();updateInfoBar();updateExportCounts();updateSelCount();
 
 
     def _format_size(self, size):
+        """Format a byte count into a human-readable string (B / KB / MB / GB / TB), or "N/A"."""
         if size is None:
             return "N/A"
         try:
@@ -2821,6 +3091,7 @@ buildSubBadges();updateInfoBar();updateExportCounts();updateSelCount();
         return f"{size:.1f} TB"
 
     def print_statistics(self):
+        """Print a Rich-formatted statistics table with result counts, categories, and execution time."""
         table = Table(title="", show_header=False, box=None, padding=(0, 2))
         table.add_column("Metric", style="cyan")
         table.add_column("Value",  style="green", justify="right")
@@ -2853,7 +3124,53 @@ buildSubBadges();updateInfoBar();updateExportCounts();updateSelCount();
 #  Helpers
 # ══════════════════════════════════════════════════════════════
 
+def _load_results_from_file(path: str) -> List[Dict]:
+    """
+    Load DorkEye results from a .json or .txt file in the Dump/ folder.
+    Returns a list of result dicts (each must have at least 'url').
+    """
+    p = Path(path)
+    # Try Dump/ subfolder if not found directly
+    if not p.exists():
+        alt = Path(__file__).parent / "Dump" / path
+        if alt.exists():
+            p = alt
+    if not p.exists():
+        console.print(f"[red][!] File not found: {path}[/red]")
+        return []
+
+    ext = p.suffix.lower()
+    try:
+        if ext == ".json":
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Support both raw list and {"results": [...]} formats
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict) and "results" in data:
+                return data["results"]
+            console.print(f"[red][!] Unrecognized JSON structure in {path}[/red]")
+            return []
+        elif ext == ".txt":
+            results = []
+            with open(p, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and line.startswith("http"):
+                        results.append({"url": line, "title": "", "snippet": "",
+                                        "dork": "", "timestamp": "", "extension": "",
+                                        "category": "webpage"})
+            return results
+        else:
+            console.print(f"[red][!] Unsupported file format: {ext} (use .json or .txt)[/red]")
+            return []
+    except Exception as e:
+        console.print(f"[red][!] Error loading file '{path}': {e}[/red]")
+        return []
+
+
 def load_config(config_file: str = None) -> Dict:
+    """Load and merge a YAML or JSON config file with DEFAULT_CONFIG; return the merged dict."""
     if not config_file:
         return DEFAULT_CONFIG.copy()
     try:
@@ -2869,6 +3186,7 @@ def load_config(config_file: str = None) -> Dict:
 
 
 def create_sample_config():
+    """Write a sample dorkeye_config.yaml to disk and confirm to the terminal."""
     config_yaml = """# DorkEye Configuration
 
 extensions:
@@ -2897,6 +3215,7 @@ extended_delay_every_n_results: 100
 
 
 def resolve_templates_argument(template_arg):
+    """Resolve the --templates argument to a list of Path objects inside the Templates/ directory."""
     templates_dir = Path(__file__).parent / "Templates"
     if template_arg is None:
         return [templates_dir / "dorks_templates.yaml"]
@@ -2914,6 +3233,7 @@ def resolve_templates_argument(template_arg):
 
 
 def get_categories_from_templates(template_files) -> List[str]:
+    """Return a sorted list of category names found across all given template YAML files."""
     categories = set()
     for template_file in template_files:
         try:
@@ -2926,14 +3246,13 @@ def get_categories_from_templates(template_files) -> List[str]:
     return sorted(categories)
 
 
+
 # ══════════════════════════════════════════════════════════════
 #  WIZARD
 # ══════════════════════════════════════════════════════════════
 
 def run_wizard():
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+    """Run the interactive guided wizard session (main menu, dork search, dork generator)."""
     print_banner()
     console.print(Panel(
         "[bold green]Interactive Wizard[/bold green] — Navigate with numbers, ENTER to confirm\n"
@@ -2942,7 +3261,10 @@ def run_wizard():
         title="[bold yellow][ DorkEye Wizard ][/bold yellow]"
     ))
 
+    # ── Internal wizard helpers ─────────────────────────────────────────────────
+
     def ask_yes_no(prompt: str, default_yes: bool = False) -> bool:
+        """Print prompt with a [Y/n] or [y/N] hint and return True/False from user input."""
         hint = "[Y/n]" if default_yes else "[y/N]"
         console.print(f"[cyan]{prompt} {hint}:[/cyan] ", end="")
         try:
@@ -2952,6 +3274,7 @@ def run_wizard():
         return default_yes if ans == "" else ans in ("y", "yes")
 
     def ask_choice(prompt: str, options: list, default: int = 0) -> int:
+        """Print a numbered option list and return the 0-based index chosen by the user."""
         for i, opt in enumerate(options, 1):
             marker = "[bold green]>[/bold green]" if i - 1 == default else " "
             console.print(f"  {marker} [yellow]{i})[/yellow] {opt}")
@@ -2964,6 +3287,7 @@ def run_wizard():
             return default
 
     def ask_string(prompt: str, placeholder: str = "") -> str:
+        """Print a prompt with an optional example and return the raw string entered by the user."""
         display = f" [dim](e.g. {placeholder})[/dim]" if placeholder else ""
         console.print(f"[cyan]{prompt}{display}:[/cyan] ", end="")
         try:
@@ -2972,13 +3296,15 @@ def run_wizard():
             return ""
 
     def ask_extensions(prompt: str) -> list:
+        """Ask for a space-separated list of file extensions; normalise and return as a list."""
         raw = ask_string(prompt, ".pdf .doc .zip")
         if not raw:
             return []
         return [ext if ext.startswith(".") else f".{ext}" for ext in raw.split()]
 
     def pick_output() -> str:
-        output = ask_string("Output filename", "dorkeye_test.html  — press ENTER to skip")
+        """Ask for an output filename; if no extension is given, prompt for format choice."""
+        output = ask_string("Output filename", "results.json")
         if not output:
             return None
         if "." in os.path.basename(output):
@@ -2989,6 +3315,7 @@ def run_wizard():
         return output + fmts[fmt_idx]
 
     def collect_run_options(config: dict, ask_count: bool = True) -> int:
+        """Prompt for all scan options (count, SQLi, stealth, fingerprinting, blacklist/whitelist)."""
         console.print("\n[bold cyan]┌─[ RUN OPTIONS ][/bold cyan]")
         console.print("[bold cyan]│[/bold cyan]")
         count = 50
@@ -3006,6 +3333,184 @@ def run_wizard():
             config["whitelist"] = ask_extensions("│    Whitelist extensions")
         console.print("[bold cyan]└─>[/bold cyan]")
         return count
+
+    def _ask_analyze(output: str) -> bool:
+        """Ask the user whether to run the analysis pipeline — only if the output is .json."""
+        if not output:
+            return False
+        if not str(output).lower().endswith(".json"):
+            return False
+        if not _ANALYZE_AVAILABLE:
+            return False
+        console.print(
+            "\n[bold cyan]┌─[ RESULTS ANALYSIS ][/bold cyan]"
+        )
+        console.print(
+            "[bold cyan]│[/bold cyan]  Results will be analyzed after the search:"
+        )
+        console.print(
+            "[bold cyan]│[/bold cyan]  triage priority · secrets · credentials · HTML report"
+        )
+        try:
+            console.print(
+                "[bold cyan]│  Run analysis on results? y/N:[/bold cyan] ", end=""
+            )
+            ans = input("").strip().lower() in ("y", "yes")
+        except KeyboardInterrupt:
+            ans = False
+        if ans:
+            console.print("[bold cyan]└─>[/bold cyan] [green]Analysis enabled — will run after the search.[/green]\n")
+        else:
+            console.print("[bold cyan]└─>[/bold cyan] [dim]Analysis skipped.[/dim]\n")
+        return ans
+
+    def _run_analyze(results: list, output: str) -> None:
+        """Run the agents pipeline and save the HTML report next to the JSON output."""
+        if not results or not _ANALYZE_AVAILABLE:
+            return
+        ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_out = str(output).replace(".json", f"_analysis_{ts}.html")
+        console.print(
+            f"\n[bold cyan][Agents] Starting analysis on {len(results)} result(s)...[/bold cyan]"
+        )
+        _wiz_args = type("A", (), {
+            "analyze_fetch":          False,
+            "analyze_fetch_max":      20,
+            "analyze_no_llm_triage":  False,
+            "analyze_report":         True,
+            "analyze_fmt":            "html",
+            "analyze_out":            report_out,
+        })()
+        try:
+            out = _run_agents_pipeline(
+                results    = results,
+                llm_plugin = None,
+                args       = _wiz_args,
+            )
+            if out.get("report_path"):
+                console.print(
+                    f"[bold green][✓] Analysis report → {out['report_path']}[/bold green]"
+                )
+            n_sec = out.get("secrets_total", 0)
+            if n_sec:
+                console.print(
+                    f"[bold red][!] {n_sec} secret(s) detected — see the report.[/bold red]"
+                )
+        except Exception as _ae:
+            console.print(f"[yellow][Agents] Error: {_ae}[/yellow]")
+
+    def _ask_crawl() -> dict | None:
+        """Ask whether to enable the adaptive recursive crawl after the search.
+
+        Returns:
+            dict with crawl options if confirmed, None otherwise.
+        """
+        if not _ANALYZE_AVAILABLE:
+            return None
+
+        console.print("\n[bold cyan]┌─[ RECURSIVE CRAWL ][/bold cyan]")
+        console.print(
+            "[bold cyan]│[/bold cyan] [i] After the initial search, the crawler runs additional refinement rounds"
+        )
+
+        console.print(
+            "[bold cyan]│[/bold cyan]  [dim](refining dorks based on: domains · paths · technologies · extensions)[/dim]"
+        )
+        try:
+            console.print(
+                "[bold cyan]│  Enable recursive crawl? y/N:[/bold cyan] ", end=""
+            )
+            ans = input("").strip().lower() in ("y", "yes")
+        except KeyboardInterrupt:
+            ans = False
+
+        if not ans:
+            console.print("[bold cyan]└─>[/bold cyan] [dim]Crawl skipped.[/dim]\n")
+            return None
+
+        # ── Number of rounds ────────────────────────────────────────────────────
+        console.print("[bold cyan]│[/bold cyan]")
+        console.print("[bold cyan]│  Number of rounds:[/bold cyan]")
+        rounds_idx = ask_choice(
+            "Rounds",
+            [
+                "2  [dim]— fast, minimal footprint[/dim]",
+                "4  [dim]— balanced (default)[/dim]",
+                "6  [dim]— thorough[/dim]",
+                "10 [dim]— maximum, very slow[/dim]",
+            ],
+            default=1,
+        )
+        rounds_map = [2, 4, 6, 10]
+        rounds     = rounds_map[rounds_idx]
+
+        # ── Stealth ───────────────────────────────────────────────────────────
+        console.print("[bold cyan]│[/bold cyan]")
+        stealth = ask_yes_no("│  Stealth mode for crawl (longer delays)? ")
+
+        # ── Final report ──────────────────────────────────────────────────────────
+        console.print("[bold cyan]│[/bold cyan]")
+        do_report = ask_yes_no("│  Generate HTML report at the end of the crawl?", default_yes=True)
+
+        console.print(
+            f"[bold cyan]└─>[/bold cyan] [green]Crawl enabled "
+            f"— {rounds} round(s){'  · stealth' if stealth else ''}[/green]\n"
+        )
+        return {
+            "rounds":     rounds,
+            "stealth":    stealth,
+            "do_report":  do_report,
+            "max":        300,
+            "per_dork":   20,
+        }
+
+    def _run_crawl_wizard(seed_dorks: list, crawl_opts: dict, output: str) -> None:
+        """Run DorkCrawlerAgent with the options chosen in the wizard session."""
+        if not crawl_opts or not _ANALYZE_AVAILABLE:
+            return
+
+        ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = None
+        if crawl_opts["do_report"]:
+            base        = os.path.splitext(output)[0] if output else f"dorkeye_crawl_{ts}"
+            report_path = f"{base}_crawl_{ts}.html"
+
+        # Namespace compatible with run_crawl()
+        _crawl_args = type("A", (), {
+            "crawl_rounds":   crawl_opts["rounds"],
+            "crawl_max":      crawl_opts["max"],
+            "crawl_per_dork": crawl_opts["per_dork"],
+            "crawl_stealth":  crawl_opts["stealth"],
+            "crawl_report":   crawl_opts["do_report"],
+            "crawl_out":      report_path,
+        })()
+
+        console.print(
+            f"\n[bold cyan][Crawl] Starting recursive crawl — "
+            f"{crawl_opts['rounds']} round max · "
+            f"stealth: {'on' if crawl_opts['stealth'] else 'off'}[/bold cyan]"
+        )
+        try:
+            crawl_out = run_crawl(
+                seed_dorks = seed_dorks,
+                args       = _crawl_args,
+                target     = "",
+            )
+            n_new = len(crawl_out.get("results", []))
+            console.print(
+                f"[bold green][Crawl] Completed — "
+                f"{crawl_out.get('rounds', 0)} round(s) · "
+                f"{n_new} result(s) · "
+                f"stop: {crawl_out.get('stop_reason', '?')}[/bold green]"
+            )
+            if crawl_out.get("report_path"):
+                console.print(
+                    f"[bold green][✓] Report crawl → {crawl_out['report_path']}[/bold green]"
+                )
+        except Exception as _ce:
+            console.print(f"[yellow][Crawl] Error: {_ce}[/yellow]")
+
+    # ── Main menu ────────────────────────────────────────────────────────────
 
     MAIN_MENU = [
         ("Google Dork Search",   "Search DuckDuckGo with dork(s)"),
@@ -3055,6 +3560,7 @@ def run_wizard():
 
         config = load_config(None)
 
+        # ── Choice 1: Google Dork Search ─────────────────────────────────────
         if choice == "1":
             console.print("\n[bold cyan]┌─[ GOOGLE DORK SEARCH ][/bold cyan]")
             console.print("[bold cyan]│[/bold cyan]  [yellow]0)[/yellow] [dim]← Back to main menu[/dim]")
@@ -3076,7 +3582,7 @@ def run_wizard():
                     console.print("[red][!] Empty dork. Aborting.[/red]")
                     continue
             elif sub == "2":
-                dork_input = ask_string("Path to .txt file")
+                dork_input = ask_string("ex: dorks.txt")
                 if not os.path.isfile(dork_input):
                     console.print(f"[red][!] File not found: {dork_input}[/red]")
                     continue
@@ -3084,8 +3590,14 @@ def run_wizard():
                 console.print("[red][!] Invalid choice.[/red]")
                 continue
 
-            count   = collect_run_options(config, ask_count=True)
-            output  = pick_output()
+            count  = collect_run_options(config, ask_count=True)
+            output = pick_output()
+
+            # ── Ask for analysis before starting (only if .json output) ────────
+            do_analyze  = _ask_analyze(output)
+            # ── Ask for recursive crawl ──────────────────────────────────────
+            crawl_opts  = _ask_crawl()
+
             dorkeye = DorkEyeEnhanced(config, output)
             dorks   = dorkeye.process_dorks(dork_input)
             console.print(f"\n[bold cyan]┌─[ LOADED {len(dorks)} DORK(s) ][/bold cyan]")
@@ -3097,8 +3609,17 @@ def run_wizard():
             dorkeye.print_statistics()
             if output:
                 console.print(f"\n[bold green][✓] Results saved: {output}[/bold green]")
+
+            # ── Post-search analysis ─────────────────────────────────────────────
+            if do_analyze and dorkeye.results:
+                _run_analyze(dorkeye.results, output)
+
+            # ── Adaptive recursive crawl ─────────────────────────────────────
+            if crawl_opts and dorks:
+                _run_crawl_wizard(dorks, crawl_opts, output or "")
             continue
 
+        # ── Choice 2: Dork Generator ─────────────────────────────────────────
         if choice == "2":
             console.print("\n[bold cyan]┌─[ DORK GENERATOR — TEMPLATE ][/bold cyan]")
             console.print("[bold cyan]│[/bold cyan]  [yellow]0)[/yellow] [dim]← Back to main menu[/dim]")
@@ -3166,6 +3687,11 @@ def run_wizard():
             collect_run_options(config, ask_count=False)
             output = pick_output()
 
+            # ── Ask for analysis before starting (only if .json output) ────────
+            do_analyze  = _ask_analyze(output)
+            # ── Ask for recursive crawl ──────────────────────────────────────
+            crawl_opts  = _ask_crawl()
+
             all_dorks = []
             for template_file in template_files:
                 generator = DorkGenerator(str(template_file))
@@ -3184,6 +3710,14 @@ def run_wizard():
             dorkeye.print_statistics()
             if output:
                 console.print(f"\n[bold green][✓] Results saved: {output}[/bold green]")
+
+            # ── Post-search analysis ─────────────────────────────────────────────
+            if do_analyze and dorkeye.results:
+                _run_analyze(dorkeye.results, output)
+
+            # ── Adaptive recursive crawl ─────────────────────────────────────
+            if crawl_opts and all_dorks:
+                _run_crawl_wizard(all_dorks, crawl_opts, output or "")
             continue
 
         console.print("[red][!] Invalid option.[/red]")
@@ -3194,6 +3728,7 @@ def run_wizard():
 # ══════════════════════════════════════════════════════════════
 
 def main():
+    """Entry point: dispatch to --wizard mode or parse CLI flags and run the appropriate pipeline."""
     if "--wizard" in sys.argv:
         greet_user()
         run_wizard()
@@ -3202,30 +3737,53 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.7 | OSINT Dorking Tool",
+        description="DorkEye v4.8 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
 
   # Interactive wizard
     %(prog)s --wizard
 
-  # Dork(s) Search
+  # Dork Search  (-o .json enables automatic analysis)
     %(prog)s -d "site:example.com filetype:pdf" -o results.json
     %(prog)s -d dorks.txt -c 100 -o output.html
 
+  # Direct SQLi test on a URL
+    %(prog)s -u "https://example.com/page.php?id=1" --sqli -o sqli_result.json
+    %(prog)s -u "https://example.com/page.php?id=1" --sqli --stealth
+
+  # Load saved results file for SQLi / analysis / crawl
+    %(prog)s -f Dump/results.json --sqli -o retest.json
+    %(prog)s -f Dump/results.json --analyze --analyze-fetch-max=5000 -o reanalyzed.json
+    %(prog)s -f Dump/results.json --sqli --crawl -o full_retest.json
+
   # Dork Generator
     %(prog)s --dg=all
-    %(prog)s --dg=sqli --mode=medium --sqli --stealth -o results.html
-    %(prog)s --dg=backups --templates=dorks_templates_research.yaml -o output.html
-    %(prog)s --dg=all --templates=dorks_template.yaml -o output.html
-    %(prog)s --dg=sqli --mode=aggressive --templates=dorks_templates.yaml --sqli --stealth -o report.html
+    %(prog)s --dg=sqli --mode=medium --sqli --stealth -o results.json
+    %(prog)s --dg=backups --templates=dorks_templates_research.yaml -o output.json
+    %(prog)s --dg=all --mode=aggressive -o results.json
+    %(prog)s --dg=all --dg-max=10000 -o big.json
+
+  # Search + integrated automatic analysis (output .json)
+    %(prog)s -d dorks.txt -o results.json --analyze
+    %(prog)s --dg=sqli --mode=medium -o results.json --analyze --analyze-fetch
+
+  # Adaptive recursive crawl (automatic multi-round refinement, no AI)
+    %(prog)s -d "site:example.com inurl:admin" --crawl -o crawl.json
+    %(prog)s --dg=sqli --crawl --crawl-rounds=5 --crawl-report -o crawl.json
+    %(prog)s -d dorks.txt --crawl --crawl-stealth --crawl-max=200 --crawl-out=report.html
+
+  # Standalone analysis on a saved results file
+    python dorkeye_analyze.py Dump/results.json --fetch --fmt=html
 
 """
     )
 
     parser.add_argument("--wizard",          action="store_true", help="Launch interactive wizard")
     parser.add_argument("-d", "--dork",      help="Single dork or file containing dorks")
-    parser.add_argument("-o", "--output",    help="Output filename (with extension: .json .csv .html .txt)")
+    parser.add_argument("-u", "--url",       help="Direct URL to test for SQLi (use with --sqli)")
+    parser.add_argument("-f", "--file",      help="Load results from a DorkEye .json or .txt file (combine with --sqli, --analyze, --crawl)")
+    parser.add_argument("-o", "--output",    help="Output filename (.json enables automatic analysis prompt)")
     parser.add_argument("-c", "--count",     type=int, default=50, help="Results per dork (default: 50)")
     parser.add_argument("--config",          help="Configuration file (YAML or JSON)")
     parser.add_argument("--no-analyze",      action="store_true", help="Disable file analysis")
@@ -3234,10 +3792,39 @@ def main():
     parser.add_argument("--no-fingerprint",  action="store_true", help="Disable HTTP fingerprinting")
     parser.add_argument("--templates",       type=str, help="Template file in Templates/")
     parser.add_argument("--dg",              action="append", nargs="?", const="all", help="Activate Dork Generator")
+    parser.add_argument("--dg-max",          type=int, default=800, help="Max dork combinations per template (default: 800)")
     parser.add_argument("--mode",            nargs="?", const="soft", default="soft", help="Generation mode: soft | medium | aggressive")
     parser.add_argument("--blacklist",       nargs="+", help="Extensions to blacklist")
     parser.add_argument("--whitelist",       nargs="+", help="Extensions to whitelist")
     parser.add_argument("--create-config",   action="store_true", help="Create sample configuration file")
+    # ── Integrated analysis ───────────────────────────────────────────────────────
+    parser.add_argument(
+        "--analyze",
+        action="store_true",
+        help="Run post-search analysis pipeline (triage + secrets). Forced when -o is .json"
+    )
+    parser.add_argument(
+        "--analyze-fetch",
+        action="store_true",
+        help="Download page content for HIGH/CRITICAL results for deeper analysis"
+    )
+    parser.add_argument(
+        "--analyze-fetch-max",
+        type=int, default=20,
+        help="Maximum pages to download (default: 20)"
+    )
+    parser.add_argument(
+        "--analyze-fmt",
+        choices=["html", "md", "json", "txt"],
+        default="html",
+        help="Analysis report format (default: html)"
+    )
+    parser.add_argument(
+        "--analyze-out",
+        type=str, default=None,
+        help="Analysis report path (default: auto-generated next to the -o file)"
+    )
+    add_crawler_args(parser)
 
     args = parser.parse_args()
 
@@ -3250,7 +3837,6 @@ def main():
     if args.dg or args.templates:
         template_files_for_validation = resolve_templates_argument(args.templates)
         VALID_CATEGORIES = get_categories_from_templates(template_files_for_validation)
-
         if not VALID_CATEGORIES and args.dg:
             parser.error("No categories found in template files.")
 
@@ -3269,16 +3855,13 @@ def main():
     if args.mode not in VALID_MODES:
         parser.error(f"Invalid mode '{args.mode}'. Available: {', '.join(VALID_MODES)}")
 
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
     print_banner()
 
     if args.create_config:
         create_sample_config()
         return
 
-    if not args.dork and not args.dg:
+    if not args.dork and not args.dg and not getattr(args, "url", None) and not getattr(args, "file", None):
         parser.print_help()
         return
 
@@ -3298,14 +3881,211 @@ def main():
             f"[dim][~] No -o specified — saving to [bold]{output_file}[/bold][/dim]"
         )
 
+    # ── Auto-detect .json output: ask for analysis BEFORE the search ─────────────
+    _is_json_output = str(output_file).lower().endswith(".json")
+    _do_analyze     = args.analyze or _is_json_output
+
+    if _is_json_output and not args.analyze and _ANALYZE_AVAILABLE:
+        console.print(
+            "\n[bold cyan]┌─[ RESULTS ANALYSIS ][/bold cyan]"
+        )
+        console.print(
+            "[bold cyan]│[/bold cyan]  .json output detected — analysis available after the search:"
+        )
+        console.print(
+            "[bold cyan]│[/bold cyan]  triage priority · secrets · credentials · HTML report"
+        )
+        console.print(
+            "[bold cyan]│  Run analysis on results? [y/N]:[/bold cyan] ", end=""
+        )
+        try:
+            _do_analyze = input("").strip().lower() in ("y", "yes")
+        except KeyboardInterrupt:
+            _do_analyze = False
+        if _do_analyze:
+            console.print("[bold cyan]└─>[/bold cyan] [green]Analysis enabled.[/green]\n")
+        else:
+            console.print("[bold cyan]└─>[/bold cyan] [dim]Analysis skipped.[/dim]\n")
+    elif args.analyze and not _ANALYZE_AVAILABLE:
+        console.print("[yellow][!] dorkeye_agents.py not found — analysis not available.[/yellow]")
+        _do_analyze = False
+
     dorkeye = DorkEyeEnhanced(config, output_file)
 
+    # ── -u / --url: direct SQLi test on a single URL ─────────────────────────
+    if getattr(args, "url", None):
+        target_url = args.url
+        console.print(f"\n[bold cyan]┌─[ DIRECT URL TEST ][/bold cyan]")
+        console.print(f"[bold cyan]│[/bold cyan]  Target → [cyan]{_rich_escape(target_url)}[/cyan]")
+        if not config.get("sqli_detection", False):
+            console.print("[bold cyan]│[/bold cyan]  [yellow][!] --sqli not specified — enabling SQLi detection automatically[/yellow]")
+            config["sqli_detection"] = True
+            dorkeye.config["sqli_detection"] = True
+            dorkeye.analyzer.config["sqli_detection"] = True
+        console.print("[bold cyan]└─>[/bold cyan] Starting SQLi test...\n")
+        _detector = SQLiDetector(
+            stealth=config.get("stealth_mode", False),
+            timeout=config.get("request_timeout", 10),
+        )
+        _sqli_result = _detector.test_sqli(target_url)
+        # ── Print result ──────────────────────────────────────────────────────
+        console.print("\n[bold yellow]┌─[ SQLi Test Result ][/bold yellow]")
+        _tested  = _sqli_result.get("tested", False)
+        _vuln    = _sqli_result.get("vulnerable", False)
+        _conf    = _sqli_result.get("overall_confidence", "none")
+        _waf     = _sqli_result.get("waf_detected")
+        _msg     = _sqli_result.get("message", "")
+        if not _tested:
+            console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] Not tested — {_msg}[/yellow]")
+        elif _vuln:
+            _style = "bold magenta" if _conf == SQLiConfidence.CRITICAL.value else "bold red"
+            console.print(f"[bold yellow]│[/bold yellow]  [{_style}][!] VULNERABLE ({_conf})[/{_style}]  {_rich_escape(target_url)}")
+            for _t in _sqli_result.get("tests", []):
+                if _t.get("vulnerable"):
+                    _method = _t.get("method", "?")
+                    _ev     = " | ".join(_t.get("evidence", [])[:2])
+                    _param  = _t.get("parameter", "")
+                    _p_str  = f" [param: {_param}]" if _param else ""
+                    console.print(f"[bold yellow]│[/bold yellow]    [dim]↳ method: [yellow]{_method}[/yellow]{_p_str}  evidence: [italic]{_rich_escape(_ev[:120])}[/italic][/dim]")
+        else:
+            console.print(f"[bold yellow]│[/bold yellow]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
+        if _waf:
+            console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] WAF detected: {_waf}[/yellow]")
+        console.print(f"[bold yellow]└─>[/bold yellow]  {_msg}")
+        # ── Optionally save ───────────────────────────────────────────────────
+        if output_file:
+            _entry = {
+                "url":       target_url,
+                "title":     "",
+                "snippet":   "",
+                "dork":      "",
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "extension": dorkeye.analyzer.get_file_extension(target_url),
+                "category":  dorkeye.analyzer.categorize_url(target_url),
+                "sqli_test": _sqli_result,
+            }
+            dorkeye.results.append(_entry)
+            if _vuln:
+                dorkeye.stats["sqli_vulnerable"] += 1
+            if _waf:
+                dorkeye.stats["waf_detected"] += 1
+            dorkeye.save_results()
+            console.print(f"\n[bold green][✓] Result saved → Dump/{output_file}[/bold green]")
+        return
+
+    # ── -f / --file: load results from saved file + re-run analysis/sqli/crawl ─
+    if getattr(args, "file", None):
+        _file_path = args.file
+        console.print(f"\n[bold cyan]┌─[ FILE MODE ][/bold cyan]")
+        console.print(f"[bold cyan]│[/bold cyan]  Loading results from: [cyan]{_file_path}[/cyan]")
+        _loaded = _load_results_from_file(_file_path)
+        if not _loaded:
+            console.print("[bold cyan]└─>[/bold cyan] [red]No results loaded — aborting.[/red]")
+            return
+        console.print(f"[bold cyan]│[/bold cyan]  Loaded [green]{len(_loaded)}[/green] result(s)")
+
+        # Determine what to do with the loaded URLs
+        _do_sqli    = config.get("sqli_detection", False)
+        _do_analyze = args.analyze or str(output_file).lower().endswith(".json")
+        _do_crawl   = getattr(args, "crawl", False)
+
+        console.print(
+            f"[bold cyan]│[/bold cyan]  SQLi: {'[bold red]ON[/bold red]' if _do_sqli else '[dim]off[/dim]'} │ "
+            f"Analyze: {'[bold green]ON[/bold green]' if _do_analyze and _ANALYZE_AVAILABLE else '[dim]off[/dim]'} │ "
+            f"Crawl: {'[bold green]ON[/bold green]' if _do_crawl and _ANALYZE_AVAILABLE else '[dim]off[/dim]'}"
+        )
+        console.print("[bold cyan]└─>[/bold cyan] Processing...\n")
+
+        # Reconstruct url_hashes to avoid false duplicates in save
+        for _r in _loaded:
+            _h = dorkeye._hash_url(_r.get("url", ""))
+            dorkeye.url_hashes.add(_h)
+
+        if _do_sqli and _loaded:
+            _analyzed = dorkeye.analyze_results(_loaded)
+            dorkeye.results = _analyzed
+        else:
+            dorkeye.results = _loaded
+
+        dorkeye.print_statistics()
+
+        if output_file:
+            dorkeye.save_results()
+            console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
+
+        # ── Integrated analysis on loaded file ───────────────────────────────────
+        if _do_analyze and dorkeye.results and _ANALYZE_AVAILABLE:
+            console.print(
+                f"\n[bold cyan][Agents] Starting analysis on {len(dorkeye.results)} result(s)...[/bold cyan]"
+            )
+            ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fmt        = args.analyze_fmt
+            report_out = args.analyze_out
+            if not report_out:
+                base       = str(output_file).replace(".json", "").replace(".html", "")
+                report_out = f"{base}_analysis_{ts}.{fmt}"
+            _analyze_args_f = type("A", (), {
+                "analyze_fetch":         args.analyze_fetch,
+                "analyze_fetch_max":     args.analyze_fetch_max,
+                "analyze_no_llm_triage": False,
+                "analyze_report":        True,
+                "analyze_fmt":           fmt,
+                "analyze_out":           report_out,
+            })()
+            try:
+                _result_f = _run_agents_pipeline(
+                    results    = dorkeye.results,
+                    llm_plugin = None,
+                    args       = _analyze_args_f,
+                )
+                if _result_f.get("report_path"):
+                    console.print(
+                        f"[bold green][✓] Analysis report → {_result_f['report_path']}[/bold green]"
+                    )
+                _n_sec = _result_f.get("secrets_total", 0)
+                if _n_sec:
+                    console.print(
+                        f"[bold red][!] {_n_sec} secret(s) detected — see the report.[/bold red]"
+                    )
+            except Exception as _fae:
+                console.print(f"[yellow][Analyzer] Error: {_fae}[/yellow]")
+
+        # ── Recursive crawl on loaded results ─────────────────────────────────
+        if _do_crawl and _ANALYZE_AVAILABLE:
+            console.print("\n[bold cyan][Crawl] Starting crawl on loaded results...[/bold cyan]")
+            _seed_dorks = list({r.get("dork", "") for r in dorkeye.results if r.get("dork")})
+            if not _seed_dorks:
+                _seed_dorks = [r.get("url", "") for r in dorkeye.results[:10]]
+            try:
+                _crawl_out_f = run_crawl(
+                    seed_dorks = _seed_dorks,
+                    args       = args,
+                    target     = "",
+                )
+                if _crawl_out_f.get("results"):
+                    _existing_urls = {r.get("url") for r in dorkeye.results}
+                    _new_crawl     = [r for r in _crawl_out_f["results"] if r.get("url") not in _existing_urls]
+                    dorkeye.results.extend(_new_crawl)
+                    if output_file:
+                        dorkeye.save_results()
+                    console.print(
+                        f"\n[bold green][Crawl] Completed — "
+                        f"{_crawl_out_f['rounds']} round(s) | "
+                        f"+{len(_new_crawl)} new result(s) | "
+                        f"stop: {_crawl_out_f['stop_reason']}[/bold green]"
+                    )
+            except Exception as _fce:
+                console.print(f"[yellow][Crawl] Error: {_fce}[/yellow]")
+
+        return
+
+    # ── Dork source ───────────────────────────────────────────────────────────
     if args.dg:
         template_files = resolve_templates_argument(args.templates)
         console.print(f"[cyan][*] Loaded template(s): {', '.join([t.name for t in template_files])}[/cyan]")
         all_dorks = []
         for template_file in template_files:
-            generator = DorkGenerator(str(template_file))
+            generator = DorkGenerator(str(template_file), max_combinations=args.dg_max)
             all_dorks.extend(generator.generate(categories=selected_categories, mode=args.mode))
         dorks = all_dorks
         console.print(f"[cyan][*] Generated {len(dorks)} dorks (mode: {args.mode})[/cyan]")
@@ -3323,6 +4103,80 @@ def main():
         console.print("\n[red][!] Search interrupted by user![/red]")
 
     dorkeye.print_statistics()
+
+    # ── Integrated post-search analysis ──────────────────────────────────────────
+    if _do_analyze and dorkeye.results and _ANALYZE_AVAILABLE:
+        console.print(
+            f"\n[bold cyan][Agents] Starting analysis on {len(dorkeye.results)} result(s)...[/bold cyan]"
+        )
+        ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fmt        = args.analyze_fmt
+        report_out = args.analyze_out
+        if not report_out:
+            base       = str(output_file).replace(".json", "")
+            report_out = f"{base}_analysis_{ts}.{fmt}"
+
+        _analyze_args = type("A", (), {
+            "analyze_fetch":         args.analyze_fetch,
+            "analyze_fetch_max":     args.analyze_fetch_max,
+            "analyze_no_llm_triage": False,
+            "analyze_report":        True,
+            "analyze_fmt":           fmt,
+            "analyze_out":           report_out,
+        })()
+        try:
+            result = _run_agents_pipeline(
+                results    = dorkeye.results,
+                llm_plugin = None,
+                args       = _analyze_args,
+            )
+            if result.get("report_path"):
+                console.print(
+                    f"[bold green][✓] Analysis report → {result['report_path']}[/bold green]"
+                )
+            n_sec = result.get("secrets_total", 0)
+            if n_sec:
+                console.print(
+                    f"[bold red][!] {n_sec} secret(s) detected — see the report.[/bold red]"
+                )
+        except Exception as _ae:
+            console.print(f"[yellow][Agents] Error: {_ae}[/yellow]")
+
+    # ── Adaptive recursive crawl (--crawl) ───────────────────────────────────────
+    if getattr(args, "crawl", False):
+        if not _ANALYZE_AVAILABLE:
+            console.print("[yellow][!] dorkeye_agents.py not found — crawl not available.[/yellow]")
+        else:
+            console.print("\n[bold cyan][Crawl] Starting adaptive recursive crawl...[/bold cyan]")
+            try:
+                crawl_out = run_crawl(
+                    seed_dorks = dorks,
+                    args       = args,
+                    target     = "",
+                )
+                if crawl_out.get("results"):
+                    # Merge crawl results with the initial search results
+                    existing_urls = {r.get("url") for r in dorkeye.results}
+                    new_from_crawl = [
+                        r for r in crawl_out["results"]
+                        if r.get("url") not in existing_urls
+                    ]
+                    dorkeye.results.extend(new_from_crawl)
+                    if dorkeye.output_file:
+                        dorkeye.save_results()
+                    console.print(
+                        f"\n[bold green][Crawl] Completed — "
+                        f"{crawl_out['rounds']} round(s) | "
+                        f"+{len(new_from_crawl)} new result(s) | "
+                        f"stop: {crawl_out['stop_reason']}[/bold green]"
+                    )
+                    if crawl_out.get("report_path"):
+                        console.print(
+                            f"[bold green][✓] Crawl report → {crawl_out['report_path']}[/bold green]"
+                        )
+            except Exception as _ce:
+                console.print(f"[yellow][Crawl] Error: {_ce}[/yellow]")
+
     if dorkeye.output_file:
         console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
     else:
