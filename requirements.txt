@@ -1,4 +1,4 @@
-# 🦅 DorkEye Requirements
+# DorkEye Requirements
 # Install with: pip install -r requirements.txt
 
 # Core HTTP requests management
