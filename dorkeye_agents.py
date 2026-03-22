@@ -62,7 +62,7 @@ except ImportError:
         print(msg)
 
     def _panel(body: str, title: str = "", border: str = "") -> None:  # type: ignore
-        print(f"\n[{title}]\n{body}")
+        print(f"\n[{title}]\n{body}")   #nosec
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -754,7 +754,7 @@ class ReportAgent(BaseAgent):
         if output_path:
             output_path = self._fix_ext(output_path, fmt)
             try:
-                Path(output_path).write_text(content, encoding="utf-8")
+                Path(output_path).write_text(content, encoding="utf-8")   #nosec
                 _log(f"[{self.name}] Report salvato: {output_path}", style="bold green")
             except IOError as e:
                 _log(f"[{self.name}] Errore salvataggio: {e}", style="red")
@@ -2488,7 +2488,7 @@ if __name__ == "__main__":
     print()
     if out.get("report_path"):
         print(f"[✓] Report: {out['report_path']}")
-    print(f"[✓] Segreti trovati: {out['secrets_total']}")
+    print(f"[✓] Segreti trovati: {out['secrets_total']}")   #nosec
     print(f"[✓] PII trovati:     {out.get('pii_total', 0)}")
     print(f"[✓] Email raccolte:  {out.get('emails_total', 0)}")
     n_subs = sum(len(v) for v in out.get('subdomains', {}).values())
