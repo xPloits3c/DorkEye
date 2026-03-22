@@ -362,8 +362,16 @@ class _ScriptStyleStripper(_HTMLParser):
 
 # Fallback regex — usato SOLO se HTMLParser lancia eccezione su HTML
 # gravemente malformato. Non è il percorso principale.
-_SCRIPT_STYLE_RE_FALLBACK = re.compile(
-    r"<(?:script|style)(?:[^>]*)>[\s\S]*?</(?:script|style)\s*>",
+#
+# FIX CWE-20/116/185/186 ("Bad HTML filtering regexp"):
+#   - Apertura : `(?:[^>]*)` invariato (gestisce attributi senza `>` non quotato)
+#   - Chiusura : sostituito `\s*>` con `[^>]*>` per coprire varianti browser-accettate
+#               come `</script anything>` o `</  script  foo>` (spazi dopo `</`
+#               gestiti da `\s*` aggiunto prima del nome tag).
+# Questo percorso è intenzionalmente un last-resort: il path primario usa
+# _ScriptStyleStripper (HTMLParser built-in) che è immune a queste varianti.
+_SCRIPT_STYLE_RE_FALLBACK = re.compile(  # noqa: S608
+    r"<(?:script|style)(?:[^>]*)>[\s\S]*?</\s*(?:script|style)[^>]*>",
     re.IGNORECASE,
 )
 
