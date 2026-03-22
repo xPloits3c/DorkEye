@@ -1,31 +1,31 @@
 """
 DorkEye Agents v3.0
 ====================
-Pipeline di analisi post-ricerca per DorkEye v4.8+
+Post-Search Analysis Pipeline for DorkEye v4.8+
 
-Gli agenti vengono invocati DOPO che DorkEye ha completato la ricerca.
-Non interferiscono con il flusso di ricerca — lavorano sui risultati gia' raccolti.
+Agents are invoked AFTER DorkEye has completed the search process.
+They do not interfere with the search flow — they operate on the results already collected.
 
-Pipeline (attivata con --analyze):
-  1. TriageAgent          — classifica i risultati per priorità OSINT (+ bonus sqli/accessible)
-  2. PageFetchAgent       — scarica pagine HIGH/CRITICAL (retry, UA rotation, salva headers)
-  3. HeaderIntelAgent     — analizza response headers: info leak, security header mancanti
-  4. TechFingerprintAgent — rileva CMS, framework, versioni JS/server dai contenuti
-  5. SecretsAgent         — regex su secrets/credenziali + hash detection + severity
-  6. PiiDetectorAgent     — rileva PII: email, phone, IBAN, CF, CC, SSN, DOB
-  7. EmailHarvesterAgent  — raccoglie e categorizza email da tutti i risultati
-  8. SubdomainHarvesterAgent — estrae subdomini e produce dork per DorkCrawler
-  9. ReportAgent          — report HTML/MD/JSON con tutte le sezioni nuove
- 10. DorkCrawlerAgent     — crawl ricorsivo adattivo (alimentato da TechFP + SubHarvest)
+Pipeline (activated with --analyze):
+  1. TriageAgent          — Classifies results by OSINT priority (+ sqli/accessible bonus).
+  2. PageFetchAgent       — Downloads HIGH/CRITICAL pages (retry, UA rotation, saves headers).
+  3. HeaderIntelAgent     — Analyzes response headers: info leaks, missing security headers.
+  4. TechFingerprintAgent — Detects CMS, frameworks, JS/server versions from content.
+  5. SecretsAgent         — Regex for secrets/credentials + hash detection + severity.
+  6. PiiDetectorAgent     — Detects PII: email, phone, IBAN, Tax IDs (CF), CC, SSN, DOB.
+  7. EmailHarvesterAgent  — Collects and categorizes emails from all results.
+  8. SubdomainHarvesterAgent — Extracts subdomains and generates dorks for DorkCrawler.
+  9. ReportAgent          — Generates HTML/MD/JSON reports including all new sections.
+ 10. DorkCrawlerAgent     — Adaptive recursive crawl (powered by TechFP + SubHarvest).
 
-Uso CLI:
+CLI USAGE:
     python dorkeye.py --dg=all --analyze -o risultati.json
     python dorkeye.py -d dorks.txt --analyze --analyze-fetch --analyze-fmt=html
 
-Uso standalone (da results file):
+Standalone Usage (from results file):
     python dorkeye_agents.py results.json --analyze-fmt=html --analyze-out=report.html
 
-Autore: DorkEye Project
+Author: DorkEye Project
 """
 
 from __future__ import annotations
