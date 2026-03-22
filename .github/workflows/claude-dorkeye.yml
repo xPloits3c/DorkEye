@@ -25,7 +25,7 @@ on:
     types: [opened, assigned]
 
   schedule:
-    - cron: "0 9 * * 1" # Ogni lunedì alle 09:00 UTC
+    - cron: "0 9 * * 1,4,7" # Ogni lunedì, giovedi, domenica alle 09:00 UTC
 
   workflow_dispatch: # Trigger manuale dall'interfaccia GitHub
 
