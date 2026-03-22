@@ -35,24 +35,18 @@
 
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, configuration files, credentials, PII data, subdomains, and technology fingerprints — efficiently and with stealth controls.
 
-| Docs | READ |
-|---------|---------|
-| Install | [`GUIDE`](Docs/INSTALL.md) |
-| DorkGen | [`GUIDE`](Docs/dork_generator.md) |
-| Full | [`USAGE`](Docs/USAGE.md)
-
 ![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
 
 ---
 
 ## Why DorkEye
 
-- ✅ Bypass CAPTCHA and rate‑limiting
-- ✅ Advanced .html report interactive
-- ✅ Maintain anonymity and avoid IP blocking
-- ✅ Clean and unfiltered search results
-- ✅ Advanced analysis and automated SQLi testing
-- ✅ Continue Dorking for hours, DorkEye won’t get banned.
+- Bypass CAPTCHA and rate‑limiting
+- Advanced .html report interactive
+- Maintain anonymity and avoid IP blocking
+- Clean and unfiltered search results
+- Advanced analysis and automated SQLi testing
+- Continue Dorking for hours, DorkEye won’t get banned.
 
 <img width="1437" height="652" alt="564558417-37385827-9112-4efe-aa0a-f8941da0a2d9" src="https://github.com/user-attachments/assets/df21ead3-dd90-4692-9eab-259c6582ae86" />
 
@@ -120,6 +114,7 @@
 ---
 
 ## Usage 
+
 <img width="1322" height="967" alt="h1" src="https://github.com/user-attachments/assets/6f5be8c5-4a71-4187-988d-6eb301789a1c" />
 <img width="852" height="626" alt="examples" src="https://github.com/user-attachments/assets/ee40a6b9-949d-4a2d-a97f-209a194e7214" />
 
