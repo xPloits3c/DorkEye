@@ -1,4 +1,5 @@
 # Google Dork Generator I.C.W.T 2026
+# DorkEye Project
 import yaml
 import itertools
 import re
@@ -44,7 +45,7 @@ class DorkGenerator:
     # ─────────────────────────────────────────────
 
     def _extract_placeholders(self, template: str) -> list:
-        """Estrae i placeholder mantenendo l'ordine ma senza duplicati."""
+        """Extracts placeholders preserving order without duplicates."""
         seen = set()
         unique = []
         for ph in re.findall(r"\{(.*?)\}", template):
@@ -54,7 +55,7 @@ class DorkGenerator:
         return unique
 
     def _validate_placeholders(self, template: str, category: str):
-        """Avvisa se un placeholder non è definito nelle variabili."""
+        """Warns if a placeholder is not defined in the variables."""
         placeholders = re.findall(r"\{(.*?)\}", template)
         unknown = [ph for ph in placeholders if ph not in self.variables]
         if unknown:
@@ -139,7 +140,7 @@ class DorkGenerator:
         if isinstance(raw_dorks, dict):
             collected = []
             for level, dork_list in raw_dorks.items():
-                # Includi solo i livelli consentiti dalla gerarchia
+                # Include only the levels allowed by the hierarchy
                 if allowed_modes is None or level in allowed_modes:
                     if isinstance(dork_list, list):
                         collected.extend(dork_list)
@@ -159,10 +160,10 @@ class DorkGenerator:
         Generates dorks filtered by category and mode.
 
         Mode hierarchy:
-          soft       → solo template "soft"
+          soft       → only "soft" templates
           medium     → "soft" + "medium"
           aggressive → "soft" + "medium" + "aggressive"
-          None       → nessun filtro, tutti i template
+          None       → no filter, all templates
         """
         all_dorks = []
 
@@ -185,7 +186,7 @@ class DorkGenerator:
                 generated = self._generate_from_template(template)
                 all_dorks.extend(generated)
 
-        # Dedup globale + shuffle
+        # Global dedup + shuffle
         all_dorks = list(set(all_dorks))
         random.shuffle(all_dorks)
 
@@ -205,7 +206,8 @@ class DorkGenerator:
 
     def get_available_modes(self) -> list:
         """
-        Returns the available modes by automatically detecting bothnested and flat structures..
+        Returns the available modes by automatically detecting both
+        nested and flat structures.
         """
         modes = set()
         for data in self.templates.values():
