@@ -159,7 +159,7 @@ DorkEye/
 │ ├── README.md
 │ /Tools/
 │    ├── dork_generator.py     ← Dork Generator Queries
-│    ├── dorkeye_agents.py     ← Agents v3.0 pipeline
+│    ├── dorkeye_agents.py     ← Agents v3.1 pipeline
 │    ├── dorkeye_patterns.py   ← Shared pattern library
 │    └── dorkeye_analyze.py    ← Standalone analysis CLI
 │ /Templates/
