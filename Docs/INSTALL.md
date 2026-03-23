@@ -2,15 +2,14 @@
 
 # 📦 DorkEye — Installation Guide
 
-Official installation guide for **DorkEye**  
-OSINT & Security Dorking Framework
+Official installation guide for **DorkEye Project**  
 
 ---
 
 ## 🔗 Direct Download
 
 You can download the latest version directly from GitHub:
-👉 (https://github.com/xPloits3c/DorkEye/)  
+👉 (https://github.com/xPloits3c/DorkEye/releases/)  
 
 Or clone the repository:
 ```bash
@@ -21,8 +20,8 @@ git clone https://github.com/xPloits3c/DorkEye.git
 ## 📋 Table of Contents
 
 1. [Prerequisites](#-prerequisites)
-2. [Quick Installation (Recommended)](#-quick_installation_recommended)
-5. [CLI Command Mode (optional)](#-cli_command_mode_(opzional))
+2. [Quick Installation (Recommended)](#-quick-installation-recommended)
+5. [CLI Command Mode (optional)](#-cli-command-mode-(opzional))
 6. [Verification](#-verification)
 7. [Troubleshooting](#-troubleshooting)
 8. [Updating DorkEye](#-updating-dorkeye)
