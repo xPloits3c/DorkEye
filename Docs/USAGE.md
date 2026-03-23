@@ -1,4 +1,4 @@
-# DorkEye Project — Complete Usage Reference
+# DorkEye — Complete Usage Reference
 
 Every flag, every mode, every combination — explained.
 
@@ -7,7 +7,7 @@ Every flag, every mode, every combination — explained.
 __H__       xploits3c.github.io/DorkEye
  [d]
  [e]
- [;]    DorkEye | USAGE
+ [;]    DorkEye | Project
  |_|
   V
 ```
