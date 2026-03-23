@@ -61,7 +61,7 @@
 | 🎯 Direct SQLi Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
 | 🔒 SQL Injection Engine | [4 methods: error-based, UNION, boolean blind, time-based — verbose output](Docs/sqli.md) |
-| 🤖 Agents v3.1 Pipeline | [10-step autonomous analysis — no external AI required](Docs/agents.md) |
+| 🤖 Agents v3.1 Pipeline | [11-step autonomous analysis — no external AI required](Docs/agents.md) |
 | 🛡️ HeaderIntelAgent | [Detects info leaks, missing security headers, outdated server versions](Docs/agents.md#headerintelagent) |
 | 🧬 TechFingerprintAgent | [35 technologies detected with version extraction, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
 | 📧 EmailHarvesterAgent | [Collects and categorizes emails: admin / security / info / noreply / personal](Docs/agents.md#emailharvesteragent) |
