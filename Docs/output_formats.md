@@ -1,4 +1,4 @@
-# Output Formats — DorkEye v4.8
+# Output Formats — DorkEye Project
 
 All result files are saved to the `Dump/` folder, created automatically in the same directory as `dorkeye.py`.
 
