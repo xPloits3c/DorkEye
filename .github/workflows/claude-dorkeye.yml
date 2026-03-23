@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # 🦅 DorkEye — Claude Code Agent Workflow
-# Powered by Anthropic Claude Code Action v1
+# Powered by Anthropic Claude Code Action v1 | DorkEye Project
 #
 # TRIGGERS:
 #   • Ogni PR aperta/aggiornata → review automatica con analisi bug + security
