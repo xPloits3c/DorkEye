@@ -1,4 +1,4 @@
-# SQL Injection Detection — DorkEye v4.9
+# SQL Injection | DorkEye Project
 
 DorkEye includes a built-in multi-method SQL injection engine that works on any URL with query parameters — no external tools required.
 
