@@ -94,7 +94,7 @@
 "Install requirements:"
   pip install -r requirements.txt
 
-"Run DorkEye WIZARD MODE:"
+"DorkEye WIZARD MODE:"
   python dorkeye.py --wizard
 ```
 ---
