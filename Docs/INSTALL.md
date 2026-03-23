@@ -1,8 +1,8 @@
 <img width="1536" height="1024" alt="dorkeye-install" src="https://github.com/user-attachments/assets/a0983dc1-2c2e-4cbd-9ab9-7ae1a3743f29" />
 
-# 📦 DorkEye v4.2.6 — Installation Guide
+# 📦 DorkEye — Installation Guide
 
-Official installation guide for **DorkEye v4.2.6**  
+Official installation guide for **DorkEye**  
 OSINT & Security Dorking Framework
 
 ---
@@ -10,7 +10,7 @@ OSINT & Security Dorking Framework
 ## 🔗 Direct Download
 
 You can download the latest version directly from GitHub:
-👉 (https://github.com/xPloits3c/DorkEye/archive/refs/tags/v4.2.6.zip)  
+👉 (https://github.com/xPloits3c/DorkEye/)  
 
 Or clone the repository:
 ```bash
