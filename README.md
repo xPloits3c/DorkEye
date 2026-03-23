@@ -61,7 +61,7 @@
 | 🎯 Direct SQLi Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
 | 🔒 SQL Injection Engine | [4 methods: error-based, UNION, boolean blind, time-based — verbose output](Docs/sqli.md) |
-| 🤖 Agents v3.0 Pipeline | [10-step autonomous analysis — no external AI required](Docs/agents.md) |
+| 🤖 Agents v3.1 Pipeline | [10-step autonomous analysis — no external AI required](Docs/agents.md) |
 | 🛡️ HeaderIntelAgent | [Detects info leaks, missing security headers, outdated server versions](Docs/agents.md#headerintelagent) |
 | 🧬 TechFingerprintAgent | [35 technologies detected with version extraction, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
 | 📧 EmailHarvesterAgent | [Collects and categorizes emails: admin / security / info / noreply / personal](Docs/agents.md#emailharvesteragent) |
@@ -94,7 +94,7 @@
 "Install requirements:"
   pip install -r requirements.txt
 
-"DorkEye WIZARD MODE:"
+"WIZARD MODE:"
   python dorkeye.py --wizard
 ```
 ---
@@ -146,7 +146,7 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
   python dorkeye.py -f Dump/results.json --sqli --analyze -o retest.html
 ```
 
-<img width="962" height="933" alt="de_generator" src="https://github.com/user-attachments/assets/dd0805c7-cce5-45ff-87e6-c3c5344d82d6" />
+<img width="852" height="626" alt="examples" src="https://github.com/user-attachments/assets/27525c33-db4d-43c1-a53d-2410f5f3e190" />
 
 ---
 
@@ -177,6 +177,8 @@ DorkEye/
 │     /ISSUE_TEMPLATE/
 │        ├── bug_report.md
 │        └── feature_request.md
+│     /workflows
+│        └── claude-dorkeye.yml
 │ /Dump/
 │    ├── *.csv
 │    ├── *.json
@@ -206,8 +208,8 @@ DorkEye/
 ## Example final Report
 ![image](https://github.com/user-attachments/assets/20055807-2f9d-4979-b221-e0cfad32828a)
 
-## Example USAGE
-<img width="852" height="626" alt="examples" src="https://github.com/user-attachments/assets/27525c33-db4d-43c1-a53d-2410f5f3e190" />
+## Wizard MODE (default payload)
+<img width="962" height="933" alt="de_generator" src="https://github.com/user-attachments/assets/dd0805c7-cce5-45ff-87e6-c3c5344d82d6" />
 
 ---
 
