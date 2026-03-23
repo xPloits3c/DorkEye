@@ -22,12 +22,16 @@ on:
     types: [created]
 
   issues:
-    types: [opened, assigned]
+    types: [assigned]
 
   schedule:
-    - cron: "0 9 * * 1,4,7" # Ogni lunedì, giovedi, domenica alle 09:00 UTC
+    - cron: "0 9 * * 1" # Ogni lunedì alle 09:00 UTC
 
   workflow_dispatch: # Trigger manuale dall'interfaccia GitHub
+
+concurrency:
+  group: dorkeye-ai-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # JOB 1 — PR Review automatica
@@ -42,6 +46,7 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -123,9 +128,10 @@ jobs:
       github.event_name == 'issues'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -150,6 +156,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -165,7 +172,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install bandit safety 2>/dev/null || true
+          pip install bandit pip-audit 2>/dev/null || true
 
       - name: Run Bandit static security scan
         run: |
@@ -174,10 +181,10 @@ jobs:
             -ll 2>/dev/null || true
           echo "✅ Bandit scan completato"
 
-      - name: Run Safety dependency vulnerability check
+      - name: Run pip-audit dependency check
         run: |
-          safety check --json > safety-report.json 2>/dev/null || true
-          echo "✅ Safety check completato"
+          pip-audit --format=json --output=pip-audit-report.json || true
+          echo "✅ pip-audit check completato"
 
       - uses: anthropics/claude-code-action@v1
         with:
@@ -202,7 +209,7 @@ jobs:
             ━━━ 1. SECURITY AUDIT ━━━
             - Leggi tutti i file .py e identifica vulnerabilità di sicurezza
             - Leggi bandit-report.json (se esiste) per i risultati automatici
-            - Leggi safety-report.json (se esiste) per dipendenze vulnerabili
+            - Leggi pip-audit-report.json (se esiste) per dipendenze vulnerabili
             - Cerca: XSS in HTML output, injection flaws, yaml.load() insicuro,
               secrets hardcoded, funzioni security-critical mai invocate
             - Verifica che ddgs sia ancora pinnato a >=4.0.0,<5.0.0
@@ -244,6 +251,6 @@ jobs:
             - Sezione "Quick Wins" con i fix più facili e impattanti
             - Aggiungi label "maintenance" se esiste nel repo
           claude_args: |
-            --max-turns 25
+            --max-turns 20
             --allowedTools "Read,GlobTool,GrepTool,Bash(cat:*),Bash(find:*),Bash(grep:*),Bash(date:*),Bash(gh issue create:*),Bash(gh issue list:*),Bash(gh label list:*)"
             --append-system-prompt "Sii rigoroso e metodico. Prioritizza finding reali di sicurezza rispetto a suggerimenti di stile. Il report della issue deve essere in Markdown pulito, leggibile e azionabile. Non creare issue duplicate — controlla prima se esiste già un audit della settimana corrente."
