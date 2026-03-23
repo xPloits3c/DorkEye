@@ -1,4 +1,4 @@
-# CLI Reference — DorkEye v4.8
+# CLI Reference — DorkEye Project
 
 > All 31 flags, all accepted values, all combinations.
 > Single-page cheat sheet — keep it open while you hunt.
