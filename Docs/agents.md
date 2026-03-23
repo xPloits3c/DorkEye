@@ -23,20 +23,21 @@ python dorkeye_agents.py Dump/results.json --analyze-fetch --analyze-fmt html
 
 ---
 
-## Pipeline — 10 Steps
+## Pipeline — 11 Steps
 
 | Step | Agent | Input | Output |
 |------|-------|-------|--------|
 | 1 | **TriageAgent** | All results | `triage_score`, `triage_label`, `triage_reason` per result |
 | 2 | **PageFetchAgent** | HIGH / CRITICAL results | `page_content`, `response_headers`, `fetch_status` |
-| 3 | **HeaderIntelAgent** | `response_headers` | `header_intel` (info leaks, missing headers, outdated versions) |
-| 4 | **TechFingerprintAgent** | `page_content` + headers + URL | `tech_fingerprint` (techs, versions, CVE dorks) |
-| 5 | **SecretsAgent** | `page_content` + snippet | `secrets` list with type, value, severity, context |
-| 6 | **PiiDetectorAgent** | `page_content` + snippet | `pii_found` list with type, censored value, context |
-| 7 | **EmailHarvesterAgent** | `page_content` + snippet | `emails_found` list, global dedup |
-| 8 | **SubdomainHarvesterAgent** | All text fields | `subdomains` list per result, global map |
-| 9 | **LLM Analysis** | All triaged results | `analysis` dict (optional — requires `dorkeye_llm_plugin.py`) |
-| 10 | **ReportAgent** | Everything above | HTML / MD / JSON / TXT report |
+| 3 | **SecurityAgent** *(new v3.1)* | `page_content` + `response_headers` + URL | `security_verdict` dict with `threat_level`, `threat_score`, `indicators` |
+| 4 | **HeaderIntelAgent** | `response_headers` | `header_intel` (info leaks, missing headers, outdated versions) |
+| 5 | **TechFingerprintAgent** | `page_content` + headers + URL | `tech_fingerprint` (techs, versions, CVE dorks) |
+| 6 | **SecretsAgent** | `page_content` + snippet | `secrets` list with type, value, severity, context |
+| 7 | **PiiDetectorAgent** | `page_content` + snippet | `pii_found` list with type, censored value, context |
+| 8 | **EmailHarvesterAgent** | `page_content` + snippet | `emails_found` list, global dedup |
+| 9 | **SubdomainHarvesterAgent** | All text fields | `subdomains` list per result, global map |
+| 10 | **LLM Analysis** | All triaged results | `analysis` dict (optional — requires `dorkeye_llm_plugin.py`) |
+| 11 | **ReportAgent** | Everything above | HTML / MD / JSON / TXT report |
 
 ---
 
@@ -87,6 +88,98 @@ Phase 2 — runtime bonuses from existing result data:
 | ≥ 50 | MEDIUM |
 | ≥ 20 | LOW |
 | < 20 | SKIP |
+
+---
+
+## SecurityAgent *(new in v3.1)*
+
+Threat-detection middleware that operates in **two modes**:
+
+- **passive** (default in `--analyze` pipeline) — analyses and tags every result with a `security_verdict`, no blocking.
+- **active** — same as passive, plus blocks (`security_blocked = True`) results classified as DANGEROUS or CRITICAL.
+
+It also hooks into the **live scanning flow** via `security_scan_hook(url, content, headers)` so threats can be intercepted before results are saved.
+
+**Detection categories:**
+
+| Category | Description |
+|----------|-------------|
+| `phishing` | Brand impersonation, credential harvesting pages, suspicious redirects |
+| `malware` | JS code execution, obfuscated payloads, file droppers |
+| `exploit` | Reverse shells, SQLi, XXE, SSTI, deserialization payloads |
+| `obfuscation` | Hex/Unicode escaping, base64 chains, high-entropy strings |
+| `suspicious_pattern` | Hidden iframes, missing security headers, executable downloads |
+
+**Threat scoring — weighted model:**
+
+The final `threat_score` (0–100) is computed as:
+- **50%** from the single worst indicator
+- **50%** from the weighted sum of all other indicators (capped)
+
+| Score range | Threat level |
+|-------------|-------------|
+| ≤ 15 | CLEAN |
+| 16 – 40 | LOW |
+| 41 – 70 | SUSPICIOUS |
+| 71 – 90 | DANGEROUS |
+| > 90 | CRITICAL |
+
+DANGEROUS and CRITICAL results are automatically blocked in `active` mode.
+
+**CLI flags:**
+
+```bash
+--no-security                  # Disable SecurityAgent entirely
+--security-mode active         # active: block DANGEROUS/CRITICAL | passive: report only (default)
+--security-quarantine          # Save blocked content to dorkeye_quarantine/
+```
+
+**Output per result:**
+
+```json
+{
+  "security_verdict": {
+    "url":              "https://target.com/shell.php",
+    "threat_level":     "DANGEROUS",
+    "threat_score":     78,
+    "badge":            "🔴 DANGEROUS",
+    "blocked":          false,
+    "summary":          "Reverse shell pattern detected in page content",
+    "scan_duration_ms": 12.4,
+    "timestamp":        "2025-01-01T12:00:00+00:00",
+    "indicators": [
+      {
+        "category":    "exploit",
+        "description": "Reverse shell pattern",
+        "severity":    60,
+        "evidence":    "bash -i >& /dev/tcp/..."
+      }
+    ]
+  }
+}
+```
+
+**Pipeline-level output keys** (added to the top-level report):
+
+| Key | Content |
+|-----|---------|
+| `security_stats` | Counters: `clean`, `low`, `suspicious`, `dangerous`, `critical`, `blocked`, `mode` |
+| `security_threats` | List of all verdicts with `threat_level` ≥ LOW |
+
+**Inline usage (scanning flow):**
+
+```python
+from dorkeye_agents import security_scan_hook, get_security_agent
+
+# Quick hook (uses global singleton)
+verdict = security_scan_hook(url, response_text, resp_headers)
+if verdict.blocked:
+    continue  # skip malicious result
+
+# Fine-grained control
+agent = get_security_agent(mode="active", quarantine_dir="dorkeye_quarantine")
+verdict = agent.scan_single(url, content, headers)
+```
 
 ---
 
@@ -305,7 +398,7 @@ Produces the final analysis report. Accepts `html`, `md`, `json`, `txt`.
 
 ```json
 {
-  "meta":       { "generated_at": "...", "target": "...", "engine": "DorkEye v4.8 + Agents v3.0" },
+  "meta":       { "generated_at": "...", "target": "...", "engine": "DorkEye v4.8 + Agents v3.1" },
   "metrics":    { "total": N, "by_label": {...}, "secrets": N, "pii": N, "emails": N, "subdomains": N },
   "analysis":   {},
   "secrets":    [...],
