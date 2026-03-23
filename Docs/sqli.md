@@ -33,38 +33,143 @@ python dorkeye.py -f Dump/results.json --sqli -o retest.json
 
 ## Detection Methods
 
-DorkEye runs four complementary methods on every URL parameter, in this order:
+DorkEye runs **seven complementary methods** across GET parameters, POST forms, JSON bodies, and URL path segments.
 
-### 1. Error-based
+### GET Parameters (methods 1–4)
 
-Injects payloads designed to trigger SQL error signatures in the response body. Supports:
+Before running the full test suite, an **adaptive pre-probe** sends a single-quote (`1'`) to each parameter and measures the deviation from the baseline response. Parameters that produce no measurable noise (within the 4% buffer) are skipped, saving requests on inert parameters.
 
-| Database | Signatures detected |
-|----------|-------------------|
-| MySQL / MariaDB | `Warning: mysql_fetch`, `You have an error in your SQL syntax`, `extractvalue` errors |
-| PostgreSQL | `pg_query()`, `unterminated quoted string`, `invalid input syntax` |
-| Microsoft SQL Server | `Unclosed quotation mark`, `ODBC SQL Server Driver`, `CAST(...)` errors |
-| Oracle | `ORA-01756`, `quoted string not properly terminated` |
-| SQLite | `SQLite3::query()`, `sqlite3.OperationalError` |
+#### 1. Error-based
 
-### 2. UNION-based
+Injects payloads designed to trigger SQL error signatures in the response body.
 
-Probes column count via `UNION SELECT NULL` sequences and detects column mismatch errors or abnormal response size changes when the UNION is processed by the server.
+**Payloads used:**
 
-### 3. Boolean blind
+```
+1' AND extractvalue(0,concat(0x7e,'TEST',0x7e)) AND '1'='1
+1 AND 1=CAST(CONCAT(0x7e,'TEST',0x7e) as INT)
+1'; SELECT NULL#
+```
 
-Sends true/false condition pairs and compares response sizes:
+**Error signatures detected per database:**
+
+| Database | Signatures |
+|----------|-----------|
+| MySQL / MariaDB | `You have an error in your SQL syntax`, `Warning.*mysqli?_`, `MySQLSyntaxErrorException`, `mysql_fetch_*`, `com.mysql.jdbc.exceptions` |
+| PostgreSQL | `PostgreSQL.*ERROR`, `Warning.*\bpg_`, `Npgsql.`, `org.postgresql.util.PSQLException`, `ERROR: syntax error at or near`, `ERROR: unterminated quoted string` |
+| MSSQL | `Driver.*SQL Server`, `OLE DB.*SQL Server`, `Unclosed quotation mark`, `Microsoft OLE DB Provider for SQL Server`, `Incorrect syntax near` |
+| Oracle | `Oracle error`, `ORA-\d{5}`, `oracle.jdbc.driver`, `quoted string not properly terminated` |
+| SQLite | `SQLite/JDBCDriver`, `SQLite.Exception`, `System.Data.SQLite.SQLiteException`, `sqlite3.OperationalError:`, `near "...": syntax error` |
+
+Confidence: **HIGH** on first match — exits immediately, no further methods run.
+
+#### 2. UNION-based
+
+Probes column counts from 1 to 5 (`_UNION_COLUMNS_MAX = 5`) using four payload variants per column count.
+
+**Payloads used (per n_cols):**
+
+```
+' UNION SELECT NULL[,NULL...]--
+' UNION SELECT NULL[,NULL...]#
+-1 UNION SELECT NULL[,NULL...]--
+0 UNION ALL SELECT NULL[,NULL...]--
+```
+
+**UNION column-mismatch signatures detected:**
+
+```
+The used SELECT statements have a different number of columns
+each UNION query must have the same number of columns
+SELECTs to the left and right of UNION do not have the same number
+ORA-01789
+column count doesn't match
+```
+
+A response size delta >20% of the baseline combined with at least one prior column mismatch triggers a **MEDIUM** confidence flag.
+
+#### 3. Boolean blind
+
+Sends two true/false condition pairs and takes multiple response-size samples per payload.
+
+**Payloads used:**
 
 ```
 1' AND '1'='1   →  true condition
 1' AND '1'='2   →  false condition
+1 AND 1=1       →  true condition
+1 AND 1=2       →  false condition
 ```
 
-If median response sizes differ significantly (>15%) with low internal variance, the parameter is flagged.
+**Detection logic:** if the median response sizes for true vs. false differ by more than 15% of the baseline, and internal variance per group is below the 4% noise ceiling, the parameter is flagged as **MEDIUM** confidence.
 
-### 4. Time-based blind
+Samples per payload: `3` (desktop) / `2` (Android/Termux).
 
-Injects `SLEEP(5)` / `WAITFOR DELAY` payloads and measures actual elapsed time against a measured baseline. Threshold = baseline + sleep delay + safety margin.
+#### 4. Time-based blind
+
+Injects `SLEEP` payloads and measures actual elapsed time against a measured baseline.
+
+**Payloads used:**
+
+```
+1' AND SLEEP(3) AND '1'='1
+1 AND SLEEP(3)
+```
+
+**Threshold:** `baseline_latency + 3s (sleep) + 2.5s (margin) = threshold`
+
+After a delay is detected, a neutral payload (`1' AND '1'='1`) is sent `2` times (1× on Android) to confirm the host is responsive without delays. Both confirmation requests must complete below `baseline + 2.5s` for the finding to be recorded.
+
+Confidence: **MEDIUM** on confirmed time-based delay.
+
+---
+
+### POST Parameters (method 5, new in v4.8)
+
+`test_post_sqli(url, post_data)` tests all form POST parameters using error-based detection.
+
+**Payload:** each parameter value is suffixed with a single quote (`value'`).
+
+If a DB error signature is matched, confidence is set to **HIGH** per parameter (score 3). Final `overall_confidence` is HIGH if average score ≥ 3, MEDIUM otherwise.
+
+```python
+# Example integration
+result = detector.test_post_sqli(
+    "https://example.com/login",
+    {"username": "admin", "password": "pass"}
+)
+```
+
+---
+
+### JSON Body Parameters (method 6, new in v4.8)
+
+`test_json_sqli(url, json_data)` sends POST requests with `Content-Type: application/json` and tests each string field.
+
+**Payload:** same single-quote suffix (`value'`) injected into each JSON key.
+
+WAF detection runs on every response; WAF-protected parameters are skipped.
+
+```python
+result = detector.test_json_sqli(
+    "https://api.example.com/users",
+    {"id": "1", "name": "test"}
+)
+```
+
+---
+
+### Path-based Parameters (method 7, new in v4.8)
+
+`test_path_based_sqli(url)` appends a single quote to the last numeric or word path segment.
+
+**Trigger condition:** URL path ends with `/\d+` or `/\w+`
+
+**Payload:** `url + "'"`
+
+Example: `https://example.com/products/42` → `https://example.com/products/42'`
+
+Confidence: **HIGH** if a DB error signature matches.
 
 ---
 
@@ -78,7 +183,36 @@ DorkEye does not test all parameters in random order. Parameters are ranked:
 | Medium | Known medium-risk names (`search`, `q`, `query`, `lang`, `view`) |
 | Low | Everything else |
 
+**High-priority parameter names:** `id`, `pid`, `uid`, `nid`, `tid`, `cid`, `rid`, `eid`, `fid`, `gid`, `page`, `pg`, `p`, `num`, `item`, `product`, `prod`, `article`, `cat`, `category`, `sort`, `order`, `by`, `type`, `idx`, `index`, `ref`, `record`, `row`, `entry`, `post`, `news`, `view`
+
+**Medium-priority parameter names:** `search`, `q`, `query`, `s`, `keyword`, `kw`, `term`, `find`, `name`, `user`, `username`, `login`, `email`, `mail`, `city`, `country`, `region`, `lang`, `language`, `filter`, `tag`, `label`, `topic`, `subject`, `section`
+
 High-priority parameters are tested first. If a CRITICAL vulnerability is found in the first parameter, testing stops immediately.
+
+---
+
+## Scoring System
+
+Each method that finds a vulnerability contributes points toward the `overall_confidence` for that parameter:
+
+| Method | Condition | Points |
+|--------|-----------|--------|
+| Error-based | HIGH confidence | 3 — immediate return, no further methods |
+| Union-based | HIGH confidence | 3 |
+| Union-based | MEDIUM confidence | 2 |
+| Union-based | LOW confidence | 1 |
+| Boolean blind | any positive | 2 |
+| Time-based blind | HIGH confidence | 3 |
+| Time-based blind | MEDIUM confidence | 2 |
+
+Final `overall_confidence` is determined by the **best per-parameter score**:
+
+| Best score | Confidence |
+|------------|------------|
+| ≥ 5 | `critical` |
+| ≥ 3 (or average ≥ 3) | `high` |
+| ≥ 2 (or average ≥ 2) | `medium` |
+| < 2 | `low` |
 
 ---
 
@@ -114,7 +248,24 @@ Before and during testing, DorkEye checks for WAF signatures in:
 - Response body (first 2000 chars)
 - HTTP status codes (403, 406, 429 with short body)
 
-Detected WAFs include: Cloudflare, Akamai, AWS WAF, F5 BIG-IP, Sucuri, Imperva, Barracuda, Fortinet, Wordfence, mod_security, and others. When a WAF is detected, aggressive payloads are skipped for that URL.
+**Detected WAFs:**
+
+| WAF | Detection signals |
+|-----|------------------|
+| Cloudflare | `cf-ray`, `__cfduid`, `cloudflare`, `attention required! \| cloudflare` |
+| mod_security | `mod_security`, `modsecurity`, `406 not acceptable` |
+| Wordfence | `wordfence`, `generated by wordfence` |
+| Sucuri | `x-sucuri-id`, `sucuri website firewall`, `access denied - sucuri` |
+| Imperva | `x-iinfo`, `incapsula incident`, `_incap_ses_` |
+| Akamai | `akamai`, `x-akamai-transformed`, `reference #18` |
+| F5 BIG-IP | `x-waf-event-info`, `bigipserver`, `the requested url was rejected` |
+| Barracuda | `barra_counter_session`, `barracuda` |
+| FortiWeb | `fortigate`, `fortiweb` |
+| AWS WAF | `x-amzn-requestid`, `awselb`, `forbidden - aws waf` |
+| DenyAll | `denyall`, `x-denyall` |
+| Reblaze | `x-reblaze-protection` |
+
+When a WAF is detected, aggressive payloads are skipped for that URL.
 
 ---
 
