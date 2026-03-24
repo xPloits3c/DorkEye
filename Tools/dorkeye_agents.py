@@ -36,7 +36,7 @@ python dorkeye.py --dg=all --analyze --no-security   # disable agent
 Standalone usage (from results file):
 python dorkeye_agents.py results.json --analyze-fmt=html --analyze-out=report.html
 
-Author: DorkEye Project
+Author: xPloits3c | DorkEye Project
 """
 
 # FIX #1: dunder mangling from copy/paste (**future** → __future__)
