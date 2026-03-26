@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "dorkeye"
+version = "4.5.0"
+description = "Advanced OSINT & Google Dorking framework with SQLi analysis, WAF detection and reporting"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "xPloits3c", email = "your@email.com" }
+]
+keywords = ["osint", "dorking", "google-dork", "security", "recon", "sqli", "pentest"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.28.0",
+    "colorama>=0.4.6",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=4.9.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+llm = [
+    "llama-cpp-python>=0.2.0",
+]
+screenshots = [
+    "playwright>=1.40.0",
+]
+all = [
+    "llama-cpp-python>=0.2.0",
+    "playwright>=1.40.0",
+]
+
+[project.scripts]
+dorkeye = "dorkeye.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/xPloits3c/DorkEye"
+Repository = "https://github.com/xPloits3c/DorkEye"
+"Bug Tracker" = "https://github.com/xPloits3c/DorkEye/issues"
+Changelog = "https://github.com/xPloits3c/DorkEye/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dorkeye*"]
+
+[tool.setuptools.package-data]
+dorkeye = ["templates/*.html", "wordlists/*.txt"]
