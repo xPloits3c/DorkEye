@@ -50,7 +50,7 @@ all = [
 ]
 
 [project.scripts]
-dorkeye = "dorkeye.cli:main"
+dorkeye = "dorkeye:main"
 
 [project.urls]
 Homepage = "https://github.com/xPloits3c/DorkEye"
@@ -58,9 +58,8 @@ Repository = "https://github.com/xPloits3c/DorkEye"
 "Bug Tracker" = "https://github.com/xPloits3c/DorkEye/issues"
 Changelog = "https://github.com/xPloits3c/DorkEye/blob/main/CHANGELOG.md"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["dorkeye*"]
+[tool.setuptools]
+py-modules = ["dorkeye"]
 
 [tool.setuptools.package-data]
 dorkeye = ["templates/*.html", "wordlists/*.txt"]
