@@ -3,7 +3,7 @@ name: Publish DorkEye to PyPI
 on:
   push:
     tags:
-      - "DorkEye_V*.*.*"   # Trigger su tag tipo v4.5.0, v5.0.0 ecc.
+      - "dev4.8*.*.*"   # Trigger su tag tipo v4.5.0, v5.0.0 ecc.
 
 jobs:
   test:
