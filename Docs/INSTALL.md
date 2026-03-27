@@ -1,4 +1,4 @@
-<img width="1536" height="1024" alt="dorkeye-install" src="https://github.com/user-attachments/assets/a0983dc1-2c2e-4cbd-9ab9-7ae1a3743f29" />
+![dorkeye-install](https://private-user-images.githubusercontent.com/153435050/539346754-a0983dc1-2c2e-4cbd-9ab9-7ae1a3743f29.png)
 
 # 📦 DorkEye — Installation Guide
 
@@ -8,11 +8,11 @@ Official installation guide for **DorkEye Project**.
 
 ## ⚡ Quickest Install (PyPI)
 
-```bash
+```
 pip install dorkeye
 ```
 
-No virtual environment needed. Works on Linux, macOS, and Windows.
+Works on Linux, macOS, and Windows. Recommended for quick testing — for production use, a virtual environment is preferred.
 
 -----
 
@@ -20,7 +20,7 @@ No virtual environment needed. Works on Linux, macOS, and Windows.
 
 Clone the repository:
 
-```bash
+```
 git clone https://github.com/xPloits3c/DorkEye.git
 ```
 
@@ -79,7 +79,7 @@ Or download the latest release:
 
 This method works on **Linux**, **macOS**, and **Windows**.
 
-```bash
+```
 # Clone the repository
 git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
@@ -110,7 +110,7 @@ python dorkeye.py -h
 
 DorkEye auto-detects Termux and activates battery-saver mode (reduced timeouts, fewer probe samples). No additional flags needed.
 
-```bash
+```
 # Install Python and git
 pkg update && pkg upgrade
 pkg install python git
@@ -143,13 +143,13 @@ python dorkeye.py --wizard
 
 Install DorkEye as a system command for direct access from anywhere:
 
-```bash
+```
 pip install -e .
 ```
 
 Then use:
 
-```bash
+```
 dorkeye --help
 dorkeye --wizard
 dorkeye -d "inurl:admin" -o results.html
@@ -163,7 +163,7 @@ This mode is recommended for advanced users who want `dorkeye` available globall
 
 Run these commands to verify everything works:
 
-```bash
+```
 # Show help and all available flags
 python dorkeye.py -h
 
@@ -182,7 +182,7 @@ python dorkeye.py --wizard
 
 If using CLI mode:
 
-```bash
+```
 dorkeye --dg=all -c 5 -o test.html
 ```
 
@@ -200,7 +200,7 @@ DorkEye/
 ├── Tools/
 │   ├── dork_generator.py       # Dork Generator engine (--dg)
 │   ├── dorkeye_agents.py       # Analysis + Crawl agents (--analyze, --crawl)
-│   ├── dorkeye_analyze.py      # Standalone analysis script
+│   ├── dorkeye_analyze.py      # Standalone analysis script (executable directly)
 │   └── dorkeye_patterns.py     # Pattern matching utilities
 ├── Templates/
 │   ├── dorks_templates.yaml    # Default dork templates
@@ -219,7 +219,7 @@ DorkEye/
 
 The search engine module has been renamed. Fix:
 
-```bash
+```
 pip uninstall duckduckgo-search -y
 pip install ddgs
 ```
@@ -228,7 +228,7 @@ pip install ddgs
 
 Modern Debian-based systems block global pip installs. Always use a virtual environment:
 
-```bash
+```
 python3 -m venv dorkeye_env
 source dorkeye_env/bin/activate
 pip install -r requirements.txt
@@ -242,7 +242,7 @@ pip install -r requirements.txt
 
 The `--templates` flag requires `=` syntax (no space):
 
-```bash
+```
 # ✅ Correct
 python dorkeye.py --dg=sqli --templates=dorks_templates.yaml
 
@@ -254,8 +254,8 @@ python dorkeye.py --dg=sqli --templates dorks_templates.yaml
 
 The `--analyze` and `--crawl` features require `dorkeye_agents.py` in the `Tools/` directory. If missing, DorkEye runs normally but these features are disabled. Ensure your clone is up to date:
 
-```bash
-git pull origin main
+```
+git pull origin master
 ```
 
 ### HTTP Fingerprinting disabled warning
@@ -270,16 +270,16 @@ DorkEye disables SSL verification for maximum compatibility during OSINT scannin
 
 ## 🔄 Updating DorkEye
 
-```bash
+```
 cd DorkEye
-git pull origin main
+git pull origin master
 pip install --upgrade -r requirements.txt
 ```
 
 If installed in CLI mode:
 
-```bash
-pip install -e . --upgrade
+```
+pip install -e .
 ```
 
 -----
@@ -288,25 +288,25 @@ pip install -e . --upgrade
 
 **Linux / macOS:**
 
-```bash
+```
 rm -rf DorkEye
 ```
 
 **Windows:**
 
-```bash
+```
 rmdir /s /q DorkEye
 ```
 
 **Remove only the virtual environment:**
 
-```bash
+```
 rm -rf dorkeye_env
 ```
 
 **If installed in CLI mode:**
 
-```bash
+```
 pip uninstall dorkeye
 ```
 
@@ -342,4 +342,4 @@ Please include:
 
 ## 🎯 Installation Complete
 
-DorkEye v4.8 is ready. Happy hunting. 🔍
+DorkEye is ready! Happy hunting. 🔍
