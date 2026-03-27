@@ -75,6 +75,21 @@
 
 ---
 
+## 📦 PyPI Installation (New!)
+
+```bash
+# Install directly via pip
+pip install dorkeye
+
+# Update to latest version
+pip install --upgrade dorkeye
+
+# Run after installation
+dorkeye --help
+```
+
+---
+
 ## Quick Install
 ```json
 "Update:"
