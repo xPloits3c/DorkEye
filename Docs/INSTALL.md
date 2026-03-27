@@ -6,6 +6,16 @@ Official installation guide for **DorkEye Project**.
 
 -----
 
+## ⚡ Quickest Install (PyPI)
+
+```bash
+pip install dorkeye
+```
+
+No virtual environment needed. Works on Linux, macOS, and Windows.
+
+-----
+
 ## 🔗 Download
 
 Clone the repository:
