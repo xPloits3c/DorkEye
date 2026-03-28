@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.8 | OSINT Dorking Tool
+DorkEye v4.9 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
@@ -12,11 +12,9 @@ import yaml
 import random
 import argparse
 import hashlib
-import difflib
 import csv
 import re
 import signal
-import statistics
 import queue
 import threading
 from datetime import datetime
@@ -24,9 +22,6 @@ from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
 from urllib.parse import urlparse, unquote, parse_qs, urlencode, quote
 from collections import defaultdict
-from dataclasses import dataclass
-from enum import Enum
-from html.parser import HTMLParser as _HTMLParser   # FIX: needed for script-tag stripping
 
 import requests
 import urllib3
@@ -34,15 +29,25 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 # ── Tools sub-package path injection ─────────────────────────────────────────
-# dork_generator, dorkeye_agents, dorkeye_analyze and dorkeye_patterns live in
-# the Tools/ sub-folder.  Adding it to sys.path lets every import below (and
-# inside those modules) work without any further change.
+# dork_generator, dorkeye_agents, dorkeye_analyze, dorkeye_patterns,
+# sqli and xss live in the Tools/ sub-folder.
+# Adding it to sys.path lets every import below work without any further change.
 _TOOLS_DIR = Path(__file__).parent / "Tools"
 if str(_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIR))
 # ─────────────────────────────────────────────────────────────────────────────
 
 from dork_generator import DorkGenerator
+
+# ── SQLi engine — extracted to Tools/sqli.py ─────────────────────────────────
+from sqli import (
+    SQLiDetector,
+    SQLiConfidence,
+    HTTPFingerprint,
+    HTTPFingerprintRotator,
+    USER_AGENTS,
+)
+# ─────────────────────────────────────────────────────────────────────────────
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -120,6 +125,17 @@ def _sigint_handler(signum, frame):
         sys.stderr.flush()
     _last_interrupt_time = now
 
+    # ── Propagate to sub-modules so in-flight requests abort cleanly ─────────
+    import sqli as _sqli_mod
+    _sqli_mod._exit_requested = _exit_requested
+    _sqli_mod._skip_current   = _skip_current
+    try:
+        import xss as _xss_mod
+        _xss_mod._exit_requested = _exit_requested
+        _xss_mod._skip_current   = _skip_current
+    except ImportError:
+        pass
+
 
 signal.signal(signal.SIGINT, _sigint_handler)
 
@@ -157,27 +173,29 @@ def print_banner():
 
     android_badge = (
         "\n[bold yellow]▸ Platform[/bold yellow] [dim]│[/dim]  "
-        "[bold green]Android / Termux  ⚡ battery-saver active[/bold green]"
+        "[bold green]Android / Termux | battery-saver active[/bold green]"
         if TERMUX_IS_ANDROID else ""
     )
 
     INFO = (
-        "[bold white]OSINT DORKING TOOL[/bold white]\n"
-        "[bold green]v4.8[/bold green]  [dim]stable[/dim]\n"
+        "[bold red]OSINT[/bold red][bold white] DORKING TOOL[/bold white]\n"
+        "[bold green]v4.9[/bold green]  [dim]ON[/dim]\n"
         "\n"
-        "[dim]▸ Author[/dim]  [dim]│[/dim]  [cyan]xPloits3c I.C.W.T[/cyan]\n"
-        "[dim]▸ GitHub[/dim]  [dim]│[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
-        "[dim]▸ Site  [/dim]  [dim]│[/dim]  [cyan]xploits3c.github.io/DorkEye[/cyan]\n"
+        "[dim]▸ Author  │[/dim]  [yellow]xPloits3c I.C.W.T[/yellow]\n"
+        "[dim]▸ GitHub  │[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
+        "[dim]▸ Telegram│[/dim]  [cyan]t.me/DorkEye[/cyan]\n"
         "\n"
-        "[dim]▸ Engine[/dim]  [dim]│[/dim]  [green]DuckDuckGo[/green]\n"
-        "[dim]▸ SQLi  [/dim]  [dim]│[/dim]  [green]Real detection[/green]\n"
-        "[dim]▸ Stealth[/dim] [dim]│[/dim]  [green]HTTP fingerprinting[/green]\n"
-        "[dim]▸ Analyzer[/dim][dim]│[/dim]  [green]Extract metadata[/green]"
+        "[dim]▸ XSS     │[/dim]  [green]51[/green][red] payloads[/red]\n"
+        "[dim]▸ SQLi    │[/dim]  [green]14[/green][red] payloads[/red]\n"
+        "[dim]▸ Engine  │[/dim]  [green]DuckDuckGo[/green]\n"
+        "[dim]▸ Stealth │[/dim]  [green]Slower, stay safe[/green]\n"
+        "[dim]▸ DorkGen │[/dim]  [green]Max DORKS Gen:[/green][red] 10.000[/red]\n"
+        "[dim]▸ Analyzer│[/dim]  [green]Extract metadata[/green]"
         + android_badge
     )
 
-    grid = Table.grid(padding=(0, 6))
-    grid.add_column(min_width=10)
+    grid = Table.grid(padding=(0, 1))
+    grid.add_column(min_width=8)
     grid.add_column()
     grid.add_row(SYRINGE, INFO)
     console.print(grid)
@@ -244,98 +262,6 @@ def greet_user():
     console.print(f"[bold {color}]{message}[/bold {color}]\n")
 
 
-# ══════════════════════════════════════════════════════════════
-#  Enums / Dataclasses
-# ══════════════════════════════════════════════════════════════
-
-class SQLiConfidence(Enum):
-    """Confidence levels for SQL injection findings (none → low → medium → high → critical)."""
-    NONE     = "none"
-    LOW      = "low"
-    MEDIUM   = "medium"
-    HIGH     = "high"
-    CRITICAL = "critical"
-
-
-@dataclass
-class HTTPFingerprint:
-    """Immutable snapshot of a browser HTTP fingerprint used to build realistic request headers."""
-    browser:         str
-    os:              str
-    user_agent:      str
-    accept_language: str
-    accept_encoding: str
-    accept:          str
-    referer:         str
-    sec_fetch_dest:  str
-    sec_fetch_mode:  str
-    sec_fetch_site:  str
-    cache_control:   str
-
-
-# ══════════════════════════════════════════════════════════════
-#  HTTP Fingerprinting
-# ══════════════════════════════════════════════════════════════
-
-def load_http_fingerprints() -> Dict:
-    """Load http_fingerprints.json and return a dict tagged with _mode (legacy | advanced | disabled)."""
-    fingerprint_file = Path(__file__).parent / "http_fingerprints.json"
-    try:
-        with open(fingerprint_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data, dict) or not data:
-            raise ValueError("Fingerprint file is empty or invalid")
-        if "fingerprints" in data:
-            return {
-                "_mode":             "advanced",
-                "_meta":             data.get("_meta", {}),
-                "fingerprints":      data.get("fingerprints", {}),
-                "language_profiles": data.get("language_profiles", {}),
-                "common_headers":    data.get("common_headers", {})
-            }
-        return {"_mode": "legacy", "fingerprints": data}
-    except Exception as e:
-        console.print(f"[yellow][!] Failed to load HTTP fingerprints: {e}[/yellow]")
-        console.print("[yellow][!] HTTP fingerprinting will be disabled[/yellow]")
-        return {"_mode": "disabled"}
-
-
-def resolve_reference(value: str, common_headers: Dict) -> str:
-    """Resolve a @reference token to its value in common_headers, or return value unchanged."""
-    if isinstance(value, str) and value.startswith("@"):
-        key = value[1:]
-        return common_headers.get(key, "")
-    return value
-
-
-def resolve_accept_language(fp_headers: Dict, language_profiles: Dict) -> str:
-    """Pick a random language profile from fp_headers and return the matching Accept-Language string."""
-    profiles = fp_headers.get("accept_language_profiles")
-    if not profiles:
-        return ""
-    profile = random.choice(profiles)
-    return language_profiles.get(profile, "")
-
-
-USER_AGENTS = {
-    "chrome": [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ],
-    "firefox": [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-        "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0"
-    ],
-    "safari": [
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
-    ],
-    "edge": [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
-    ]
-}
 
 DEFAULT_CONFIG = {
     "extensions": {
@@ -352,6 +278,8 @@ DEFAULT_CONFIG = {
     "analyze_files":        True,
     "max_file_size_check":  52428800,
     "sqli_detection":       False,
+    "xss_detection":        False,
+    "xss_type":             "all",  # "reflected" | "stored" | "dom" | "all"
     "stealth_mode":         False,
     "user_agent_rotation":  True,
     "http_fingerprinting":  True,
@@ -361,1230 +289,6 @@ DEFAULT_CONFIG = {
 }
 
 
-# ══════════════════════════════════════════════════════════════
-#  HTTPFingerprintRotator
-# ══════════════════════════════════════════════════════════════
-
-class HTTPFingerprintRotator:
-    """
-Rotates browser fingerprint profiles on every request to make traffic look like real users.
-
-    Supports two JSON schema modes:
-      legacy   — flat dict of fingerprint objects
-      advanced — shared header references + language profiles
-
-"""
-    def __init__(self):
-        """Load raw fingerprints from JSON and build the fingerprint list."""
-        self.raw_fingerprints    = load_http_fingerprints()
-        self.fingerprints        = self._build_fingerprints()
-        self.current_index       = 0
-        self.current_fingerprint = None
-
-    def _build_fingerprints(self) -> List[HTTPFingerprint]:
-        """Parse raw fingerprint data into a list of HTTPFingerprint dataclass instances."""
-        fingerprints: List[HTTPFingerprint] = []
-        mode = self.raw_fingerprints.get("_mode")
-
-        if mode == "legacy":
-            for fp_data in self.raw_fingerprints.get("fingerprints", {}).values():
-                try:
-                    fingerprints.append(HTTPFingerprint(
-                        browser         = fp_data["browser"],
-                        os              = fp_data["os"],
-                        user_agent      = fp_data["user_agent"],
-                        accept_language = fp_data["accept_language"],
-                        accept_encoding = fp_data["accept_encoding"],
-                        accept          = fp_data["accept"],
-                        referer         = "",
-                        sec_fetch_dest  = fp_data["sec_fetch_dest"],
-                        sec_fetch_mode  = fp_data["sec_fetch_mode"],
-                        sec_fetch_site  = fp_data["sec_fetch_site"],
-                        cache_control   = fp_data["cache_control"],
-                    ))
-                except KeyError:
-                    continue
-            return fingerprints
-
-        if mode == "advanced":
-            language_profiles = self.raw_fingerprints.get("language_profiles", {})
-            common_headers    = self.raw_fingerprints.get("common_headers", {})
-            fps               = self.raw_fingerprints.get("fingerprints", {})
-            for fp in fps.values():
-                try:
-                    headers   = fp.get("headers", {})
-                    sec_fetch = headers.get("sec_fetch", {})
-                    fingerprints.append(HTTPFingerprint(
-                        browser         = fp.get("browser", ""),
-                        os              = fp.get("os", ""),
-                        user_agent      = fp.get("user_agent", ""),
-                        accept_language = resolve_accept_language(headers, language_profiles),
-                        accept_encoding = resolve_reference(headers.get("accept_encoding", ""), common_headers),
-                        accept          = resolve_reference(headers.get("accept", ""), common_headers),
-                        referer         = "",
-                        sec_fetch_dest  = sec_fetch.get("dest", "document"),
-                        sec_fetch_mode  = sec_fetch.get("mode", "navigate"),
-                        sec_fetch_site  = sec_fetch.get("site", "none"),
-                        cache_control   = resolve_reference(headers.get("cache_control", ""), common_headers),
-                    ))
-                except Exception:
-                    continue
-
-        return fingerprints
-
-    def get_random(self) -> Optional[HTTPFingerprint]:
-        """Select and store a random fingerprint from the pool; return it."""
-        self.current_fingerprint = random.choice(self.fingerprints) if self.fingerprints else None
-        return self.current_fingerprint
-
-    def get_next(self) -> Optional[HTTPFingerprint]:
-        """Select and store the next fingerprint in round-robin order; return it."""
-        if not self.fingerprints:
-            return None
-        self.current_fingerprint = self.fingerprints[self.current_index]
-        self.current_index       = (self.current_index + 1) % len(self.fingerprints)
-        return self.current_fingerprint
-
-    def build_headers(self, referer: str = "") -> Dict[str, str]:
-        """Build and return an HTTP headers dict from the current fingerprint. Adds Referer if provided."""
-        if not self.current_fingerprint:
-            return {"User-Agent": "Mozilla/5.0", "Accept": "*/*", "Connection": "keep-alive"}
-        headers = {
-            "User-Agent":                self.current_fingerprint.user_agent,
-            "Accept":                    self.current_fingerprint.accept,
-            "Accept-Language":           self.current_fingerprint.accept_language,
-            "Accept-Encoding":           self.current_fingerprint.accept_encoding,
-            "Sec-Fetch-Dest":            self.current_fingerprint.sec_fetch_dest,
-            "Sec-Fetch-Mode":            self.current_fingerprint.sec_fetch_mode,
-            "Sec-Fetch-Site":            self.current_fingerprint.sec_fetch_site,
-            "Cache-Control":             self.current_fingerprint.cache_control,
-            "Pragma":                    "no-cache",
-            "DNT":                       "1",
-            "Connection":                "keep-alive",
-            "Upgrade-Insecure-Requests": "1"
-        }
-        if referer:
-            headers["Referer"] = referer
-        return headers
-
-
-# ══════════════════════════════════════════════════════════════
-#  CircuitBreaker
-# ══════════════════════════════════════════════════════════════
-
-class CircuitBreaker:
-    """Tracks unreachable hosts and short-circuits further requests to them within a session."""
-    def __init__(self):
-        """Initialise with an empty dead-host set."""
-        self._dead: Set[str] = set()
-
-    def _key(self, url: str) -> str:
-        """Return the scheme+netloc key for the given URL (host-level granularity)."""
-        p = urlparse(url)
-        return f"{p.scheme}://{p.netloc}"
-
-    def is_dead(self, url: str) -> bool:
-        """Return True if the host of url has been marked dead."""
-        return self._key(url) in self._dead
-
-    def mark_dead(self, url: str) -> None:
-        """Mark the host of url as dead so future requests are skipped immediately."""
-        self._dead.add(self._key(url))
-
-    def reset(self) -> None:
-        """Clear the dead-host set, re-enabling all hosts."""
-        self._dead.clear()
-
-
-# ══════════════════════════════════════════════════════════════
-#  SQLiDetector — constants
-# ══════════════════════════════════════════════════════════════
-
-_CONNECT_TIMEOUT  = 3 if TERMUX_IS_ANDROID else 4
-_DEFAULT_READ     = 6 if TERMUX_IS_ANDROID else 8
-_TIMEBASED_MARGIN = 2.5
-_SLEEP_DELAY      = 3
-_BASELINE_SAMPLES = 1 if TERMUX_IS_ANDROID else 2
-_MAX_BASELINE_S   = 6.0
-
-_PROBE_SAMPLES       = 2 if TERMUX_IS_ANDROID else 3
-_PROBE_NOISE_BUFFER  = 0.04
-_PROBE_MAX_THRESHOLD = 0.18
-_BOOL_SAMPLES        = 2 if TERMUX_IS_ANDROID else 3
-_TIMEBASED_CONFIRM   = 1 if TERMUX_IS_ANDROID else 2
-_UNION_COLUMNS_MAX   = 5
-
-
-# ══════════════════════════════════════════════════════════════
-#  FIX: HTMLParser-based script-tag stripper
-#
-#  The original code used a regex to strip <script> blocks before
-#  scanning response bodies for SQL error signatures:
-#
-#    _SCRIPT_TAG_RE = re.compile(r"<script[\s\S]*?</script\s*>", re.IGNORECASE)
-#
-#  CodeQL flagged this as CWE-20/116/185/186 ("Bad HTML filtering
-#  regexp") because the pattern does not match all syntactically
-#  valid closing tags that browsers accept (e.g. </script\t\n bar>,
-#  or </SCRIPT  >), making it bypassable.
-#
-#  Fix: use Python's built-in HTMLParser.  The regex is kept only as
-#  a last-resort fallback for documents so malformed that the parser
-#  itself raises an exception.
-# ══════════════════════════════════════════════════════════════
-
-class _ScriptStripper(_HTMLParser):
-    """HTMLParser subclass that removes every <script>…</script> block."""
-
-    def __init__(self):
-        """Initialise state: script depth counter and text-part accumulator."""
-        super().__init__(convert_charrefs=False)
-        self._in_script: int = 0   # counter handles (unusual) nested script tags
-        self._parts: list   = []
-
-    def handle_starttag(self, tag, attrs):
-        """Increment the nesting counter when a <script> opening tag is encountered."""
-        if tag.lower() == "script":
-            self._in_script += 1
-
-    def handle_endtag(self, tag):
-        """Decrement the nesting counter when a </script> closing tag is encountered."""
-        if tag.lower() == "script" and self._in_script:
-            self._in_script -= 1
-
-    def handle_data(self, data):
-        """Append text to the result only when not inside a <script> block."""
-        if not self._in_script:
-            self._parts.append(data)
-
-    def handle_entityref(self, name):
-        """Append HTML entity references (&name;) when not inside a <script> block."""
-        if not self._in_script:
-            self._parts.append(f"&{name};")
-
-    def handle_charref(self, name):
-        """Append numeric character references (&#N;) when not inside a <script> block."""
-        if not self._in_script:
-            self._parts.append(f"&#{name};")
-
-    def get_result(self) -> str:
-        """Return the accumulated clean text with all <script> blocks removed."""
-        return "".join(self._parts)
-
-
-# Fallback-only regex (used when the HTML parser itself raises an exception).
-# NOTE: this regex is intentionally NOT used as the primary path.
-_SCRIPT_TAG_RE_FALLBACK = re.compile(
-    r"<script(?:[^>]*)>[\s\S]*?</script\s*>", re.IGNORECASE
-)
-
-
-def _strip_script_tags(body: str) -> str:
-    """Return *body* with all <script> blocks removed.
-
-    Uses the built-in HTMLParser as the primary implementation to
-    correctly handle all valid (and many invalid) HTML closing-tag
-    variants that a regex cannot reliably cover.
-    """
-    stripper = _ScriptStripper()
-    try:
-        stripper.feed(body)
-        stripper.close()
-        return stripper.get_result()
-    except Exception:
-        # Malformed HTML that breaks the parser — fall back to regex
-        return _SCRIPT_TAG_RE_FALLBACK.sub("", body)
-
-
-# ══════════════════════════════════════════════════════════════
-#  [4] WAF detection signatures
-# ══════════════════════════════════════════════════════════════
-
-WAF_SIGNATURES: Dict[str, List[str]] = {
-    "cloudflare":  ["cf-ray", "__cfduid", "cloudflare", "attention required! | cloudflare"],
-    "modsecurity": ["mod_security", "modsecurity", "406 not acceptable", "not acceptable!"],
-    "wordfence":   ["wordfence", "generated by wordfence"],
-    "sucuri":      ["x-sucuri-id", "sucuri website firewall", "access denied - sucuri"],
-    "imperva":     ["x-iinfo", "incapsula incident", "_incap_ses_"],
-    "akamai":      ["akamai", "x-akamai-transformed", "reference #18"],
-    "f5_bigip":    ["x-waf-event-info", "bigipserver", "the requested url was rejected"],
-    "barracuda":   ["barra_counter_session", "barracuda"],
-    "fortiweb":    ["fortigate", "fortiweb"],
-    "aws_waf":     ["x-amzn-requestid", "awselb", "forbidden - aws waf"],
-    "denyall":     ["denyall", "x-denyall"],
-    "reblaze":     ["x-reblaze-protection"],
-}
-
-# ══════════════════════════════════════════════════════════════
-#  [6] Parameter priority tables
-# ══════════════════════════════════════════════════════════════
-
-_HIGH_PRIORITY_PARAMS: frozenset = frozenset({
-    "id", "pid", "uid", "nid", "tid", "cid", "rid", "eid", "fid", "gid",
-    "page", "pg", "p", "num", "item", "product", "prod", "article",
-    "cat", "category", "sort", "order", "by", "type", "idx", "index",
-    "ref", "record", "row", "entry", "post", "news", "view",
-})
-
-_MEDIUM_PRIORITY_PARAMS: frozenset = frozenset({
-    "search", "q", "query", "s", "keyword", "kw", "term", "find",
-    "name", "user", "username", "login", "email", "mail",
-    "city", "country", "region", "lang", "language",
-    "filter", "tag", "label", "topic", "subject", "section",
-})
-
-
-# ══════════════════════════════════════════════════════════════
-#  SQLiDetector
-# ══════════════════════════════════════════════════════════════
-
-class SQLiDetector:
-
-    """
-    Multi-method SQL injection detector that tests GET/POST/JSON/path parameters.
-
-        Detection methods (run in order per parameter):
-          1. error_based    — injects payloads that trigger DB error signatures
-          2. union_based     — probes column count and detects UNION response anomalies
-          3. boolean_blind   — compares response sizes for true/false condition pairs
-          4. time_based_blind — measures SLEEP()-induced response delays
-
-        Parameters are prioritised by attack surface before testing:
-          high   — numeric values or known high-risk names (id, page, cat, …)
-          medium — search/filter names (q, search, lang, …)
-          low    — everything else
-
-        A CircuitBreaker skips further requests to hosts that became unreachable.
-
-    """
-    SQL_ERROR_SIGNATURES = {
-        "mysql": [
-            r"You have an error in your SQL syntax",
-            r"Warning.*mysqli?_",
-            r"MySQLSyntaxErrorException",
-            r"valid MySQL result",
-            r"mysql_num_rows\(\)",
-            r"mysql_fetch_(?:array|assoc|row|object)",
-            r"MySQL server version for the right syntax",
-            r"com\.mysql\.jdbc\.exceptions",
-        ],
-        "postgresql": [
-            r"PostgreSQL.*ERROR",
-            r"Warning.*\bpg_",
-            r"valid PostgreSQL result",
-            r"Npgsql\.",
-            r"org\.postgresql\.util\.PSQLException",
-            r"ERROR:\s+syntax error at or near",
-            r"ERROR:\s+unterminated quoted string",
-        ],
-        "mssql": [
-            r"Driver.*SQL[\-\_\ ]*Server",
-            r"OLE DB.*SQL Server",
-            r"SQLServer JDBC Driver",
-            r"Microsoft SQL Native Client error",
-            r"ODBC SQL Server Driver",
-            r"Unclosed quotation mark after the character string",
-            r"Microsoft OLE DB Provider for SQL Server",
-            r"\[Microsoft\]\[ODBC SQL Server Driver\]",
-            r"Incorrect syntax near",
-        ],
-        "sqlite": [
-            r"SQLite/JDBCDriver",
-            r"SQLite\.Exception",
-            r"System\.Data\.SQLite\.SQLiteException",
-            r"sqlite3\.OperationalError:",
-            r"near \".*\": syntax error",
-        ],
-        "oracle": [
-            r"Oracle error",
-            r"Oracle.*Driver",
-            r"Warning.*\boci_",
-            r"ORA-\d{5}",
-            r"oracle\.jdbc\.driver",
-            r"quoted string not properly terminated",
-        ],
-    }
-
-    _UNION_COL_MISMATCH_RE = re.compile(
-        r"(The used SELECT statements have a different number of columns"
-        r"|each UNION query must have the same number of columns"
-        r"|SELECTs to the left and right of UNION do not have the same number"
-        r"|ORA-01789"
-        r"|column count doesn.t match)",
-        re.IGNORECASE,
-    )
-
-    def __init__(self, stealth: bool = False, timeout: int = _DEFAULT_READ):
-        """Initialise the detector with stealth flag, timeout, fingerprint rotator, and circuit breaker."""
-        self.stealth             = stealth
-        self.read_timeout        = timeout
-        self.circuit_breaker     = CircuitBreaker()
-        self.fingerprint_rotator = HTTPFingerprintRotator()
-        self._session            = self._build_session()
-
-    def _build_session(self) -> requests.Session:
-        """Build and return a requests.Session with a retry adapter (backoff on 429/5xx)."""
-        session = requests.Session()
-        retry   = Retry(
-            total            = 2,
-            backoff_factor   = 0.5,
-            status_forcelist = [429, 500, 502, 503, 504],
-            allowed_methods  = ["GET"],
-            raise_on_status  = False,
-        )
-        adapter = HTTPAdapter(max_retries=retry)
-        session.mount("http://",  adapter)
-        session.mount("https://", adapter)
-        return session
-
-    def _timeout(self, extra_read: float = 0) -> Tuple[int, float]:
-        """Return a (connect_timeout, read_timeout + extra_read) tuple for use in requests calls."""
-        return (_CONNECT_TIMEOUT, self.read_timeout + extra_read)
-
-    def _run_interruptible(self, fn, total_timeout: float, on_connect_error=None):
-        """
-    Run fn() in a daemon thread; return its result or None on timeout or interrupt.
-
-            Args:
-                fn:               Zero-argument callable that performs the HTTP request.
-                total_timeout:    Wall-clock deadline in seconds.
-                on_connect_error: Optional callback invoked when a connection-level exception fires.
-
-    """
-        _POLL = 0.1
-        result_holder = [None]
-        exc_holder    = [None]
-        done_event    = threading.Event()
-
-        def _worker():
-            """Worker thread: call fn() and store result or exception, then set done_event."""
-            try:
-                result_holder[0] = fn()
-            except (requests.exceptions.ConnectTimeout,
-                    requests.exceptions.ConnectionError) as e:
-                exc_holder[0] = e
-            except Exception:
-                pass
-            finally:
-                done_event.set()
-
-        threading.Thread(target=_worker, daemon=True).start()
-
-        deadline = total_timeout + 1.0
-        elapsed  = 0.0
-        while elapsed < deadline:
-            if _exit_requested or _skip_current:
-                return None
-            if done_event.wait(timeout=_POLL):
-                if exc_holder[0] is not None and on_connect_error:
-                    on_connect_error()
-                return result_holder[0]
-            elapsed += _POLL
-
-        return None
-
-    def _get(self, url: str, extra_read: float = 0) -> Optional[requests.Response]:
-        """Perform a GET request with the current fingerprint; return the Response or None on failure."""
-        if self.circuit_breaker.is_dead(url):
-            return None
-
-        self.fingerprint_rotator.get_random()
-        headers = self.fingerprint_rotator.build_headers()
-        timeout = self._timeout(extra_read)
-
-        def _do():
-            """Execute the actual requests.get call inside the worker thread."""
-            return self._session.get(
-                url,
-                headers         = headers,
-                timeout         = timeout,
-                verify          = False,
-                allow_redirects = True,
-            )
-
-        total = _CONNECT_TIMEOUT + self.read_timeout + extra_read
-
-        return self._run_interruptible(
-            _do,
-            total_timeout    = total,
-            on_connect_error = lambda: self.circuit_breaker.mark_dead(url),
-        )
-
-    # ──────────────────────────────────────────────────────────
-    #  [4] WAF Detection
-    # ──────────────────────────────────────────────────────────
-
-    def _detect_waf(self, response: requests.Response) -> Optional[str]:
-        """Scan response headers and body for known WAF signatures; return the WAF name or None."""
-        headers_keys   = {k.lower() for k in response.headers}
-        headers_values = " ".join(v.lower() for v in response.headers.values())
-        body_snippet   = response.text[:2000].lower()
-
-        for waf_name, sigs in WAF_SIGNATURES.items():
-            for sig in sigs:
-                if sig in headers_keys or sig in headers_values or sig in body_snippet:
-                    return waf_name
-
-        if response.status_code in (403, 406, 419, 429) and len(response.text) < 600:
-            return "generic_waf"
-
-        return None
-
-    def _measure_baseline_latency(self, url: str) -> Optional[float]:
-        """Measure average response latency over _BASELINE_SAMPLES requests; return it or None."""
-        times = []
-        for _ in range(_BASELINE_SAMPLES):
-            if self.circuit_breaker.is_dead(url):
-                return None
-            if _exit_requested or _skip_current:
-                return None
-            t0       = time.monotonic()
-            response = self._get(url)
-            elapsed  = time.monotonic() - t0
-            if response is None:
-                return None
-            times.append(elapsed)
-            _interruptible_sleep(0.3)
-        baseline = sum(times) / len(times)
-        if baseline > _MAX_BASELINE_S:
-            return None
-        return baseline
-
-    def has_query_params(self, url: str) -> bool:
-        """Return True if the URL contains at least one GET query parameter."""
-        try:
-            return bool(parse_qs(urlparse(url).query))
-        except Exception:
-            return False
-
-    def _extract_query_params(self, url: str) -> Dict[str, str]:
-        """Parse and return all GET query parameters as a flat {name: first_value} dict."""
-        try:
-            params = parse_qs(urlparse(url).query)
-            return {k: v[0] if isinstance(v, list) else v for k, v in params.items()}
-        except Exception:
-            return {}
-
-    def _inject_payload(self, url: str, param_name: str, payload: str) -> str:
-        """Return a copy of url with param_name replaced by payload. Preserves the URL fragment."""
-        parsed = urlparse(url)
-        params = parse_qs(parsed.query)
-        if param_name not in params:
-            return url
-        params[param_name] = [payload]
-        new_query = urlencode(params, doseq=True)
-        rebuilt = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{new_query}"
-        if parsed.fragment:
-            rebuilt += f"#{parsed.fragment}"
-        return rebuilt
-
-    def _get_baseline_response(self, url: str) -> Optional[Tuple[int, str, int]]:
-        """Fetch the baseline response for url; return (status_code, body_text, body_len) or None."""
-        response = self._get(url)
-        if response is None:
-            return None
-        return (response.status_code, response.text, len(response.text))
-
-    def _match_sql_errors(self, body: str) -> Optional[Tuple[str, str]]:
-        """Strip <script> blocks then scan the body for SQL error signatures; return (db, pattern) or None."""
-        # Use HTMLParser-based stripper instead of the bypassed regex (CWE-20/116/185/186 fix)
-        clean_body = _strip_script_tags(body)
-        for db_type, patterns in self.SQL_ERROR_SIGNATURES.items():
-            for pattern in patterns:
-                if re.search(pattern, clean_body, re.IGNORECASE):
-                    return (db_type, pattern)
-        return None
-
-    # ──────────────────────────────────────────────────────────
-    #  [6] Parameter prioritisation
-    # ──────────────────────────────────────────────────────────
-
-    def _prioritize_params(self, params: Dict[str, str]) -> List[str]:
-        """Sort params into high / medium / low priority lists and return them concatenated."""
-        high: List[str] = []
-        medium: List[str] = []
-        low: List[str] = []
-
-        for param, value in params.items():
-            p_lower = param.lower()
-            if value.isdigit() or p_lower in _HIGH_PRIORITY_PARAMS:
-                high.append(param)
-            elif p_lower in _MEDIUM_PRIORITY_PARAMS:
-                medium.append(param)
-            else:
-                low.append(param)
-
-        return high + medium + low
-
-    def _probe_parameter(self, url: str, param_name: str, baseline_content: str) -> bool:
-        """
-    Return True if the parameter shows meaningful response variation when injected with a quote.
-
-            Measures natural noise first, then checks whether the 1-quote payload pushes the
-            response delta above the adaptive threshold derived from that noise.
-
-    """
-        if self.circuit_breaker.is_dead(url):
-            return False
-
-        r_init = self._get(url)
-        if r_init is None:
-            return False
-        baseline_status: int = r_init.status_code
-        first_sim            = difflib.SequenceMatcher(None, baseline_content, r_init.text).ratio()
-        noise_samples: List[float] = [1.0 - first_sim]
-
-        for _ in range(_PROBE_SAMPLES - 1):
-            if _exit_requested or _skip_current:
-                return False
-            r = self._get(url)
-            if r is None:
-                return False
-            sim = difflib.SequenceMatcher(None, baseline_content, r.text).ratio()
-            noise_samples.append(1.0 - sim)
-            _interruptible_sleep(0.2)
-
-        noise_level = statistics.median(noise_samples)
-
-        if noise_level > _PROBE_MAX_THRESHOLD:
-            return False
-
-        adaptive_threshold = noise_level + _PROBE_NOISE_BUFFER
-
-        if _exit_requested or _skip_current:
-            return False
-
-        test_url  = self._inject_payload(url, param_name, "1'")
-        r_payload = self._get(test_url)
-        if r_payload is None:
-            return False
-
-        if r_payload.status_code != baseline_status:
-            return False
-
-        payload_noise = 1.0 - difflib.SequenceMatcher(
-            None, baseline_content, r_payload.text
-        ).ratio()
-
-        return payload_noise > adaptive_threshold
-
-    def _test_error_based(self, url: str, param_name: str) -> Dict:
-        """Inject error-based payloads and look for DB error signatures in the response body."""
-        result = {
-            "method":     "error_based",
-            "vulnerable": False,
-            "confidence": SQLiConfidence.NONE.value,
-            "evidence":   [],
-            "waf":        None,
-        }
-        payloads = [
-            "1' AND extractvalue(0,concat(0x7e,'TEST',0x7e)) AND '1'='1",
-            "1 AND 1=CAST(CONCAT(0x7e,'TEST',0x7e) as INT)",
-            "1'; SELECT NULL#",
-        ]
-        for payload in payloads:
-            if self.circuit_breaker.is_dead(url):
-                break
-            if _exit_requested or _skip_current:
-                break
-
-            test_url = self._inject_payload(url, param_name, payload)
-            response = self._get(test_url)
-            if response is None:
-                continue
-
-            waf = self._detect_waf(response)
-            if waf:
-                result["waf"] = waf
-                result["evidence"].append(f"WAF detected ({waf}): error-based skipped")
-                break
-
-            match = self._match_sql_errors(response.text)
-            if match:
-                db_type, pattern = match
-                result["vulnerable"] = True
-                result["confidence"] = SQLiConfidence.HIGH.value
-                result["evidence"].append(
-                    f"{db_type.upper()} error signature matched: {pattern[:60]}"
-                )
-                return result
-
-            if self.stealth:
-                _interruptible_sleep(random.uniform(1.5, 3))
-
-        return result
-
-    def _test_union_based(self, url: str, param_name: str, baseline_len: int) -> Dict:
-        """Probe UNION SELECT column counts and look for mismatch errors or abnormal response sizes."""
-        result = {
-            "method":     "union_based",
-            "vulnerable": False,
-            "confidence": SQLiConfidence.NONE.value,
-            "evidence":   [],
-            "waf":        None,
-        }
-
-        mismatch_at: List[int] = []
-
-        for n_cols in range(1, _UNION_COLUMNS_MAX + 1):
-            if self.circuit_breaker.is_dead(url):
-                break
-            if _exit_requested or _skip_current:
-                break
-
-            null_cols = ",".join(["NULL"] * n_cols)
-            payloads = [
-                f"' UNION SELECT {null_cols}--",
-                f"' UNION SELECT {null_cols}#",
-                f"-1 UNION SELECT {null_cols}--",
-                f"0 UNION ALL SELECT {null_cols}--",
-            ]
-
-            for payload in payloads:
-                if _exit_requested or _skip_current:
-                    break
-
-                test_url = self._inject_payload(url, param_name, payload)
-                response = self._get(test_url)
-                if response is None:
-                    continue
-
-                waf = self._detect_waf(response)
-                if waf:
-                    result["waf"] = waf
-                    result["evidence"].append(
-                        f"WAF detected ({waf}): UNION probe aborted at {n_cols} cols"
-                    )
-                    return result
-
-                body = response.text
-
-                if self._UNION_COL_MISMATCH_RE.search(body):
-                    if n_cols not in mismatch_at:
-                        mismatch_at.append(n_cols)
-                        result["evidence"].append(
-                            f"UNION col-mismatch at n={n_cols} — server processes UNION"
-                        )
-                    break
-
-                sql_match = self._match_sql_errors(body)
-                if sql_match:
-                    db_type, pattern = sql_match
-                    result["vulnerable"] = True
-                    result["confidence"] = SQLiConfidence.HIGH.value
-                    result["evidence"].append(
-                        f"UNION triggered {db_type.upper()} error at n={n_cols}: {pattern[:50]}"
-                    )
-                    return result
-
-                len_diff = abs(len(body) - baseline_len)
-                if (response.status_code == 200
-                        and len_diff > baseline_len * 0.20
-                        and (n_cols in mismatch_at or bool(mismatch_at))):
-                    result["vulnerable"] = True
-                    result["confidence"] = SQLiConfidence.MEDIUM.value
-                    result["evidence"].append(
-                        f"UNION SELECT {n_cols} cols: response Δ={len_diff}B "
-                        f"(prev mismatches at cols {mismatch_at})"
-                    )
-                    return result
-
-                if self.stealth:
-                    _interruptible_sleep(random.uniform(0.5, 1.5))
-
-        if mismatch_at:
-            result["vulnerable"] = True
-            result["confidence"] = SQLiConfidence.LOW.value
-            result["evidence"].append(
-                f"UNION col-mismatch at col(s) {mismatch_at}: UNION syntax processed by server"
-            )
-
-        return result
-
-    def _test_boolean_blind(self, url: str, param_name: str, baseline_len: int) -> Dict:
-        """Send true/false boolean pairs and detect statistically significant response-size differences."""
-        result = {
-            "method":     "boolean_blind",
-            "vulnerable": False,
-            "confidence": SQLiConfidence.NONE.value,
-            "evidence":   [],
-        }
-
-        bool_payloads = [
-            ("1' AND '1'='1", "true"),
-            ("1' AND '1'='2", "false"),
-            ("1 AND 1=1",     "true"),
-            ("1 AND 1=2",     "false"),
-        ]
-
-        true_groups:  List[List[int]] = []
-        false_groups: List[List[int]] = []
-
-        for payload, payload_type in bool_payloads:
-            if self.circuit_breaker.is_dead(url):
-                break
-            if _exit_requested or _skip_current:
-                break
-
-            test_url = self._inject_payload(url, param_name, payload)
-            samples: List[int] = []
-
-            for _ in range(_BOOL_SAMPLES):
-                if _exit_requested or _skip_current:
-                    break
-                r = self._get(test_url)
-                if r is not None:
-                    samples.append(len(r.text))
-                if self.stealth:
-                    _interruptible_sleep(random.uniform(0.5, 1))
-
-            if len(samples) >= 2:
-                (true_groups if payload_type == "true" else false_groups).append(samples)
-
-            if self.stealth:
-                _interruptible_sleep(random.uniform(1, 2))
-
-        if not true_groups or not false_groups:
-            return result
-
-        all_true  = [v for g in true_groups  for v in g]
-        all_false = [v for g in false_groups for v in g]
-
-        median_true  = statistics.median(all_true)
-        median_false = statistics.median(all_false)
-        diff         = abs(median_true - median_false)
-
-        internal_variance_true  = max(all_true)  - min(all_true)
-        internal_variance_false = max(all_false) - min(all_false)
-        noise_ceiling           = baseline_len * 0.04
-
-        if (diff > baseline_len * 0.15
-                and internal_variance_true  < noise_ceiling
-                and internal_variance_false < noise_ceiling):
-            result["vulnerable"] = True
-            result["confidence"] = SQLiConfidence.MEDIUM.value
-            result["evidence"].append(
-                f"Boolean median differential: TRUE={median_true:.0f}B  "
-                f"FALSE={median_false:.0f}B  diff={diff:.0f}B  "
-                f"variance_t={internal_variance_true:.0f}B  "
-                f"variance_f={internal_variance_false:.0f}B"
-            )
-
-        return result
-
-    def _test_time_based_blind(self, url: str, param_name: str) -> Dict:
-        """Inject SLEEP payloads and detect delays above baseline + margin as time-based blind SQLi."""
-        result = {
-            "method":     "time_based_blind",
-            "vulnerable": False,
-            "confidence": SQLiConfidence.NONE.value,
-            "evidence":   [],
-        }
-
-        baseline = self._measure_baseline_latency(url)
-        if baseline is None:
-            result["evidence"].append(
-                "Skipped: host unreachable or baseline latency too high"
-            )
-            return result
-
-        threshold  = baseline + _SLEEP_DELAY + _TIMEBASED_MARGIN
-        extra_read = _SLEEP_DELAY + _TIMEBASED_MARGIN + 3
-
-        sleep_payloads = [
-            f"1' AND SLEEP({_SLEEP_DELAY}) AND '1'='1",
-            f"1 AND SLEEP({_SLEEP_DELAY})",
-        ]
-        neutral_payload = "1' AND '1'='1"
-
-        for sleep_payload in sleep_payloads:
-            if self.circuit_breaker.is_dead(url):
-                break
-
-            test_url = self._inject_payload(url, param_name, sleep_payload)
-            t0       = time.monotonic()
-            response = self._get(test_url, extra_read=extra_read)
-            elapsed  = time.monotonic() - t0
-
-            sleep_triggered = False
-            if response is None and elapsed >= threshold * 0.9:
-                sleep_triggered = True
-            elif response is not None and elapsed >= threshold:
-                sleep_triggered = True
-
-            if not sleep_triggered:
-                continue
-
-            if response is not None:
-                waf = self._detect_waf(response)
-                if waf:
-                    result["evidence"].append(
-                        f"WAF detected ({waf}): time-based latency may be firewall delay"
-                    )
-                    continue
-
-            neutral_url      = self._inject_payload(url, param_name, neutral_payload)
-            confirm_times:   List[float] = []
-            confirm_failures = 0
-
-            for _ in range(_TIMEBASED_CONFIRM):
-                if self.circuit_breaker.is_dead(url):
-                    break
-                if _exit_requested or _skip_current:
-                    break
-                t_c       = time.monotonic()
-                r_c       = self._get(neutral_url)
-                elapsed_c = time.monotonic() - t_c
-
-                if r_c is None:
-                    confirm_failures += 1
-                else:
-                    confirm_times.append(elapsed_c)
-
-                _interruptible_sleep(0.5)
-
-            if confirm_failures > 0:
-                continue
-            if not confirm_times:
-                continue
-
-            confirm_avg       = sum(confirm_times) / len(confirm_times)
-            confirm_threshold = baseline + _TIMEBASED_MARGIN
-
-            if confirm_avg <= confirm_threshold:
-                result["vulnerable"] = True
-                result["confidence"] = SQLiConfidence.MEDIUM.value
-                result["evidence"].append(
-                    f"Time-based confirmed: SLEEP elapsed={elapsed:.1f}s  "
-                    f"threshold={threshold:.1f}s  "
-                    f"neutral avg={confirm_avg:.2f}s  "
-                    f"baseline={baseline:.2f}s"
-                )
-                return result
-
-        return result
-
-    def test_sqli(self, url: str) -> Dict:
-        """Run the full GET-parameter SQLi test suite on url; return a structured result dict."""
-        result = {
-            "url":                url,
-            "vulnerable":         False,
-            "overall_confidence": SQLiConfidence.NONE.value,
-            "tests":              [],
-            "tested":             False,
-            "message":            "",
-            "waf_detected":       None,
-        }
-
-        if not self.has_query_params(url):
-            result["message"] = "No query parameters found"
-            return result
-
-        if self.circuit_breaker.is_dead(url):
-            result["message"] = "Host unreachable (circuit breaker open)"
-            return result
-
-        result["tested"] = True
-        params = self._extract_query_params(url)
-        if not params:
-            result["message"] = "No query parameters found"
-            return result
-
-        baseline = self._get_baseline_response(url)
-        if baseline is None:
-            result["message"] = "Could not establish baseline (host unreachable)"
-            return result
-
-        baseline_status, baseline_content, baseline_len = baseline
-
-        # Second GET for WAF detection (baseline_content came from text, we need the Response obj)
-        _bl2 = self._get(url)
-        if _bl2 is not None:
-            waf_on_baseline = self._detect_waf(_bl2)
-            if waf_on_baseline:
-                result["waf_detected"] = waf_on_baseline
-                result["message"] = (
-                    f"WAF detected ({waf_on_baseline}) on baseline — "
-                    f"results may have false negatives"
-                )
-
-        per_param_scores: List[int] = []
-
-        for param_name in self._prioritize_params(params):
-
-            if self.circuit_breaker.is_dead(url):
-                result["message"] = "Host became unreachable during testing"
-                break
-            if _exit_requested or _skip_current:
-                break
-            if not self._probe_parameter(url, param_name, baseline_content):
-                continue
-
-            param_score = 0
-
-            error_result = self._test_error_based(url, param_name)
-            result["tests"].append(error_result)
-
-            if error_result.get("waf") and not result["waf_detected"]:
-                result["waf_detected"] = error_result["waf"]
-
-            if error_result["vulnerable"]:
-                if error_result["confidence"] == SQLiConfidence.HIGH.value:
-                    param_score += 3
-                    result["vulnerable"]         = True
-                    result["overall_confidence"] = SQLiConfidence.HIGH.value
-                    result["message"]            = f"Tested {len(params)} parameter(s)"
-                    return result
-                else:
-                    param_score += 2
-
-            union_result = self._test_union_based(url, param_name, baseline_len)
-            result["tests"].append(union_result)
-
-            if union_result.get("waf") and not result["waf_detected"]:
-                result["waf_detected"] = union_result["waf"]
-
-            if union_result["vulnerable"]:
-                if union_result["confidence"] == SQLiConfidence.HIGH.value:
-                    param_score += 3
-                elif union_result["confidence"] == SQLiConfidence.MEDIUM.value:
-                    param_score += 2
-                else:
-                    param_score += 1
-
-            bool_result = self._test_boolean_blind(url, param_name, baseline_len)
-            result["tests"].append(bool_result)
-            if bool_result["vulnerable"]:
-                param_score += 2
-
-            time_result = self._test_time_based_blind(url, param_name)
-            result["tests"].append(time_result)
-            if time_result.get("vulnerable", False):
-                param_score += (
-                    3 if time_result["confidence"] == SQLiConfidence.HIGH.value else 2
-                )
-
-            if param_score > 0:
-                per_param_scores.append(param_score)
-
-            if self.stealth:
-                _interruptible_sleep(random.uniform(2, 4))
-
-        if per_param_scores:
-            best  = max(per_param_scores)
-            avg   = sum(per_param_scores) / len(per_param_scores)
-
-            result["vulnerable"] = True
-
-            if best >= 5:
-                result["overall_confidence"] = SQLiConfidence.CRITICAL.value
-            elif best >= 3 or avg >= 3:
-                result["overall_confidence"] = SQLiConfidence.HIGH.value
-            elif best >= 2 or avg >= 2:
-                result["overall_confidence"] = SQLiConfidence.MEDIUM.value
-            else:
-                result["overall_confidence"] = SQLiConfidence.LOW.value
-
-        result["message"] = f"Tested {len(params)} parameter(s)"
-        return result
-
-    def test_post_sqli(self, url: str, post_data: Dict[str, str]) -> Dict:
-        """Test all POST parameters for SQL injection using error-based detection."""
-        result = {
-            "url": url, "vulnerable": False,
-            "overall_confidence": SQLiConfidence.NONE.value,
-            "tests": [], "tested": False, "message": "",
-            "waf_detected": None,
-        }
-        if not post_data or self.circuit_breaker.is_dead(url):
-            result["message"] = "No POST parameters or host unreachable"
-            return result
-
-        result["tested"]  = True
-        baseline_resp     = self._get(url)
-        if baseline_resp is None:
-            result["message"] = "Could not establish baseline"
-            return result
-
-        waf = self._detect_waf(baseline_resp)
-        if waf:
-            result["waf_detected"] = waf
-
-        confidence_scores = []
-
-        for param_name in post_data.keys():
-            if self.circuit_breaker.is_dead(url):
-                break
-            if _exit_requested or _skip_current:
-                break
-
-            payload_dict             = post_data.copy()
-            payload_dict[param_name] = str(post_data[param_name]) + "'"
-
-            _hdrs    = self.fingerprint_rotator.build_headers()
-            _data    = payload_dict
-            _timeout = self._timeout()
-
-            def _do_post(_d=_data, _h=_hdrs, _t=_timeout):
-                """Execute the POST request with the current payload dict inside the worker thread."""
-                return self._session.post(
-                    url,
-                    data    = _d,
-                    headers = _h,
-                    timeout = _t,
-                    verify  = False,
-                )
-
-            response = self._run_interruptible(
-                _do_post,
-                total_timeout    = _CONNECT_TIMEOUT + self.read_timeout,
-                on_connect_error = lambda: self.circuit_breaker.mark_dead(url),
-            )
-            if response is None:
-                if self.circuit_breaker.is_dead(url):
-                    break
-                continue
-
-            waf = self._detect_waf(response)
-            if waf:
-                if not result["waf_detected"]:
-                    result["waf_detected"] = waf
-                continue
-
-            match = self._match_sql_errors(response.text)
-            if match:
-                db_type, pattern = match
-                result["vulnerable"] = True
-                result["tests"].append({
-                    "method":    "post_error_based",
-                    "parameter": param_name,
-                    "db":        db_type,
-                    "evidence":  pattern[:60],
-                })
-                confidence_scores.append(3)
-
-            if self.stealth:
-                _interruptible_sleep(random.uniform(2, 4))
-
-        if confidence_scores:
-            avg = sum(confidence_scores) / len(confidence_scores)
-            result["overall_confidence"] = (
-                SQLiConfidence.HIGH.value if avg >= 3 else SQLiConfidence.MEDIUM.value
-            )
-            result["vulnerable"] = True
-
-        result["message"] = f"Tested {len(post_data)} POST parameter(s)"
-        return result
-
-    def test_json_sqli(self, url: str, json_data: Dict[str, str]) -> Dict:
-        """Test all JSON body parameters for SQL injection using error-based detection."""
-        result = {
-            "url": url, "vulnerable": False,
-            "overall_confidence": SQLiConfidence.NONE.value,
-            "tests": [], "tested": False, "message": "",
-            "waf_detected": None,
-        }
-        if not json_data or self.circuit_breaker.is_dead(url):
-            result["message"] = "No JSON parameters or host unreachable"
-            return result
-
-        result["tested"]  = True
-        confidence_scores = []
-
-        for key in json_data.keys():
-            if self.circuit_breaker.is_dead(url):
-                break
-            if _exit_requested or _skip_current:
-                break
-
-            payload_dict      = json_data.copy()
-            payload_dict[key] = payload_dict[key] + "'"
-
-            _json    = payload_dict
-            _timeout = self._timeout()
-
-            def _do_json_post(_j=_json, _t=_timeout):
-                """Execute the JSON POST request inside the worker thread."""
-                return self._session.post(
-                    url,
-                    json    = _j,
-                    timeout = _t,
-                    verify  = False,
-                )
-
-            response = self._run_interruptible(
-                _do_json_post,
-                total_timeout    = _CONNECT_TIMEOUT + self.read_timeout,
-                on_connect_error = lambda: self.circuit_breaker.mark_dead(url),
-            )
-            if response is None:
-                continue
-
-            waf = self._detect_waf(response)
-            if waf:
-                if not result["waf_detected"]:
-                    result["waf_detected"] = waf
-                continue
-
-            match = self._match_sql_errors(response.text)
-            if match:
-                db_type, pattern = match
-                result["vulnerable"] = True
-                result["tests"].append({
-                    "method":    "json_error_based",
-                    "parameter": key,
-                    "db":        db_type,
-                    "evidence":  pattern[:60],
-                })
-                confidence_scores.append(3)
-
-            if self.stealth:
-                _interruptible_sleep(random.uniform(2, 4))
-
-        if confidence_scores:
-            avg = sum(confidence_scores) / len(confidence_scores)
-            result["overall_confidence"] = (
-                SQLiConfidence.HIGH.value if avg >= 3 else SQLiConfidence.MEDIUM.value
-            )
-            result["vulnerable"] = True
-
-        result["message"] = "JSON injection test completed"
-        return result
-
-    def test_path_based_sqli(self, url: str) -> Dict:
-        """Test path-based SQL injection by appending a quote to numeric/word path segments."""
-        result = {
-            "method":     "path_based",
-            "vulnerable": False,
-            "confidence": SQLiConfidence.NONE.value,
-            "evidence":   [],
-        }
-        if self.circuit_breaker.is_dead(url):
-            return result
-
-        path = urlparse(url).path
-        if re.search(r"/\d+$", path) or re.search(r"/\w+$", path):
-            response = self._get(url + "'")
-            if response:
-                waf = self._detect_waf(response)
-                if waf:
-                    result["evidence"].append(f"WAF detected ({waf}): path-based skipped")
-                    return result
-
-                match = self._match_sql_errors(response.text)
-                if match:
-                    db_type, pattern = match
-                    result["vulnerable"] = True
-                    result["confidence"] = SQLiConfidence.HIGH.value
-                    result["evidence"].append(
-                        f"Path-based SQLi: {db_type.upper()} — {pattern[:60]}"
-                    )
-        return result
-
-
-# ══════════════════════════════════════════════════════════════
-#  UserAgentRotator
-# ══════════════════════════════════════════════════════════════
 
 class UserAgentRotator:
     """Rotates User-Agent strings across Chrome, Firefox, Safari, and Edge profiles."""
@@ -1626,6 +330,18 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
             stealth = config.get("stealth_mode", False),
             timeout = config.get("request_timeout", 10)
         )
+        # ── XSS detector — lazy import avoids hard dependency ─────────────────
+        self.xss_detector = None
+        if config.get("xss_detection", False):
+            try:
+                from xss import XSSDetector
+                self.xss_detector = XSSDetector(
+                    stealth  = config.get("stealth_mode", False),
+                    timeout  = config.get("request_timeout", 10),
+                    xss_type = config.get("xss_type", "all"),
+                )
+            except ImportError:
+                pass  # xss.py not found — XSS silently disabled
         self.session = self._create_session()
 
     def _create_session(self) -> requests.Session:
@@ -1725,6 +441,12 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
         if not self.config.get("sqli_detection", False):
             return {"tested": False}
         return self.sqli_detector.test_sqli(url)
+
+    def check_xss(self, url: str) -> Dict:
+        """Run XSS detection on url if xss_detection is enabled in config; return the result dict."""
+        if not self.config.get("xss_detection", False) or self.xss_detector is None:
+            return {"tested": False}
+        return self.xss_detector.test_xss(url)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -2003,6 +725,51 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                     progress.advance(task2)
                     if self.config.get("stealth_mode", False):
                         _interruptible_sleep(random.uniform(3, 6))
+
+            # ── XSS Testing ─────────────────────────────────────────────────────
+            urls_to_test_xss = [r for r in results if self.config.get("xss_detection", False)]
+            if self.config.get("xss_detection", False) and urls_to_test_xss:
+                task3 = progress.add_task("[cyan]Testing for [bold yellow]XSS[cyan]...", total=len(urls_to_test_xss))
+                for result in urls_to_test_xss:
+                    if _exit_requested:
+                        break
+                    if _skip_current:
+                        console.print("[yellow][~] Ctrl+C — skipping remaining XSS tests for this dork.[/yellow]")
+                        _skip_current = False
+                        break
+
+                    xss_result         = self.analyzer.check_xss(result["url"])
+                    result["xss_test"] = xss_result
+
+                    if xss_result.get("waf_detected") and not result.get("sqli_test", {}).get("waf_detected"):
+                        console.print(
+                            f"[yellow][~] WAF detected "
+                            f"({xss_result['waf_detected']}): {_rich_escape(result['url'])}[/yellow]"
+                        )
+                        self.stats["waf_detected"] += 1
+
+                    if xss_result.get("vulnerable", False):
+                        self.stats["xss_vulnerable"] += 1
+                        confidence = xss_result.get("overall_confidence", "?")
+                        types_str  = ", ".join(xss_result.get("xss_types_found", []))
+                        console.print(
+                            f"[bold yellow][!] Potential XSS found "
+                            f"({confidence}) [{types_str}]: {_rich_escape(result['url'])}[/bold yellow]"
+                        )
+                        for _xt in xss_result.get("tests", []):
+                            if _xt.get("vulnerable"):
+                                _xtype  = _xt.get("type", "unknown")
+                                _xev    = " | ".join(_xt.get("evidence", [])[:2])
+                                _xpayld = _xt.get("payload", "")
+                                _xpstr  = f" [payload: {_xpayld[:60]}]" if _xpayld else ""
+                                console.print(
+                                    f"[dim]    ↳ type: [yellow]{_xtype}[/yellow]{_xpstr}"
+                                    + (f"  evidence: [italic]{_rich_escape(_xev[:120])}[/italic]" if _xev else "")
+                                    + "[/dim]"
+                                )
+                    progress.advance(task3)
+                    if self.config.get("stealth_mode", False):
+                        _interruptible_sleep(random.uniform(2, 5))
         return results
 
     def run_search(self, dorks: List[str], count: int):
@@ -2027,6 +794,9 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             console.print("[bold magenta][*] HTTP Fingerprinting: ENABLED[/bold magenta]")
         if self.config.get("sqli_detection", False):
             console.print("[bold red][*] SQL Injection Detection: ENABLED[/bold red]")
+        if self.config.get("xss_detection", False):
+            xss_t = self.config.get("xss_type", "all").upper()
+            console.print(f"[bold yellow][*] XSS Detection: ENABLED  [dim](type: {xss_t})[/dim][/bold yellow]")
         if TERMUX_IS_ANDROID:
             console.print("[bold green][*] Android/Termux mode: battery-saver constants active[/bold green]")
 
@@ -2045,7 +815,7 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
                 break
 
-            if self.config.get("analyze_files", True) or self.config.get("sqli_detection", False):
+            if self.config.get("analyze_files", True) or self.config.get("sqli_detection", False) or self.config.get("xss_detection", False):
                 results = self.analyze_results(results)
 
             self.results.extend(results)
@@ -2124,7 +894,8 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         fieldnames = [
             "url","title","snippet","dork","timestamp","extension","category",
             "file_size","content_type","accessible","status_code",
-            "sqli_vulnerable","sqli_confidence","waf_detected"
+            "sqli_vulnerable","sqli_confidence","waf_detected",
+            "xss_vulnerable","xss_types","xss_confidence",
         ]
         with open(filename, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
@@ -2135,6 +906,10 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                     row["sqli_vulnerable"] = result["sqli_test"].get("vulnerable", False)
                     row["sqli_confidence"] = result["sqli_test"].get("overall_confidence", "none")
                     row["waf_detected"]    = result["sqli_test"].get("waf_detected", "")
+                if "xss_test" in result:
+                    row["xss_vulnerable"] = result["xss_test"].get("vulnerable", False)
+                    row["xss_types"]      = ",".join(result["xss_test"].get("xss_types_found", []))
+                    row["xss_confidence"] = result["xss_test"].get("overall_confidence", "none")
                 writer.writerow(row)
 
     def _save_json(self, filename: str):
@@ -2145,6 +920,9 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 "generated_at":                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "sqli_detection_enabled":      self.config.get("sqli_detection", False),
                 "sqli_vulnerabilities_found":  self.stats.get("sqli_vulnerable", 0),
+                "xss_detection_enabled":       self.config.get("xss_detection", False),
+                "xss_type":                    self.config.get("xss_type", "all"),
+                "xss_vulnerabilities_found":   self.stats.get("xss_vulnerable", 0),
                 "waf_blocked_count":           self.stats.get("waf_detected", 0),
                 "http_fingerprinting_enabled": self.config.get("http_fingerprinting", True),
                 "stealth_mode":                self.config.get("stealth_mode", False),
@@ -2174,6 +952,12 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                         f.write(f"   SQLi: {status} ({sqli.get('overall_confidence')})\n")
                     if sqli.get("waf_detected"):
                         f.write(f"   WAF: {sqli.get('waf_detected')}\n")
+                if "xss_test" in result:
+                    xss = result["xss_test"]
+                    if xss.get("tested", False):
+                        xss_status = "VULNERABLE" if xss.get("vulnerable") else "SAFE"
+                        xss_types  = ",".join(xss.get("xss_types_found", [])) or "—"
+                        f.write(f"   XSS: {xss_status} ({xss.get('overall_confidence')}) [{xss_types}]\n")
                 f.write("\n")
 
     def _save_html(self, filename: str):
@@ -2184,8 +968,14 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             if "sqli_test" in r and r["sqli_test"].get("tested") and not r["sqli_test"].get("vulnerable")
         )
         sqli_total = sqli_count + sqli_safe
+        xss_count  = self.stats.get("xss_vulnerable", 0)
+        xss_safe   = sum(
+            1 for r in self.results
+            if "xss_test" in r and r["xss_test"].get("tested") and not r["xss_test"].get("vulnerable")
+        )
+        xss_total  = xss_count + xss_safe
         waf_count  = self.stats.get("waf_detected", 0)
-        cnt        = {"all": len(self.results), "doc": 0, "sqli": sqli_total, "scripts": 0, "page": 0}
+        cnt        = {"all": len(self.results), "doc": 0, "sqli": sqli_total, "xss": xss_total, "scripts": 0, "page": 0}
         for r in self.results:
             cat = r.get("category", "unknown")
             if cat in ("documents", "archives", "backups"):    cnt["doc"]     += 1
@@ -2204,6 +994,11 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 sqli_s = ("critical" if conf == "critical" else "vuln") if sqli_t.get("vulnerable") else "safe"
             else:
                 sqli_s = "untested"
+            xss_t  = r.get("xss_test", {})
+            if xss_t.get("tested"):
+                xss_s = "vuln" if xss_t.get("vulnerable") else "safe"
+            else:
+                xss_s = "untested"
             export_rows.append({
                 "url":       r.get("url", ""),
                 "title":     r.get("title", ""),
@@ -2214,6 +1009,9 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 "sqli":      sqli_s,
                 "conf":      sqli_t.get("overall_confidence", ""),
                 "waf":       sqli_t.get("waf_detected", "") or "",
+                "xss":       xss_s,
+                "xss_types": ",".join(xss_t.get("xss_types_found", [])),
+                "xss_conf":  xss_t.get("overall_confidence", ""),
             })
 
         # ── File export rows (non-webpage results with file info) ─────────
@@ -2386,6 +1184,7 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         col.c-title { min-width: 120px; width: 14%; }
         col.c-cat   { min-width: 90px;  width: 9%; }
         col.c-sqli  { min-width: 110px; width: 10%; }
+        col.c-xss   { min-width: 110px; width: 10%; }
         col.c-waf   { min-width: 70px;  width: 7%; }
         col.c-size  { min-width: 54px;  width: 6%; }
         /* ── responsive breakpoints ── */
@@ -2426,6 +1225,9 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         .sqli-vuln     { color: #ff3333; font-weight: bold; }
         .sqli-safe     { color: #00ff41; }
         .sqli-untested { color: #444; }
+        .xss-vuln      { color: #ffaa00; font-weight: bold; }
+        .xss-safe      { color: #00ff41; }
+        .xss-untested  { color: #444; }
         .waf-label     { font-size: 10px; color: #ffaa00; border: 1px solid #ffaa00; padding: 1px 5px; letter-spacing: 1px; white-space: nowrap; }
         .url-cell { display: flex; align-items: center; gap: 6px; overflow: hidden; }
         .url-cell a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
@@ -2438,11 +1240,17 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             font-size: 13px; cursor: pointer; line-height: 1; padding: 0 1px;
             transition: color .12s; font-family: 'Courier New', monospace; }
         .info-btn:hover { color: #00ccff; }
+        .info-overlay { display: none; position: fixed; inset: 0; z-index: 8900;
+            background: rgba(0,0,0,0.72); backdrop-filter: blur(2px); }
+        .info-overlay.open { display: block; animation: fadeIn .15s ease; }
         .info-popup { display: none; position: fixed; z-index: 9000;
+            top: 50%; left: 50%; transform: translate(-50%,-50%);
             background: rgba(0,4,12,0.98); border: 1px solid #007acc;
-            border-top: 2px solid #00aaff; box-shadow: 0 10px 40px rgba(0,120,200,0.3);
-            min-width: 360px; max-width: 520px; font-size: 11px; padding: 14px 16px; }
-        .info-popup.open { display: block; animation: fadeIn .15s ease; }
+            border-top: 3px solid #00aaff;
+            box-shadow: 0 0 60px rgba(0,120,200,0.45), 0 0 120px rgba(0,80,160,0.25);
+            width: min(560px, 92vw); max-height: 80vh; overflow-y: auto;
+            font-size: 11px; padding: 18px 20px; }
+        .info-popup.open { display: block; animation: fadeIn .18s ease; }
         .info-popup-title { font-size: 10px; color: #005588; letter-spacing: 2px;
             text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid rgba(0,100,180,0.2);
             padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
@@ -2482,6 +1290,13 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         <p>Review the results marked VULNERABLE below — use the Export panel to download them.</p>
     </div>
 """)
+        if xss_count > 0:
+            parts.append(f"""    <div class="xss-alert" style="background:rgba(40,20,0,0.88);border:1px solid #ffaa00;border-left:4px solid #ffaa00;padding:14px 20px;margin-bottom:20px;color:#ffcc44;">
+        <h2 style="font-size:15px;letter-spacing:2px;margin-bottom:6px;">&#9888; XSS ALERT &#9888;</h2>
+        <p style="font-size:13px;color:#ffdd88;"><strong>{xss_count}</strong> potential Cross-Site Scripting vulnerabilities detected!</p>
+        <p style="font-size:13px;color:#ffdd88;">Check results marked XSS VULN — types may include reflected, stored, or DOM-based.</p>
+    </div>
+""")
         if waf_count > 0:
             parts.append(f"""    <div class="waf-alert">
         &#9888; <strong>{waf_count}</strong> WAF-protected target(s) detected — SQLi results on those URLs may have false negatives.
@@ -2491,6 +1306,7 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         <div class="stat-card"><h3>&#9632; TOTAL RESULTS</h3><p>{len(self.results)}</p></div>
         <div class="stat-card"><h3>&#9632; DUPLICATES FILTERED</h3><p>{self.stats.get("duplicates", 0)}</p></div>
         <div class="stat-card"><h3>&#9632; SQLI VULNERABILITIES</h3><p style="color:#ff3333;text-shadow:0 0 8px rgba(255,0,0,0.4)">{sqli_count}</p></div>
+        <div class="stat-card"><h3>&#9632; XSS VULNERABILITIES</h3><p style="color:#ffaa00;text-shadow:0 0 8px rgba(255,170,0,0.4)">{xss_count}</p></div>
         <div class="stat-card"><h3>&#9632; WAF DETECTED</h3><p style="color:#ffaa00">{waf_count}</p></div>
         <div class="stat-card"><h3>&#9632; EXECUTION TIME</h3><p>{round(time.time() - self.start_time, 2)}s</p></div>
     </div>
@@ -2519,6 +1335,14 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 <button class="sub-btn"        data-sub="sqli-critical" onclick="applySubFilter(this,'sqli')">SQLi CRITICAL <span class="sub-badge sqli-critical" id="sbadge-sqli-critical">–</span></button>
                 <button class="sub-btn"        data-sub="sqli-vuln"    onclick="applySubFilter(this,'sqli')">SQLi VULN     <span class="sub-badge sqli-vuln" id="sbadge-sqli-vuln">{sqli_count}</span></button>
                 <button class="sub-btn"        data-sub="sqli-safe"    onclick="applySubFilter(this,'sqli')">SQLi SAFE     <span class="sub-badge" id="sbadge-sqli-safe">{sqli_safe}</span></button>
+            </div>
+        </div>
+        <div class="filter-group" id="fg-xss">
+            <button class="filter-btn has-sub" data-group="xss" onclick="applyFilter(this)">XSS <span class="badge" id="badge-xss">{cnt["xss"]}</span><span class="arrow">&#9660;</span></button>
+            <div class="sub-menu" id="sub-xss">
+                <button class="sub-btn active" data-sub="xss-all"  onclick="applySubFilter(this,'xss')">ALL  <span class="sub-badge" id="sbadge-xss-all">{xss_total}</span></button>
+                <button class="sub-btn"        data-sub="xss-vuln" onclick="applySubFilter(this,'xss')">VULN <span class="sub-badge xss-vuln" id="sbadge-xss-vuln">{xss_count}</span></button>
+                <button class="sub-btn"        data-sub="xss-safe" onclick="applySubFilter(this,'xss')">SAFE <span class="sub-badge" id="sbadge-xss-safe">{xss_safe}</span></button>
             </div>
         </div>
         <div class="filter-group" id="fg-scripts">
@@ -2597,6 +1421,27 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
               </div>
             </div>
             <div class="ep-section">
+              <div class="ep-title">&#9632; Export Links — XSS by status</div>
+              <div class="ep-row">
+                <span class="ep-label warn" style="color:#ffbb44">&#9888; All tested <span id="epCntXssAll"></span></span>
+                <button class="exp-btn txt"  onclick="doExport('txt','xss-all')">TXT</button>
+                <button class="exp-btn json" onclick="doExport('json','xss-all')">JSON</button>
+                <button class="exp-btn csv"  onclick="doExport('csv','xss-all')">CSV</button>
+              </div>
+              <div class="ep-row">
+                <span class="ep-label" style="color:#ffaa00">&#9888; VULN only <span id="epCntXssVuln"></span></span>
+                <button class="exp-btn txt"  onclick="doExport('txt','xss-vuln')">TXT</button>
+                <button class="exp-btn json" onclick="doExport('json','xss-vuln')">JSON</button>
+                <button class="exp-btn csv"  onclick="doExport('csv','xss-vuln')">CSV</button>
+              </div>
+              <div class="ep-row">
+                <span class="ep-label safe-lbl">&#10003; SAFE only <span id="epCntXssSafe"></span></span>
+                <button class="exp-btn txt"  onclick="doExport('txt','xss-safe')">TXT</button>
+                <button class="exp-btn json" onclick="doExport('json','xss-safe')">JSON</button>
+                <button class="exp-btn csv"  onclick="doExport('csv','xss-safe')">CSV</button>
+              </div>
+            </div>
+            <div class="ep-section">
               <div class="ep-title">&#9632; Export Links — Current view</div>
               <div class="ep-row">
                 <span class="ep-label view-lbl">Visible <span id="epCntView"></span></span>
@@ -2666,11 +1511,11 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
     <table>
         <colgroup>
           <col class="c-num"><col class="c-url"><col class="c-title">
-          <col class="c-cat"><col class="c-sqli"><col class="c-waf"><col class="c-size">
+          <col class="c-cat"><col class="c-sqli"><col class="c-xss"><col class="c-waf"><col class="c-size">
         </colgroup>
         <thead><tr>
           <th>#</th><th>URL</th><th>Title</th>
-          <th>Category</th><th>SQLi Status</th><th>WAF</th><th>Size</th>
+          <th>Category</th><th>SQLi</th><th>XSS</th><th>WAF</th><th>Size</th>
         </tr></thead>
         <tbody id="results-tbody">
 """)
@@ -2691,6 +1536,9 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             sqli_data   = "untested"
             sqli_conf   = ""
             waf_label   = ""
+            xss_status  = "N/A"
+            xss_class   = "xss-untested"
+            xss_data    = "untested"
 
             # ── Build info payload for ⓘ popup ───────────────────────────────
             _sqli_t   = result.get("sqli_test", {})
@@ -2712,6 +1560,24 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 _payload_str = " ↳ ".join(_details[:3])
             _waf_info = _sqli_t.get("waf_detected", "") or ""
 
+            # ── XSS info for popup ────────────────────────────────────────────
+            _xss_t       = result.get("xss_test", {})
+            _xss_str     = ""
+            _xss_det_str = ""
+            if _xss_t.get("tested"):
+                _xss_str = "VULNERABLE" if _xss_t.get("vulnerable") else "SAFE"
+                _xconf   = _xss_t.get("overall_confidence", "")
+                _xtypes  = ",".join(_xss_t.get("xss_types_found", []))
+                if _xconf:
+                    _xss_str += f" ({_xconf})"
+                if _xtypes:
+                    _xss_str += f" [{_xtypes}]"
+                _xdet = []
+                for _xt in _xss_t.get("tests", []):
+                    if _xt.get("vulnerable"):
+                        _xdet.append(_xt.get("type", "") + ": " + " | ".join(_xt.get("evidence", [])[:1]))
+                _xss_det_str = " ↳ ".join(_xdet[:3])
+
             _info_obj = _json.dumps({
                 "url":       url,
                 "title":     result.get("title", "") or "",
@@ -2723,6 +1589,8 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 "sqli":      _vuln_str,
                 "payload":   _payload_str,
                 "waf":       _waf_info,
+                "xss":       _xss_str,
+                "xss_det":   _xss_det_str,
                 "size":      size,
             }, ensure_ascii=False).replace("'", "&#39;").replace("</", "<\\/")
 
@@ -2747,13 +1615,26 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 if waf:
                     waf_label = f'<span class="waf-label">{_html_mod.escape(waf)}</span>'
 
-            parts.append(f"""            <tr data-category="{category}" data-ext="{ext}" data-sqli="{sqli_data}" data-conf="{sqli_conf}"
+            if "xss_test" in result and result["xss_test"].get("tested", False):
+                _xconf = result["xss_test"].get("overall_confidence", "none")
+                if result["xss_test"].get("vulnerable", False):
+                    _xtypes_short = ",".join(result["xss_test"].get("xss_types_found", []))[:30]
+                    xss_status = f"VULN [{_xtypes_short}]"
+                    xss_class  = "xss-vuln"
+                    xss_data   = "vuln"
+                else:
+                    xss_status = "SAFE"
+                    xss_class  = "xss-safe"
+                    xss_data   = "safe"
+
+            parts.append(f"""            <tr data-category="{category}" data-ext="{ext}" data-sqli="{sqli_data}" data-conf="{sqli_conf}" data-xss="{xss_data}"
                 data-idx="{idx-1}" data-url="{url_esc_td}" data-title="{title_esc}" data-dork="{dork_val}">
                 <td style="color:#444">{idx}</td>
                 <td><div class="url-cell"><a href="{url_esc_td}" target="_blank" title="{url_esc_td}">{url_display}</a><a class="dl-btn" href="{url_esc_td}" download>&#8681;</a><button class="info-btn" onclick="showInfo(this)" data-info='{_info_obj}' title="Details">&#9432;</button></div></td>
                 <td title="{title_esc}">{_html_mod.escape(title_disp)}</td>
                 <td><span class="category category-{category}">{category}</span></td>
                 <td class="{sqli_class}">{sqli_status}</td>
+                <td class="{xss_class}">{xss_status}</td>
                 <td>{waf_label}</td>
                 <td>{size}</td>
             </tr>
@@ -2762,12 +1643,13 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         parts.append(f"""        </tbody>
     </table>
     </div>
-    <div class="footer">DorkEye v4.8 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+    <div class="footer">DorkEye v4.9 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
 </div>
 
 <div id="toast"></div>
 
-<!-- ⓘ Info popup -->
+<!-- ⓘ Info popup overlay -->
+<div class="info-overlay" id="infoOverlay" onclick="closeInfo()"></div>
 <div class="info-popup" id="infoPopup">
   <div class="info-popup-title">
     <span>&#9432; RESULT DETAILS</span>
@@ -2810,6 +1692,9 @@ const SUB_PRED={{
   "sqli-critical":(r)=>r.dataset.sqli==="critical",
   "sqli-vuln":(r)=>["vuln","critical"].includes(r.dataset.sqli),
   "sqli-safe":(r)=>r.dataset.sqli==="safe",
+  "xss-all":(r)=>["vuln","safe"].includes(r.dataset.xss),
+  "xss-vuln":(r)=>r.dataset.xss==="vuln",
+  "xss-safe":(r)=>r.dataset.xss==="safe",
   "scripts-all":()=>true,
   "scripts-php":(r)=>r.dataset.ext===".php",
   "scripts-asp":(r)=>[".asp",".aspx"].includes(r.dataset.ext),
@@ -2844,6 +1729,7 @@ function renderRows(){{
     let hide=false;
     if(activeGroup!=='all'){{
       if(activeGroup==='sqli'){{hide=!pred(row);}}
+      else if(activeGroup==='xss'){{hide=!pred(row);}}
       else{{const cats=GROUP_CATS[activeGroup]||[];hide=!cats.includes(row.dataset.category||'');if(!hide)hide=!pred(row);}}
     }}
     hide?row.classList.add('hidden'):row.classList.remove('hidden');
@@ -2855,6 +1741,7 @@ function buildSubBadges(){{
   const inG=cats=>r=>cats.includes(r.dataset.category||'');
   const docR=rows.filter(inG(GROUP_CATS['doc']));
   const sqliR=rows.filter(r=>["vuln","safe","critical"].includes(r.dataset.sqli));
+  const xssR=rows.filter(r=>["vuln","safe"].includes(r.dataset.xss));
   const scR=rows.filter(inG(GROUP_CATS['scripts']));
   const s=(id,n)=>{{const el=document.getElementById(id);if(el)el.textContent=n;}};
   s('sbadge-doc-all',docR.length);
@@ -2867,6 +1754,9 @@ function buildSubBadges(){{
   s('sbadge-sqli-critical',sqliR.filter(r=>r.dataset.sqli==='critical').length);
   s('sbadge-sqli-vuln',sqliR.filter(r=>['vuln','critical'].includes(r.dataset.sqli)).length);
   s('sbadge-sqli-safe',sqliR.filter(r=>r.dataset.sqli==='safe').length);
+  s('sbadge-xss-all',xssR.length);
+  s('sbadge-xss-vuln',xssR.filter(r=>r.dataset.xss==='vuln').length);
+  s('sbadge-xss-safe',xssR.filter(r=>r.dataset.xss==='safe').length);
   s('sbadge-scripts-all',scR.length);
   s('sbadge-scripts-php',scR.filter(r=>r.dataset.ext==='.php').length);
   s('sbadge-scripts-asp',scR.filter(r=>['.asp','.aspx'].includes(r.dataset.ext)).length);
@@ -2932,11 +1822,17 @@ function updateExportCounts(){{
   const sqliAll =EXPORT_DATA.filter(r=>["vuln","safe","critical"].includes(r.sqli));
   const sqliVuln=EXPORT_DATA.filter(r=>["vuln","critical"].includes(r.sqli));
   const sqliSafe=EXPORT_DATA.filter(r=>r.sqli==="safe");
+  const xssAll  =EXPORT_DATA.filter(r=>["vuln","safe"].includes(r.xss));
+  const xssVuln =EXPORT_DATA.filter(r=>r.xss==="vuln");
+  const xssSafe =EXPORT_DATA.filter(r=>r.xss==="safe");
   const viewIdxs=new Set(Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden):not(.srch-hidden)')).map(r=>parseInt(r.dataset.idx)));
   const s=(id,n)=>{{const el=document.getElementById(id);if(el)el.textContent='('+n+')';}}; 
   s('epCntSqliAll', sqliAll.length);
   s('epCntSqliVuln',sqliVuln.length);
   s('epCntSqliSafe',sqliSafe.length);
+  s('epCntXssAll',  xssAll.length);
+  s('epCntXssVuln', xssVuln.length);
+  s('epCntXssSafe', xssSafe.length);
   s('epCntView',    EXPORT_DATA.filter((_,i)=>viewIdxs.has(i)).length);
 }}
 function _getRows(scope){{
@@ -2944,13 +1840,16 @@ function _getRows(scope){{
   if(scope==='sqli-all')  return EXPORT_DATA.filter(r=>["vuln","safe","critical"].includes(r.sqli));
   if(scope==='sqli-vuln') return EXPORT_DATA.filter(r=>["vuln","critical"].includes(r.sqli));
   if(scope==='sqli-safe') return EXPORT_DATA.filter(r=>r.sqli==="safe");
+  if(scope==='xss-all')   return EXPORT_DATA.filter(r=>["vuln","safe"].includes(r.xss));
+  if(scope==='xss-vuln')  return EXPORT_DATA.filter(r=>r.xss==="vuln");
+  if(scope==='xss-safe')  return EXPORT_DATA.filter(r=>r.xss==="safe");
   if(scope==='view'){{
     const vis=new Set(Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden):not(.srch-hidden)')).map(r=>parseInt(r.dataset.idx)));
     return EXPORT_DATA.filter((_,i)=>vis.has(i));
   }}
   return EXPORT_DATA;
 }}
-function _scopeLabel(scope){{return{{'all':'all','sqli-all':'sqli_tested','sqli-vuln':'sqli_vuln','sqli-safe':'sqli_safe','view':'view'}}[scope]||scope;}}
+function _scopeLabel(scope){{return{{'all':'all','sqli-all':'sqli_tested','sqli-vuln':'sqli_vuln','sqli-safe':'sqli_safe','xss-all':'xss_tested','xss-vuln':'xss_vuln','xss-safe':'xss_safe','view':'view'}}[scope]||scope;}}
 function _download(content,filename,mime){{
   const blob=new Blob([content],{{type:mime}});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;
@@ -2972,6 +1871,7 @@ function doExport(fmt,scope){{
       if(r.category)s+='   Category : '+r.category+'\\n';
       if(r.dork)    s+='   Dork     : '+r.dork+'\\n';
       if(r.sqli&&r.sqli!=='untested')s+='   SQLi     : '+r.sqli.toUpperCase()+(r.conf?' ('+r.conf+')':'')+'\\n';
+      if(r.xss&&r.xss!=='untested') s+='   XSS      : '+r.xss.toUpperCase()+(r.xss_conf?' ('+r.xss_conf+')':'')+(r.xss_types?' ['+r.xss_types+']':'')+'\\n';
       if(r.waf)     s+='   WAF      : '+r.waf+'\\n';
       s+='   Time     : '+r.timestamp+'\\n';
       return s;
@@ -2982,7 +1882,7 @@ function doExport(fmt,scope){{
     _download(JSON.stringify({{meta:{{generated:ts,scope:scope,total:rows.length}},results:rows}},null,2),base+'.json','application/json');
     _showToast('Exported '+rows.length+' links → '+base+'.json');
   }}else if(fmt==='csv'){{
-    const headers=['url','title','dork','category','ext','sqli','conf','waf','timestamp'];
+    const headers=['url','title','dork','category','ext','sqli','conf','waf','xss','xss_conf','xss_types','timestamp'];
     const esc=v=>{{const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\\n')?'"'+s.replace(/"/g,'""')+'"':s;}};
     _download([headers.join(','),...rows.map(r=>headers.map(h=>esc(r[h]||'')).join(','))].join('\\r\\n'),base+'.csv','text/csv');
     _showToast('Exported '+rows.length+' links → '+base+'.csv');
@@ -3050,6 +1950,7 @@ let _infoOpen=false;
 function showInfo(btn){{
   const d=JSON.parse(btn.getAttribute('data-info'));
   const sqliColor=d.sqli&&d.sqli.startsWith('VULN')?'#ff3333':d.sqli==='SAFE'?'#00ff41':d.sqli.startsWith('VULNERABLE')?'#ff00ff':'#444';
+  const xssColor=d.xss&&d.xss.startsWith('VULN')?'#ffaa00':d.xss==='SAFE'?'#00ff41':'#444';
   let rows='';
   const row=(lbl,val,color)=>val?`<div class="info-row"><span class="info-lbl">${{lbl}}</span><span class="info-val" style="color:${{color||'#00aaff'}}">${{val}}</span></div>`:'';
   rows+=row('URL',d.url.length>80?d.url.slice(0,80)+'…':d.url);
@@ -3061,20 +1962,26 @@ function showInfo(btn){{
   rows+=row('Dork',d.dork&&d.dork.length>80?d.dork.slice(0,80)+'…':d.dork,'#cc88ff');
   rows+=row('Snippet',d.snippet&&d.snippet.length>120?d.snippet.slice(0,120)+'…':d.snippet,'#777');
   if(d.sqli)rows+=row('SQLi Status',d.sqli,sqliColor);
-  if(d.payload)rows+=row('Method/Payload',d.payload.length>100?d.payload.slice(0,100)+'…':d.payload,'#ff6666');
+  if(d.payload)rows+=row('SQLi Method',d.payload.length>100?d.payload.slice(0,100)+'…':d.payload,'#ff6666');
+  if(d.xss)rows+=row('XSS Status',d.xss,xssColor);
+  if(d.xss_det)rows+=row('XSS Detail',d.xss_det.length>100?d.xss_det.slice(0,100)+'…':d.xss_det,'#ffcc66');
   if(d.waf)rows+=row('WAF','⚠ '+d.waf,'#ffaa00');
   document.getElementById('infoBody').innerHTML=rows||'<span style="color:#444">No details.</span>';
   const popup=document.getElementById('infoPopup');
-  const rect=btn.getBoundingClientRect();
-  let top=rect.bottom+window.scrollY+4;
-  let left=rect.left+window.scrollX-300;
-  if(left<8)left=8;
-  if(left+520>window.innerWidth)left=window.innerWidth-528;
-  popup.style.top=top+'px';popup.style.left=left+'px';
-  popup.classList.add('open');_infoOpen=true;
+  const overlay=document.getElementById('infoOverlay');
+  popup.classList.add('open');
+  overlay.classList.add('open');
+  _infoOpen=true;
+  // prevent page scroll when popup is open
+  document.body.style.overflow='hidden';
 }}
-function closeInfo(){{document.getElementById('infoPopup').classList.remove('open');_infoOpen=false;}}
-document.addEventListener('click',(e)=>{{if(_infoOpen&&!e.target.closest('#infoPopup')&&!e.target.classList.contains('info-btn'))closeInfo();}});
+function closeInfo(){{
+  document.getElementById('infoPopup').classList.remove('open');
+  document.getElementById('infoOverlay').classList.remove('open');
+  document.body.style.overflow='';
+  _infoOpen=false;
+}}
+document.addEventListener('keydown',(e)=>{{if(_infoOpen&&e.key==='Escape')closeInfo();}});
 </script>
 </body>
 </html>""")
@@ -3114,6 +2021,8 @@ document.addEventListener('click',(e)=>{{if(_infoOpen&&!e.target.closest('#infoP
         if self.config.get("sqli_detection", False):
             table.add_row("├─> SQLi Vulnerabilities", f"[bold red]{self.stats.get('sqli_vulnerable', 0)}[/bold red]")
             table.add_row("├─> WAF Detected",          f"[bold yellow]{self.stats.get('waf_detected', 0)}[/bold yellow]")
+        if self.config.get("xss_detection", False):
+            table.add_row("├─> XSS Vulnerabilities",  f"[bold yellow]{self.stats.get('xss_vulnerable', 0)}[/bold yellow]")
         table.add_row("└─> Execution Time", f"{round(time.time() - self.start_time, 2)}s")
         console.print(table)
         categories = {k.replace("category_", ""): v for k, v in self.stats.items() if k.startswith("category_")}
@@ -3334,6 +2243,11 @@ def run_wizard():
             count     = int(count_str) if count_str.isdigit() else 50
             console.print("[bold cyan]│[/bold cyan]")
         config["sqli_detection"]      = ask_yes_no("│  Enable SQLi detection?")
+        config["xss_detection"]       = ask_yes_no("│  Enable XSS detection?")
+        if config["xss_detection"]:
+            console.print("[bold cyan]│[/bold cyan]  XSS type: 1)all 2)reflected 3)stored 4)dom")
+            _xtype_idx = ask_choice("│  XSS type", ["all", "reflected", "stored", "dom"])
+            config["xss_type"] = ["all", "reflected", "stored", "dom"][_xtype_idx]
         config["stealth_mode"]        = ask_yes_no("│  Enable stealth mode?")
         config["http_fingerprinting"] = not ask_yes_no("│  Disable HTTP fingerprinting?")
         config["analyze_files"]       = not ask_yes_no("│  Disable file analysis?")
@@ -3747,7 +2661,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.8 | OSINT Dorking Tool",
+        description="DorkEye v4.9 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
 
@@ -3766,6 +2680,13 @@ def main():
     %(prog)s -f Dump/results.json --sqli -o retest.json
     %(prog)s -f Dump/results.json --analyze --analyze-fetch-max=5000 -o reanalyzed.json
     %(prog)s -f Dump/results.json --sqli --crawl -o full_retest.json
+
+  # XSS detection
+    %(prog)s -d "inurl:search?q=" --xss -o results.json
+    %(prog)s -d dorks.txt --xss --xss-type=reflected --stealth -o results.json
+    %(prog)s -u "https://target.com/search?q=test" --xss
+    %(prog)s -f Dump/results.json --xss --xss-type=dom -o xss_retest.json
+    %(prog)s --dg=all --sqli --xss -o full_scan.json
 
   # Dork Generator
     %(prog)s --dg=all
@@ -3791,13 +2712,16 @@ def main():
 
     parser.add_argument("--wizard",          action="store_true", help="Launch interactive wizard")
     parser.add_argument("-d", "--dork",      help="Single dork or file containing dorks")
-    parser.add_argument("-u", "--url",       help="Direct URL to test for SQLi (use with --sqli)")
+    parser.add_argument("-u", "--url",       help="Direct URL to test for SQLi/XSS (use with --sqli / --xss)")
     parser.add_argument("-f", "--file",      help="Load results from a DorkEye .json or .txt file (combine with --sqli, --analyze, --crawl)")
     parser.add_argument("-o", "--output",    help="Output filename (.json enables automatic analysis prompt)")
     parser.add_argument("-c", "--count",     type=int, default=50, help="Results per dork (default: 50)")
     parser.add_argument("--config",          help="Configuration file (YAML or JSON)")
     parser.add_argument("--no-analyze",      action="store_true", help="Disable file analysis")
     parser.add_argument("--sqli",            action="store_true", help="Enable SQL injection detection")
+    parser.add_argument("--xss",             action="store_true", help="Enable XSS detection (reflected, stored, DOM)")
+    parser.add_argument("--xss-type",        choices=["reflected","stored","dom","all"], default="all",
+                        help="XSS detection type (default: all)")
     parser.add_argument("--stealth",         action="store_true", help="Enable stealth mode (slower, safer)")
     parser.add_argument("--no-fingerprint",  action="store_true", help="Disable HTTP fingerprinting")
     parser.add_argument("--templates",       type=str, help="Template file in Templates/")
@@ -3879,6 +2803,8 @@ def main():
 
     if args.no_analyze:     config["analyze_files"]       = False
     if args.sqli:           config["sqli_detection"]      = True
+    if args.xss:            config["xss_detection"]       = True
+    if args.xss:            config["xss_type"]            = args.xss_type
     if args.stealth:        config["stealth_mode"]        = True
     if args.no_fingerprint: config["http_fingerprinting"] = False
     if args.blacklist:      config["blacklist"]            = args.blacklist
@@ -3922,63 +2848,112 @@ def main():
 
     dorkeye = DorkEyeEnhanced(config, output_file)
 
-    # ── -u / --url: direct SQLi test on a single URL ─────────────────────────
+    # ── -u / --url: direct SQLi + XSS test on a single URL ───────────────────
     if getattr(args, "url", None):
         target_url = args.url
+        _do_url_sqli = config.get("sqli_detection", False)
+        _do_url_xss  = config.get("xss_detection",  False)
+
         console.print(f"\n[bold cyan]┌─[ DIRECT URL TEST ][/bold cyan]")
         console.print(f"[bold cyan]│[/bold cyan]  Target → [cyan]{_rich_escape(target_url)}[/cyan]")
-        if not config.get("sqli_detection", False):
-            console.print("[bold cyan]│[/bold cyan]  [yellow][!] --sqli not specified — enabling SQLi detection automatically[/yellow]")
+
+        # Auto-enable SQLi when neither flag given (legacy behaviour)
+        if not _do_url_sqli and not _do_url_xss:
+            console.print("[bold cyan]│[/bold cyan]  [yellow][!] No test flag — enabling SQLi detection automatically[/yellow]")
             config["sqli_detection"] = True
             dorkeye.config["sqli_detection"] = True
             dorkeye.analyzer.config["sqli_detection"] = True
-        console.print("[bold cyan]└─>[/bold cyan] Starting SQLi test...\n")
-        _detector = SQLiDetector(
-            stealth=config.get("stealth_mode", False),
-            timeout=config.get("request_timeout", 10),
-        )
-        _sqli_result = _detector.test_sqli(target_url)
-        # ── Print result ──────────────────────────────────────────────────────
-        console.print("\n[bold yellow]┌─[ SQLi Test Result ][/bold yellow]")
-        _tested  = _sqli_result.get("tested", False)
-        _vuln    = _sqli_result.get("vulnerable", False)
-        _conf    = _sqli_result.get("overall_confidence", "none")
-        _waf     = _sqli_result.get("waf_detected")
-        _msg     = _sqli_result.get("message", "")
-        if not _tested:
-            console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] Not tested — {_msg}[/yellow]")
-        elif _vuln:
-            _style = "bold magenta" if _conf == SQLiConfidence.CRITICAL.value else "bold red"
-            console.print(f"[bold yellow]│[/bold yellow]  [{_style}][!] VULNERABLE ({_conf})[/{_style}]  {_rich_escape(target_url)}")
-            for _t in _sqli_result.get("tests", []):
-                if _t.get("vulnerable"):
-                    _method = _t.get("method", "?")
-                    _ev     = " | ".join(_t.get("evidence", [])[:2])
-                    _param  = _t.get("parameter", "")
-                    _p_str  = f" [param: {_param}]" if _param else ""
-                    console.print(f"[bold yellow]│[/bold yellow]    [dim]↳ method: [yellow]{_method}[/yellow]{_p_str}  evidence: [italic]{_rich_escape(_ev[:120])}[/italic][/dim]")
-        else:
-            console.print(f"[bold yellow]│[/bold yellow]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
-        if _waf:
-            console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] WAF detected: {_waf}[/yellow]")
-        console.print(f"[bold yellow]└─>[/bold yellow]  {_msg}")
-        # ── Optionally save ───────────────────────────────────────────────────
-        if output_file:
-            _entry = {
-                "url":       target_url,
-                "title":     "",
-                "snippet":   "",
-                "dork":      "",
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "extension": dorkeye.analyzer.get_file_extension(target_url),
-                "category":  dorkeye.analyzer.categorize_url(target_url),
-                "sqli_test": _sqli_result,
-            }
-            dorkeye.results.append(_entry)
-            if _vuln:
+            _do_url_sqli = True
+
+        tests_label = " + ".join(filter(None, ["SQLi" if _do_url_sqli else "", "XSS" if _do_url_xss else ""]))
+        console.print(f"[bold cyan]└─>[/bold cyan] Starting {tests_label} test...\n")
+
+        _entry = {
+            "url":       target_url,
+            "title":     "",
+            "snippet":   "",
+            "dork":      "",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "extension": dorkeye.analyzer.get_file_extension(target_url),
+            "category":  dorkeye.analyzer.categorize_url(target_url),
+        }
+
+        # ── SQLi ──────────────────────────────────────────────────────────────
+        if _do_url_sqli:
+            _detector    = SQLiDetector(
+                stealth=config.get("stealth_mode", False),
+                timeout=config.get("request_timeout", 10),
+            )
+            _sqli_result = _detector.test_sqli(target_url)
+            _entry["sqli_test"] = _sqli_result
+
+            console.print("\n[bold yellow]┌─[ SQLi Test Result ][/bold yellow]")
+            _tested = _sqli_result.get("tested", False)
+            _vuln   = _sqli_result.get("vulnerable", False)
+            _conf   = _sqli_result.get("overall_confidence", "none")
+            _waf    = _sqli_result.get("waf_detected")
+            _msg    = _sqli_result.get("message", "")
+            if not _tested:
+                console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] Not tested — {_msg}[/yellow]")
+            elif _vuln:
+                _style = "bold magenta" if _conf == SQLiConfidence.CRITICAL.value else "bold red"
+                console.print(f"[bold yellow]│[/bold yellow]  [{_style}][!] VULNERABLE ({_conf})[/{_style}]  {_rich_escape(target_url)}")
+                for _t in _sqli_result.get("tests", []):
+                    if _t.get("vulnerable"):
+                        _method = _t.get("method", "?")
+                        _ev     = " | ".join(_t.get("evidence", [])[:2])
+                        _param  = _t.get("parameter", "")
+                        _p_str  = f" [param: {_param}]" if _param else ""
+                        console.print(f"[bold yellow]│[/bold yellow]    [dim]↳ method: [yellow]{_method}[/yellow]{_p_str}  evidence: [italic]{_rich_escape(_ev[:120])}[/italic][/dim]")
                 dorkeye.stats["sqli_vulnerable"] += 1
+            else:
+                console.print(f"[bold yellow]│[/bold yellow]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
             if _waf:
+                console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] WAF detected: {_waf}[/yellow]")
                 dorkeye.stats["waf_detected"] += 1
+            console.print(f"[bold yellow]└─>[/bold yellow]  {_msg}")
+
+        # ── XSS ───────────────────────────────────────────────────────────────
+        if _do_url_xss:
+            try:
+                from xss import XSSDetector
+                _xss_det = XSSDetector(
+                    stealth  = config.get("stealth_mode", False),
+                    timeout  = config.get("request_timeout", 10),
+                    xss_type = config.get("xss_type", "all"),
+                )
+                _xss_result = _xss_det.test_xss(target_url)
+                _entry["xss_test"] = _xss_result
+
+                console.print("\n[bold yellow]┌─[ XSS Test Result ][/bold yellow]")
+                _xvuln   = _xss_result.get("vulnerable", False)
+                _xconf   = _xss_result.get("overall_confidence", "none")
+                _xtypes  = ", ".join(_xss_result.get("xss_types_found", []))
+                _xwaf    = _xss_result.get("waf_detected")
+                _xmsg    = _xss_result.get("message", "")
+                if not _xss_result.get("tested"):
+                    console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] Not tested — {_xmsg}[/yellow]")
+                elif _xvuln:
+                    console.print(f"[bold yellow]│[/bold yellow]  [bold yellow][!] VULNERABLE ({_xconf}) [{_xtypes}][/bold yellow]  {_rich_escape(target_url)}")
+                    for _xt in _xss_result.get("tests", []):
+                        if _xt.get("vulnerable"):
+                            _xtype   = _xt.get("type", "?")
+                            _xev     = " | ".join(_xt.get("evidence", [])[:2])
+                            _xpayld  = _xt.get("payload", "")
+                            _xp_str  = f" [payload: {_xpayld[:60]}]" if _xpayld else ""
+                            console.print(f"[bold yellow]│[/bold yellow]    [dim]↳ type: [yellow]{_xtype}[/yellow]{_xp_str}  evidence: [italic]{_rich_escape(_xev[:120])}[/italic][/dim]")
+                    dorkeye.stats["xss_vulnerable"] += 1
+                else:
+                    console.print(f"[bold yellow]│[/bold yellow]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
+                if _xwaf:
+                    console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] WAF detected: {_xwaf}[/yellow]")
+                console.print(f"[bold yellow]└─>[/bold yellow]  {_xmsg}")
+            except ImportError:
+                console.print("[yellow][!] xss.py not found in Tools/ — XSS test skipped.[/yellow]")
+
+        # ── Save ──────────────────────────────────────────────────────────────
+        if output_file:
+            dorkeye.results.append(_entry)
             dorkeye.save_results()
             console.print(f"\n[bold green][✓] Result saved → Dump/{output_file}[/bold green]")
         return
@@ -3996,11 +2971,13 @@ def main():
 
         # Determine what to do with the loaded URLs
         _do_sqli    = config.get("sqli_detection", False)
+        _do_xss     = config.get("xss_detection", False)
         _do_analyze = args.analyze or str(output_file).lower().endswith(".json")
         _do_crawl   = getattr(args, "crawl", False)
 
         console.print(
             f"[bold cyan]│[/bold cyan]  SQLi: {'[bold red]ON[/bold red]' if _do_sqli else '[dim]off[/dim]'} │ "
+            f"XSS: {'[bold yellow]ON[/bold yellow]' if _do_xss else '[dim]off[/dim]'} │ "
             f"Analyze: {'[bold green]ON[/bold green]' if _do_analyze and _ANALYZE_AVAILABLE else '[dim]off[/dim]'} │ "
             f"Crawl: {'[bold green]ON[/bold green]' if _do_crawl and _ANALYZE_AVAILABLE else '[dim]off[/dim]'}"
         )
@@ -4011,7 +2988,7 @@ def main():
             _h = dorkeye._hash_url(_r.get("url", ""))
             dorkeye.url_hashes.add(_h)
 
-        if _do_sqli and _loaded:
+        if (_do_sqli or _do_xss) and _loaded:
             _analyzed = dorkeye.analyze_results(_loaded)
             dorkeye.results = _analyzed
         else:
