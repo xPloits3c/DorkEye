@@ -4,7 +4,7 @@ build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "dorkeye"
-version = "4.8.0"
+version = "4.9.0"
 description = "Advanced Google Dorking with Google Dorks Generator, SQLi analysis, WAF detection and extract metadata."
 readme = "README.md"
 license = { file = "LICENSE" }
