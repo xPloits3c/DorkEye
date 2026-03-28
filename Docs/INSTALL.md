@@ -1,5 +1,3 @@
-![dorkeye-install](https://private-user-images.githubusercontent.com/153435050/539346754-a0983dc1-2c2e-4cbd-9ab9-7ae1a3743f29.png)
-
 # 📦 DorkEye — Installation Guide
 
 Official installation guide for **DorkEye Project**.
@@ -12,11 +10,19 @@ Official installation guide for **DorkEye Project**.
 pip install dorkeye
 ```
 
-Works on Linux, macOS, and Windows. Recommended for quick testing — for production use, a virtual environment is preferred.
+Works on Linux, macOS, Windows, and Termux. Recommended for quick testing — for production use or development, a virtual environment is preferred.
+
+After installing, run directly:
+
+```
+dorkeye --help
+dorkeye --wizard
+dorkeye -d "inurl:admin" -o results.html
+```
 
 -----
 
-## 🔗 Download
+## 🔗 Download (Source)
 
 Clone the repository:
 
@@ -52,6 +58,9 @@ Or download the latest release:
 |pip (latest)     |`pip3 --version`   |
 |git              |`git --version`    |
 
+
+> **Note:** `git` is only required for source installation. If you install via `pip install dorkeye`, you only need Python and pip.
+
 **System Requirements:**
 
 - Linux / Windows 10+ / macOS 10.14+ / Android (Termux)
@@ -59,7 +68,7 @@ Or download the latest release:
 - 100 MB free disk space
 - Internet connection
 
-**Key Python Dependencies** (installed automatically via `requirements.txt`):
+**Key Python Dependencies** (installed automatically via `pip install dorkeye` or `requirements.txt`):
 
 - `ddgs` — DuckDuckGo search engine
 - `requests` — HTTP client
@@ -76,6 +85,14 @@ Or download the latest release:
 -----
 
 ## 🐧 Quick Installation (Recommended)
+
+### Option A — PyPI (fastest)
+
+```
+pip install dorkeye
+```
+
+### Option B — From Source
 
 This method works on **Linux**, **macOS**, and **Windows**.
 
@@ -110,6 +127,17 @@ python dorkeye.py -h
 
 DorkEye auto-detects Termux and activates battery-saver mode (reduced timeouts, fewer probe samples). No additional flags needed.
 
+### Option A — PyPI (fastest)
+
+```
+pkg update && pkg upgrade
+pkg install python
+pip install dorkeye
+dorkeye --wizard
+```
+
+### Option B — From Source
+
 ```
 # Install Python and git
 pkg update && pkg upgrade
@@ -141,7 +169,9 @@ python dorkeye.py --wizard
 
 ## 💻 CLI Command Mode (Optional)
 
-Install DorkEye as a system command for direct access from anywhere:
+If you installed via **PyPI** (`pip install dorkeye`), the `dorkeye` command is already available globally — no extra steps needed.
+
+If you cloned **from source**, install DorkEye as a system command for direct access from anywhere:
 
 ```
 pip install -e .
@@ -155,13 +185,24 @@ dorkeye --wizard
 dorkeye -d "inurl:admin" -o results.html
 ```
 
-This mode is recommended for advanced users who want `dorkeye` available globally.
-
 -----
 
 ## ✅ Verification
 
-Run these commands to verify everything works:
+### If installed via PyPI:
+
+```
+# Show help and all available flags
+dorkeye -h
+
+# Quick test search
+dorkeye -d "python programming" -c 5 -o test.html
+
+# Launch the interactive wizard
+dorkeye --wizard
+```
+
+### If installed from source:
 
 ```
 # Show help and all available flags
@@ -180,7 +221,7 @@ python dorkeye.py --dg=all --mode=soft -c 5 -o dg_test.html
 python dorkeye.py --wizard
 ```
 
-If using CLI mode:
+If using CLI mode (source + `pip install -e .`):
 
 ```
 dorkeye --dg=all -c 5 -o test.html
@@ -193,8 +234,9 @@ dorkeye --dg=all -c 5 -o test.html
 ```
 DorkEye/
 ├── dorkeye.py                  # Main script
+├── pyproject.toml              # PyPI package configuration
 ├── requirements.txt            # Python dependencies
-├── setup.py                    # CLI install config
+├── setup.py                    # CLI install config (editable mode)
 ├── dorkeye_config.yaml         # Config (generated with --create-config)
 ├── http_fingerprints.json      # Browser fingerprint profiles
 ├── Tools/
@@ -226,12 +268,20 @@ pip install ddgs
 
 ### `Externally Managed Environment` (Kali Linux / Debian 12+)
 
-Modern Debian-based systems block global pip installs. Always use a virtual environment:
+Modern Debian-based systems block global pip installs. Use a virtual environment:
 
 ```
 python3 -m venv dorkeye_env
 source dorkeye_env/bin/activate
 pip install -r requirements.txt
+```
+
+Or install via PyPI inside the venv:
+
+```
+python3 -m venv dorkeye_env
+source dorkeye_env/bin/activate
+pip install dorkeye
 ```
 
 ### Permission Errors
@@ -258,6 +308,8 @@ The `--analyze` and `--crawl` features require `dorkeye_agents.py` in the `Tools
 git pull origin master
 ```
 
+> **Note:** When installed via PyPI, the `Tools/` directory is not included. For full feature support (agents, dork generator), use the source installation.
+
 ### HTTP Fingerprinting disabled warning
 
 If `http_fingerprints.json` is missing or malformed, DorkEye falls back to basic User-Agent rotation. Re-download the file from the repository.
@@ -269,6 +321,14 @@ DorkEye disables SSL verification for maximum compatibility during OSINT scannin
 -----
 
 ## 🔄 Updating DorkEye
+
+### PyPI install:
+
+```
+pip install --upgrade dorkeye
+```
+
+### Source install:
 
 ```
 cd DorkEye
@@ -285,6 +345,14 @@ pip install -e .
 -----
 
 ## 🗑️ Uninstallation
+
+### PyPI install:
+
+```
+pip uninstall dorkeye
+```
+
+### Source install:
 
 **Linux / macOS:**
 
@@ -304,7 +372,7 @@ rmdir /s /q DorkEye
 rm -rf dorkeye_env
 ```
 
-**If installed in CLI mode:**
+**If installed in CLI mode (source):**
 
 ```
 pip uninstall dorkeye
@@ -321,6 +389,7 @@ Please include:
 
 - Operating system + version
 - Python version (`python3 --version`)
+- Installation method (PyPI or source)
 - Full error message / traceback
 - Steps to reproduce the issue
 - Whether you’re using a virtual environment
@@ -328,6 +397,16 @@ Please include:
 -----
 
 ## ✅ Post-Installation Checklist
+
+**PyPI install:**
+
+- ✔ Python 3.9+
+- ✔ `pip install dorkeye` completed
+- ✔ `dorkeye -h` shows help
+- ✔ Test search works (`dorkeye -d "test" -c 5 -o test.html`)
+- ✔ Wizard launches (`dorkeye --wizard`)
+
+**Source install:**
 
 - ✔ Python 3.9+
 - ✔ Virtual environment active
