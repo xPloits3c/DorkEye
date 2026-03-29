@@ -1,3 +1,6 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/96b442db-cb6d-4b26-8d5c-be968c97197b" />
+
+
 # 📦 DorkEye — Installation Guide
 
 Official installation guide for **DorkEye Project**.
