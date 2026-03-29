@@ -72,7 +72,7 @@
 | 🔑 HTTP Fingerprinting | [22 browser/OS profiles — Chrome,Firefox,Safari,mobile..](Docs/fingerprinting.md) |
 | 📊 Output Formats | [HTML interactive report — all saved to `Dump/`](Docs/output_formats.md) |
 | 🗂️ File Categories | [7 auto-detected categories - whitelist / blacklist filtering](Docs/file_categories.md) |
-| 🖥️ Full CLI Reference | [All 26 flags and every possible combination](Docs/cli.md) |
+| 🖥️ Full CLI Reference | [All 31 flags and every possible combination](Docs/cli.md) |
 
 ---
 
