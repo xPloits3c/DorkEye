@@ -56,22 +56,22 @@
 
 | Feature | Details |
 |---------|---------|
-| 🧙 Wizard | [Interactive guided session — all options, no CLI knowledge needed](Docs/wizard.md) |
-| ⚙️ Dork Generator | [YAML template engine with `soft` / `medium` / `aggressive` modes](Docs/dork_generator.md) |
+| 🧙 Wizard | [Interactive guided session — all options](Docs/wizard.md) |
+| ⚙️ Dork Generator | [YAML template modes: `soft` / `medium` / `aggressive`](Docs/dork_generator.md) |
 | 🎯 Direct SQLi Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
-| 🔒 SQL Injection Engine | [4 methods: error-based, UNION, boolean blind, time-based — verbose output](Docs/sqli.md) |
-| 🔒 SQL Injection Engine | [DorkEye includes a built-in multi-method XSS detection engine supporting reflected, stored, DOM-based, and header-based injection — no browser or external tool required.](Docs/xss.md) |
-| 🤖 Agents v3.1 Pipeline | [11-step autonomous analysis — no external AI required](Docs/agents.md) |
-| 🛡️ HeaderIntelAgent | [Detects info leaks, missing security headers, outdated server versions](Docs/agents.md#headerintelagent) |
-| 🧬 TechFingerprintAgent | [35 technologies detected with version extraction, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
-| 📧 EmailHarvesterAgent | [Collects and categorizes emails: admin / security / info / noreply / personal](Docs/agents.md#emailharvesteragent) |
-| 🔐 PiiDetectorAgent | [Phone, IBAN, fiscal code, credit card (Luhn-validated), SSN, DOB](Docs/agents.md#piidetectoragent) |
-| 🌐 SubdomainHarvesterAgent | [Extracts subdomains and generates `site:sub.domain` follow-up dorks](Docs/agents.md#subdomainharvesteragent) |
-| 🔄 Adaptive Crawl | [Recursive multi-round dorking that refines itself automatically](Docs/crawler.md) |
-| 🔑 HTTP Fingerprinting | [22 browser/OS profiles — Chrome, Firefox, Safari, Edge, mobile](Docs/fingerprinting.md) |
-| 📊 Output Formats | [HTML interactive report, JSON, CSV, TXT — all saved to `Dump/`](Docs/output_formats.md) |
-| 🗂️ File Categories | [7 auto-detected categories with whitelist / blacklist filtering](Docs/file_categories.md) |
+| 💉 SQL Injection | [4 methods: error-based, UNION, boolean blind, time-based](Docs/sqli.md) |
+| 💉 XSS Injection | [4 methods: reflected, stored, DOM-based, header-based](Docs/xss.md) |
+| 🤖 Agents v3.1 Pipeline | [11-step autonomous analysis](Docs/agents.md) |
+| 🛡️ HeaderIntelAgent | [Info leaks, missing security headers, outdated server](Docs/agents.md#headerintelagent) |
+| 🧬 TechFingerprintAgent | [35 technologies detected, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
+| 📧 EmailHarvesterAgent | [Collects and categorizes emails: admin / security / info..](Docs/agents.md#emailharvesteragent) |
+| 🔐 PiiDetectorAgent | [Phone, IBAN, fiscal code, credit card, SSN, DOB](Docs/agents.md#piidetectoragent) |
+| 🌐 SubdomainAgent | [Extracts subdomains and generates `queries`](Docs/agents.md#subdomainharvesteragent) |
+| 🔄 Adaptive Crawl | [Recursive multi-round dorking](Docs/crawler.md) |
+| 🔑 HTTP Fingerprinting | [22 browser/OS profiles — Chrome,Firefox,Safari,mobile..](Docs/fingerprinting.md) |
+| 📊 Output Formats | [HTML interactive report — all saved to `Dump/`](Docs/output_formats.md) |
+| 🗂️ File Categories | [7 auto-detected categories - whitelist / blacklist filtering](Docs/file_categories.md) |
 | 🖥️ Full CLI Reference | [All 26 flags and every possible combination](Docs/cli.md) |
 
 ---
