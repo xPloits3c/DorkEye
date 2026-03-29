@@ -61,6 +61,7 @@
 | 🎯 Direct SQLi Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
 | 🔒 SQL Injection Engine | [4 methods: error-based, UNION, boolean blind, time-based — verbose output](Docs/sqli.md) |
+| 🔒 SQL Injection Engine | [DorkEye includes a built-in multi-method XSS detection engine supporting reflected, stored, DOM-based, and header-based injection — no browser or external tool required.](Docs/xss.md) |
 | 🤖 Agents v3.1 Pipeline | [11-step autonomous analysis — no external AI required](Docs/agents.md) |
 | 🛡️ HeaderIntelAgent | [Detects info leaks, missing security headers, outdated server versions](Docs/agents.md#headerintelagent) |
 | 🧬 TechFingerprintAgent | [35 technologies detected with version extraction, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
