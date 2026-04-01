@@ -1,41 +1,20 @@
 """
 DorkEye XSS
 ═══════════════════════════════════════════════════════════════
-Multi-method XSS testing engine for DorkEye
+Multi-method XSS testing engine for DorkEye Project
 
 Detection methods:
   1. reflected  — inject payloads into GET params; check for unescaped reflection
   2. stored     — POST payload per individual param, then refetch and check for marker
   3. dom        — static analysis of JS source-to-sink patterns (inline + external scripts)
   4. header     — inject marker into X-Forwarded-For / Referer / User-Agent / etc.
-
-Fixes applied:
-  [FIX-1]  Import path corrected: from sqli import ... (was from Tools.sqli_detector)
-  [FIX-2]  _get_exit_flag / _get_skip_flag internal import corrected (sqli, not Tools.sqli_detector)
-  [FIX-3]  difflib moved to top-level import (was inline inside _probe_parameter)
-  [FIX-4]  _is_response_html() helper — skip HTML-injection tests on JSON/XML/plain responses
-  [FIX-5]  _is_reflected_unescaped() — wider context window (60 chars), HTML-comment check,
-           JS-escaped string check
-  [FIX-6]  _test_reflected() — content-type gate + full-tag structure verification
-  [FIX-7]  _test_stored() — content-type gate on both POST echo and GET refetch
-  [FIX-8]  _test_dom() — sliding 40-line block analysis (source & sink must co-occur
-           in the same block); safe-pattern filter removes analytics/static-string lines
-  [FIX-9]  Reflected payload set expanded (+16 payloads: autofocus, SVG animate,
-           MathML, attribute injection, HTML5 elements, bypass variants)
-  [FIX-10] Bypass payload set expanded (+10 payloads: double-encoding, comment
-           insertion, tab/newline in tag, data URI, backtick attributes)
-  [FIX-11] _probe_parameter() uses top-level difflib (no inline import)
-  [FIX-12] _test_header_xss() — content-type gate on baseline and per-response
-  [FIX-13] _is_reflected_unescaped() — fixed HTML-comment false negative: now
-           checks that the comment is not closed (-->) between open and marker
-
 Author: xPloits3c I.C.W.T | https://github.com/xPloits3c/DorkEye
 """
 
 import re
 import time
 import random
-import difflib          # [FIX-3]
+import difflib
 import threading
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
@@ -75,7 +54,7 @@ def _get_exit_flag() -> bool:
     if _exit_requested:
         return True
     if _SHARED_IMPORTS:
-        import sqli as _sqli  # [FIX-2]
+        import sqli as _sqli
         return _sqli._exit_requested
     return False
 
@@ -243,7 +222,7 @@ Multi-method XSS detector for DorkEye.
     # ── Unique marker ─────────────────────────────────────────────────────────
     _MARKER = "DEXSS7x"
 
-    # ── [FIX-9] Reflected payloads: expanded set ──────────────────────────────
+    # ── Reflected payloads: expanded set ──────────────────────────────
     _REFLECTED_PAYLOADS: List[str] = [
         # Classic script injection
         "<script>alert('DEXSS7x')</script>",
@@ -291,7 +270,7 @@ Multi-method XSS detector for DorkEye.
         "`<script>alert('DEXSS7x')</script>`",
     ]
 
-    # ── [FIX-10] WAF-bypass encoding variants ────────────────────────────────
+    # ── WAF-bypass encoding variants ────────────────────────────────
     _BYPASS_PAYLOADS: List[str] = [
         # Case mixing
         "<ScRiPt>alert('DEXSS7x')</sCrIpT>",
@@ -396,7 +375,7 @@ Multi-method XSS detector for DorkEye.
         "\\x3c",
     ]
 
-    # ── [FIX-4] Non-HTML content types — HTML injection is meaningless ────────
+    # ── Non-HTML content types — HTML injection is meaningless ────────
     _NON_HTML_CONTENT_TYPES: Tuple[str, ...] = (
         "application/json",
         "application/xml",
@@ -640,7 +619,7 @@ Multi-method XSS detector for DorkEye.
         return "html" in ct or "xhtml" in ct
 
     # ──────────────────────────────────────────────────────────────────────────
-    #  [FIX-5 + FIX-13] Improved reflection check
+    #  Improved reflection check
     # ──────────────────────────────────────────────────────────────────────────
 
     def _is_reflected_unescaped(self, body: str, payload: str) -> bool:
@@ -658,7 +637,7 @@ Multi-method XSS detector for DorkEye.
 
         marker_idx = body.find(self._MARKER)
 
-        # [FIX-5a] Wider context window
+        # Wider context window
         ctx_start = max(0, marker_idx - 60)
         ctx_end   = marker_idx + len(self._MARKER) + 60
         context   = body[ctx_start:ctx_end]
@@ -668,7 +647,7 @@ Multi-method XSS detector for DorkEye.
             if enc.lower() in context.lower():
                 return False
 
-        # [FIX-13] Reject reflection inside HTML comment <!-- ... -->
+        # Reject reflection inside HTML comment <!-- ... -->
         # Only reject if the comment opened BEFORE the marker and was NOT
         # closed (-->) between the opening <!-- and the marker position.
         comment_open = body.rfind("<!--", 0, marker_idx)
@@ -691,7 +670,7 @@ Multi-method XSS detector for DorkEye.
         return True
 
     # ──────────────────────────────────────────────────────────────────────────
-    #  [FIX-6] Full-tag structure verification (anti false-positive)
+    #  Full-tag structure verification (anti false-positive)
     # ──────────────────────────────────────────────────────────────────────────
 
     def _payload_structure_present(self, body: str, payload: str) -> bool:
@@ -794,7 +773,7 @@ Multi-method XSS detector for DorkEye.
             result["evidence"].append("Baseline request failed")
             return result
 
-        # [FIX-6a] Content-type gate on baseline
+        # Content-type gate on baseline
         if not self._is_response_html(baseline):
             result["evidence"].append(
                 f"Reflected XSS skipped — non-HTML content-type: "
@@ -1032,10 +1011,10 @@ Multi-method XSS detector for DorkEye.
         all_js_parts = inline_scripts + external_bodies
         js_content   = "\n".join(all_js_parts) if all_js_parts else body
 
-        # [FIX-8a] Compile safe-pattern filter
+        # Compile safe-pattern filter
         safe_re = re.compile("|".join(self._DOM_SAFE_PATTERNS), re.IGNORECASE)
 
-        # [FIX-8b] Sliding-block analysis — source & sink must appear in same block
+        # Sliding-block analysis — source & sink must appear in same block
         blocks: List[List[str]] = self._sliding_blocks(js_content, block_size=40)
         danger_pairs: List[Tuple[str, str]] = []
 
@@ -1078,7 +1057,7 @@ Multi-method XSS detector for DorkEye.
             result["sources"]    = all_sources[:6]
             result["sinks"]      = all_sinks[:6]
 
-            # [FIX-8c] Confidence: single pair → LOW, 2+ pairs → MEDIUM
+            # Confidence: single pair → LOW, 2+ pairs → MEDIUM
             result["confidence"] = (
                 XSSConfidence.MEDIUM.value
                 if len(danger_pairs) >= 2
@@ -1123,7 +1102,7 @@ Multi-method XSS detector for DorkEye.
             result["evidence"].append("Baseline request failed — header XSS skipped")
             return result
 
-        # [FIX-12] Content-type gate
+        # Content-type gate
         if not self._is_response_html(baseline):
             result["evidence"].append("Header XSS skipped — non-HTML content-type")
             return result
