@@ -1,7 +1,7 @@
 """
-DorkEye XSS Detector — Tools/xss.py
+DorkEye XSS
 ═══════════════════════════════════════════════════════════════
-Multi-method XSS testing engine for DorkEye v4.9
+Multi-method XSS testing engine for DorkEye
 
 Detection methods:
   1. reflected  — inject payloads into GET params; check for unescaped reflection
