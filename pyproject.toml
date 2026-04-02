@@ -63,6 +63,9 @@ Changelog = "https://github.com/xPloits3c/DorkEye/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 py-modules = ["dorkeye"]
+packages = ["Tools"]
 
 [tool.setuptools.package-data]
+Tools = ["*.py"]
 dorkeye = ["templates/*.html", "wordlists/*.txt"]
+
