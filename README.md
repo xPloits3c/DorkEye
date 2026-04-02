@@ -80,6 +80,8 @@
 
 ```bash
 # Install directly via pip
+python -m venv dorkeye_env
+source dorkeye_env/bin/activate
 pip install dorkeye
 
 # Update to latest version
