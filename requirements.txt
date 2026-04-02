@@ -2,8 +2,8 @@
 # Install with: pip install -r requirements.txt
 
 # Core HTTP requests management
-# urllib3 is also listed explicitly because it is imported directly
-# in dorkeye.py and Tools/dorkeye_analyze.py (not only as a transitive dep)
+# urllib3 is also listed explicitly because it is imported
+# in dorkeye.py and Tools/dorkeye_analyze.py (not only as a dependency of requests)
 requests>=2.32.3,<3.0.0
 urllib3>=2.2.0,<3.0.0
 
@@ -11,13 +11,15 @@ urllib3>=2.2.0,<3.0.0
 # 6.0.2+ fixes a yaml.load() security issue present in 6.0.1
 PyYAML>=6.0.2,<7.0.0
 
+# Terminal formatting and colors
+colorama>=0.4.6
+
+# HTML parsing
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
 # Advanced Terminal UI and formatting
 rich>=13.7.0,<14.0.0
 
 # DuckDuckGo Search API integration
-# Pinned to v4.x — stable API, avoids breaking changes introduced in v5.x
 ddgs>=6.0.0
-
-# Minimum urllib3 floor for security patches and modern TLS defaults
-# Required independently of requests to support direct imports in dorkeye_analyze.py
-urllib3>=2.0.0
