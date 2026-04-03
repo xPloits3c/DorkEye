@@ -52,20 +52,4 @@ all = [
     "playwright>=1.40.0",
 ]
 
-[project.scripts]
-dorkeye = "dorkeye:main"
-
-[project.urls]
-Homepage = "https://github.com/xPloits3c/DorkEye"
-Repository = "https://github.com/xPloits3c/DorkEye"
-"Bug Tracker" = "https://github.com/xPloits3c/DorkEye/issues"
-Changelog = "https://github.com/xPloits3c/DorkEye/blob/main/CHANGELOG.md"
-
-[tool.setuptools]
-py-modules = ["dorkeye"]
-packages = ["Tools"]
-
-[tool.setuptools.package-data]
-Tools = ["*.py"]
-dorkeye = ["templates/*.html", "wordlists/*.txt"]
 
