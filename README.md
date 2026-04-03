@@ -116,7 +116,7 @@
 
 ## Usage 
 
-<img width="1322" height="967" alt="h1" src="https://github.com/user-attachments/assets/6f5be8c5-4a71-4187-988d-6eb301789a1c" />
+<img width="1141" height="948" alt="de-h" src="https://github.com/user-attachments/assets/99fe8d3a-822a-4bfe-97b1-62897db6db1d" />
 
 🔹 # WIZARD Mode
 ```json
@@ -147,7 +147,7 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
   python dorkeye.py -f Dump/results.json --sqli --analyze -o retest.html
 ```
 
-<img width="852" height="626" alt="examples" src="https://github.com/user-attachments/assets/27525c33-db4d-43c1-a53d-2410f5f3e190" />
+<img width="938" height="832" alt="de-hex" src="https://github.com/user-attachments/assets/da253967-45a7-4249-aed2-9726eaa37b79" />
 
 ---
 
