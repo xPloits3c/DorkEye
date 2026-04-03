@@ -76,23 +76,6 @@
 
 ---
 
-## 📦 PyPI Installation
-
-```json
-"Install directly via pip"
-  python -m venv dorkeye_env
-  source dorkeye_env/bin/activate
-  pip install dorkeye
-
-"Update to latest version"
-  pip install --upgrade dorkeye
-
-"Run after installation"
-  dorkeye --help
-```
-
----
-
 ## Quick Install
 ```json
 "Update:"
