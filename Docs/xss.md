@@ -1,4 +1,4 @@
-# XSS Detection — DorkEye v4.9
+# XSS Detection — DorkEye Project
 
 DorkEye includes a built-in multi-method XSS detection engine supporting reflected, stored, DOM-based, and header-based injection — no browser or external tool required.
 
