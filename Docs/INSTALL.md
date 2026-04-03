@@ -7,24 +7,6 @@ Official installation guide for **DorkEye Project**.
 
 -----
 
-## ⚡ Quickest Install (PyPI)
-
-```
-pip install dorkeye
-```
-
-Works on Linux, macOS, Windows, and Termux. Recommended for quick testing — for production use or development, a virtual environment is preferred.
-
-After installing, run directly:
-
-```
-dorkeye --help
-dorkeye --wizard
-dorkeye -d "inurl:admin" -o results.html
-```
-
------
-
 ## 🔗 Download (Source)
 
 Clone the repository:
@@ -87,16 +69,7 @@ Or download the latest release:
 
 -----
 
-## 🐧 Quick Installation (Recommended)
-
-### Option A — PyPI (fastest)
-
-```
-pip install dorkeye
-```
-
-### Option B — From Source
-
+## 🐧 Quick Installation 
 This method works on **Linux**, **macOS**, and **Windows**.
 
 ```
@@ -130,16 +103,7 @@ python dorkeye.py -h
 
 DorkEye auto-detects Termux and activates battery-saver mode (reduced timeouts, fewer probe samples). No additional flags needed.
 
-### Option A — PyPI (fastest)
-
-```
-pkg update && pkg upgrade
-pkg install python
-pip install dorkeye
-dorkeye --wizard
-```
-
-### Option B — From Source
+### From Source
 
 ```
 # Install Python and git
@@ -170,42 +134,9 @@ python dorkeye.py --wizard
 
 -----
 
-## 💻 CLI Command Mode (Optional)
-
-If you installed via **PyPI** (`pip install dorkeye`), the `dorkeye` command is already available globally — no extra steps needed.
-
-If you cloned **from source**, install DorkEye as a system command for direct access from anywhere:
-
-```
-pip install -e .
-```
-
-Then use:
-
-```
-dorkeye --help
-dorkeye --wizard
-dorkeye -d "inurl:admin" -o results.html
-```
-
------
-
 ## ✅ Verification
 
-### If installed via PyPI:
-
-```
-# Show help and all available flags
-dorkeye -h
-
-# Quick test search
-dorkeye -d "python programming" -c 5 -o test.html
-
-# Launch the interactive wizard
-dorkeye --wizard
-```
-
-### If installed from source:
+### From source:
 
 ```
 # Show help and all available flags
@@ -223,13 +154,6 @@ python dorkeye.py --dg=all --mode=soft -c 5 -o dg_test.html
 # Launch the interactive wizard
 python dorkeye.py --wizard
 ```
-
-If using CLI mode (source + `pip install -e .`):
-
-```
-dorkeye --dg=all -c 5 -o test.html
-```
-
 -----
 
 ## 📁 Project Structure
@@ -279,17 +203,7 @@ source dorkeye_env/bin/activate
 pip install -r requirements.txt
 ```
 
-Or install via PyPI inside the venv:
-
-```
-python3 -m venv dorkeye_env
-source dorkeye_env/bin/activate
-pip install dorkeye
-```
-
 ### Permission Errors
-
-**Never** use `sudo pip install`. Use a virtual environment instead.
 
 ### `--templates=filename.yaml` syntax error
 
@@ -325,12 +239,6 @@ DorkEye disables SSL verification for maximum compatibility during OSINT scannin
 
 ## 🔄 Updating DorkEye
 
-### PyPI install:
-
-```
-pip install --upgrade dorkeye
-```
-
 ### Source install:
 
 ```
@@ -338,26 +246,9 @@ cd DorkEye
 git pull origin master
 pip install --upgrade -r requirements.txt
 ```
-
-If installed in CLI mode:
-
-```
-pip install -e .
-```
-
 -----
 
 ## 🗑️ Uninstallation
-
-### PyPI install:
-
-```
-pip uninstall dorkeye
-```
-
-### Source install:
-
-**Linux / macOS:**
 
 ```
 rm -rf DorkEye
@@ -400,14 +291,6 @@ Please include:
 -----
 
 ## ✅ Post-Installation Checklist
-
-**PyPI install:**
-
-- ✔ Python 3.9+
-- ✔ `pip install dorkeye` completed
-- ✔ `dorkeye -h` shows help
-- ✔ Test search works (`dorkeye -d "test" -c 5 -o test.html`)
-- ✔ Wizard launches (`dorkeye --wizard`)
 
 **Source install:**
 
