@@ -1,4 +1,4 @@
-# HTTP Fingerprinting — DorkEye v4.8
+# HTTP Fingerprinting — DorkEye Project
 
 HTTP fingerprinting makes DorkEye's requests look like real browser traffic instead of a Python script. Each request is built from a complete browser profile — not just a user-agent string.
 
