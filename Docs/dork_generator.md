@@ -1,4 +1,4 @@
-# Dork Generator — DorkEye v4.8
+# Dork Generator — DorkEye Project
 
 The Dork Generator produces structured Google dorks automatically from YAML template files. Instead of writing dorks manually, you define variables and templates once and let DorkEye generate every combination.
 
