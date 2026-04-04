@@ -35,7 +35,8 @@
 
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, configuration files, credentials, PII data, subdomains, and technology fingerprints — efficiently and with stealth controls.
 
-![de_start_sql](https://github.com/user-attachments/assets/a34627b6-0862-4c02-91f2-3fe75fdbb516)
+<img width="1212" height="880" alt="startdev4 9 5" src="https://github.com/user-attachments/assets/6ee12cbe-fd40-40dd-8684-0dba594b1a67" />
+<img width="1202" height="832" alt="startdev4 9 5_0" src="https://github.com/user-attachments/assets/1f593af6-5908-4f35-b2b9-fe7f89417589" />
 
 ---
 
@@ -98,9 +99,10 @@
 "WIZARD MODE:"
   python dorkeye.py --wizard
 ```
+
+<img width="1175" height="982" alt="dev5 0wiz" src="https://github.com/user-attachments/assets/79253966-b2ed-431e-9d46-aaa8d8297c82" />
+
 ---
-## Test
-<img width="1247" height="928" alt="start0" src="https://github.com/user-attachments/assets/af8f2234-ec3a-4ae5-8150-7c3de1af2983" />
 
 ```json
 "Help:"
@@ -210,9 +212,6 @@ DorkEye/
 
 ## Example final Report
 ![image](https://github.com/user-attachments/assets/20055807-2f9d-4979-b221-e0cfad32828a)
-
-## Wizard MODE (default payload)
-<img width="962" height="933" alt="de_generator" src="https://github.com/user-attachments/assets/dd0805c7-cce5-45ff-87e6-c3c5344d82d6" />
 
 ---
 
