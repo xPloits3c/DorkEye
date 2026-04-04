@@ -1,4 +1,4 @@
-# File Categories — DorkEye v4.8
+# File Categories — DorkEye Project
 
 DorkEye automatically categorizes every URL it finds by examining the file extension. Categories drive filtering in the HTML report, export scopes, and the file analysis pipeline.
 
