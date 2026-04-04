@@ -3,8 +3,6 @@
 
 # 📦 DorkEye — Installation Guide
 
-Official installation guide for **DorkEye Project**.
-
 -----
 
 ## 🔗 Download (Source)
