@@ -7,7 +7,7 @@ Every flag, every mode, every combination — explained.
 __H__       xploits3c.github.io/DorkEye
  [d]
  [e]
- [;]    DorkEye v4.9 | Project
+ [;]    DorkEye Project
  |_|
   V
 ```
