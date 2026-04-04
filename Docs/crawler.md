@@ -1,4 +1,4 @@
-# Adaptive Recursive Crawler — DorkEye v4.8
+# Adaptive Recursive Crawler — DorkEye Project
 
 The crawler runs additional rounds of DuckDuckGo searches after the initial result set, automatically refining its dorks based on what it found in each round. No AI — everything is driven by pattern matching and template logic.
 
