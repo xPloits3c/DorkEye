@@ -31,7 +31,7 @@
 
 ## What is DorkEye
 **DorkEye** is an advanced automated dorking and OSINT recon tool that leverages DuckDuckGo to discover exposed web resources through intelligent search queries.
-- It combines a powerful dork generator, a full SQL injection detection engine, a 10-step autonomous analysis pipeline, and an adaptive recursive crawler — all without requiring any external AI or cloud services.
+- It combines a powerful dork generator, a full SQL injection detection engine, a 11-step autonomous analysis pipeline, and an adaptive recursive crawler — all without requiring any external AI or cloud services.
 
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, configuration files, credentials, PII data, subdomains, and technology fingerprints — efficiently and with stealth controls.
 
