@@ -21,8 +21,6 @@ variables:
     - page=
     - php?id=
     - index.php?id=
-    - login.php
-    - admin.php
 
 
 templates:
