@@ -37,7 +37,7 @@
 
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, configuration files, credentials, PII data, subdomains, and technology fingerprints — efficiently and with stealth controls.
 
-<img width="1212" height="880" alt="startdev4 9 5" src="https://github.com/user-attachments/assets/6ee12cbe-fd40-40dd-8684-0dba594b1a67" />
+<img width="1186" height="778" alt="startdev4 9 5" src="https://github.com/user-attachments/assets/82056363-5f7a-4fe8-9aa1-df662e09796b" />
 <img width="1202" height="832" alt="startdev4 9 5_0" src="https://github.com/user-attachments/assets/1f593af6-5908-4f35-b2b9-fe7f89417589" />
 
 ---
