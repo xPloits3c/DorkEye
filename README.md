@@ -63,8 +63,8 @@
 | ⚙️ Dork Generator | [YAML template modes: `soft` / `medium` / `aggressive`](Docs/dork_generator.md) |
 | 🎯 Direct SQLi Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
-| 💉 SQL Injection | [4 methods: error-based, UNION, boolean blind, time-based](Docs/sqli.md) |
-| 💉 XSS Injection | [4 methods: reflected, stored, DOM-based, header-based](Docs/xss.md) |
+| 💉 SQL Injection | [5 methods: 105 payloads](Docs/sqli.md) |
+| 💉 XSS Injection | [4 methods: 111 payloads](Docs/xss.md) |
 | 🤖 Agents v3.1 Pipeline | [11-step autonomous analysis](Docs/agents.md) |
 | 🛡️ HeaderIntelAgent | [Info leaks, missing security headers, outdated server](Docs/agents.md#headerintelagent) |
 | 🧬 TechFingerprintAgent | [35 technologies detected, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
@@ -167,7 +167,7 @@ DorkEye/
 │    ├── dorkeye_agents.py     ← Agents v3.1 pipeline
 │    ├── dorkeye_patterns.py   ← Shared pattern library
 │    ├── dorkeye_analyze.py    ← Standalone analysis CLI
-│    ├── sqli.py     ← 4 method sqli injection(105 payloads)
+│    ├── sqli.py     ← 5 method sqli injection(105 payloads)
 │    └── xss.py     ← 4 method xss injection (111 payloads)
 │ /Templates/
 │    ├── dorks_templates.yaml
