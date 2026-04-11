@@ -27,6 +27,8 @@
 <!-- ── Row 3: Community ── -->
 [![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](#)
 
+![image](https://github.com/user-attachments/assets/c52b3326-6224-4fd5-9d41-d9f22e887b7a)
+
 ---
 
 ## What is DorkEye
