@@ -167,8 +167,8 @@ DorkEye/
 │    ├── dorkeye_agents.py     ← Agents v3.1 pipeline
 │    ├── dorkeye_patterns.py   ← Shared pattern library
 │    ├── dorkeye_analyze.py    ← Standalone analysis CLI
-│    ├── sqli.py     ← 4 method sqli injection(14 payloads)
-│    └── xss.py     ← 4 method xss injection (51 payloads)
+│    ├── sqli.py     ← 4 method sqli injection(105 payloads)
+│    └── xss.py     ← 4 method xss injection (111 payloads)
 │ /Templates/
 │    ├── dorks_templates.yaml
 │    ├── sqli.yaml
