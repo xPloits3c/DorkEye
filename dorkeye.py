@@ -17,6 +17,7 @@ import re
 import signal
 import queue
 import threading
+import pickle
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
@@ -29,9 +30,6 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 # ── Tools sub-package path injection ─────────────────────────────────────────
-# dork_generator, dorkeye_agents, dorkeye_analyze, dorkeye_patterns,
-# sqli and xss live in the Tools/ sub-folder.
-# Adding it to sys.path lets every import below work without any further change.
 _TOOLS_DIR = Path(__file__).parent / "Tools"
 if str(_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIR))
@@ -39,7 +37,7 @@ if str(_TOOLS_DIR) not in sys.path:
 
 from dork_generator import DorkGenerator
 
-# ── SQLi engine — extracted to Tools/sqli.py ─────────────────────────────────
+# ── SQLi engine ───────────────────────────────────────────────────────────────
 from sqli import (
     SQLiDetector,
     SQLiConfidence,
@@ -51,7 +49,7 @@ from sqli import (
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ── Agents — integrated post-search analysis pipeline (autonomous, no external AI) ──
+# ── Agents ────────────────────────────────────────────────────────────────────
 try:
     from dorkeye_agents import (
         run_analysis_pipeline as _run_agents_pipeline,
@@ -66,15 +64,16 @@ try:
     _ANALYZE_AVAILABLE = True
 except ImportError:
     _ANALYZE_AVAILABLE = False
-    def _run_agents_pipeline(*a, **kw):  # type: ignore[misc]
-        """Fallback stub: run the full post-search agents pipeline (triage, fetch, secrets, report)."""
+    def _run_agents_pipeline(*a, **kw):
+        """Fallback stub."""
         return {"triaged": None, "all_secrets": [], "report_path": None}
-    def add_crawler_args(parser):        # type: ignore[misc]
-        """Fallback stub: register --crawl-* CLI arguments onto the given argparse parser."""
+    def add_crawler_args(parser):
+        """Fallback stub."""
         return parser
-    def run_crawl(*a, **kw):             # type: ignore[misc]
-        """Fallback stub: run the DorkCrawlerAgent and return a summary dict."""
+    def run_crawl(*a, **kw):
+        """Fallback stub."""
         return {"results": [], "rounds": 0, "stop_reason": "unavailable"}
+
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from rich.table import Table
@@ -112,7 +111,7 @@ _exit_requested: bool       = False
 
 
 def _sigint_handler(signum, frame):
-    """Handle SIGINT (Ctrl+C). Single press skips the current task; double press within 1.5 s exits."""
+    """Handle SIGINT (Ctrl+C). Single press skips; double press within 1.5 s exits."""
     global _last_interrupt_time, _skip_current, _exit_requested
     now = time.monotonic()
     if now - _last_interrupt_time < 1.5:
@@ -125,7 +124,6 @@ def _sigint_handler(signum, frame):
         sys.stderr.flush()
     _last_interrupt_time = now
 
-    # ── Propagate to sub-modules so in-flight requests abort cleanly ─────────
     import sqli as _sqli_mod
     _sqli_mod._exit_requested = _exit_requested
     _sqli_mod._skip_current   = _skip_current
@@ -151,7 +149,7 @@ def _interruptible_sleep(seconds: float, step: float = 0.25) -> None:
 
 
 def print_banner():
-    """Print the ASCII art banner, version info, and legal disclaimer to the terminal."""
+    """Print the ASCII art banner."""
     TITLE_ROWS = [
         ("bold bright_blue", "╔╦╗╔═╗╦═╗╦╔═  ╔═╗╦ ╦╔═╗"),
         ("bold blue",        " ║║║ ║╠╦╝╠╩╗  ║╣ ╚╦╝║╣"),
@@ -162,6 +160,7 @@ def print_banner():
     console.print()
 
     SYRINGE = (
+        "\n\n\n\n"
         "[bold yellow] ___[/bold yellow]\n"
         "[bold yellow]__H__[/bold yellow]\n"
         "[bold yellow] [[/bold yellow][bold red]d[/bold red][bold yellow]][/bold yellow]\n"
@@ -179,17 +178,18 @@ def print_banner():
 
     INFO = (
         "[bold red]OSINT[/bold red][bold white] DORKING TOOL[/bold white]\n"
-        "[bold green]v4.9[/bold green]  [dim]ON[/dim]\n"
+        "[bold green]v4.9[/bold green]  [dim]stable[/dim]\n"
         "\n"
         "[dim]▸ Author  │[/dim]  [yellow]xPloits3c I.C.W.T[/yellow]\n"
         "[dim]▸ GitHub  │[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
         "[dim]▸ Telegram│[/dim]  [cyan]t.me/DorkEye[/cyan]\n"
         "\n"
-        "[dim]▸ XSS     │[/dim]  [green]51[/green][red] payloads[/red]\n"
-        "[dim]▸ SQLi    │[/dim]  [green]14[/green][red] payloads[/red]\n"
+        "[dim]▸ XSS     │[/dim]  [green]111[/green][red] payloads[/red]\n"
+        "[dim]▸ SQLi    │[/dim]  [green]105[/green][red] payloads[/red]\n"
         "[dim]▸ Engine  │[/dim]  [green]DuckDuckGo[/green]\n"
+        "[dim]▸ Crawler │[/dim]  [red]Intel[/red]\n"
         "[dim]▸ Stealth │[/dim]  [green]Slower, stay safe[/green]\n"
-        "[dim]▸ DorkGen │[/dim]  [green]Max DORKS Gen:[/green][red] 10.000[/red]\n"
+        "[dim]▸ DorkGen │[/dim]  [green]Max:[/green][red] 10.000[/red]\n"
         "[dim]▸ Analyzer│[/dim]  [green]Extract metadata[/green]"
         + android_badge
     )
@@ -244,7 +244,7 @@ WELCOME_COLORS = [
 
 
 def get_user_name() -> str:
-    """Return the current OS username; fall back to hostname, then "friend"."""
+    """Return the current OS username; fall back to hostname, then 'friend'."""
     try:
         return getpass.getuser()
     except Exception:
@@ -255,12 +255,11 @@ def get_user_name() -> str:
 
 
 def greet_user():
-    """Print a random welcome message with a random colour using the OS username."""
+    """Print a random welcome message with a random colour."""
     name    = _rich_escape(get_user_name())
     message = random.choice(WELCOME_MESSAGES).format(name=name)
     color   = random.choice(WELCOME_COLORS)
     console.print(f"[bold {color}]{message}[/bold {color}]\n")
-
 
 
 DEFAULT_CONFIG = {
@@ -279,7 +278,7 @@ DEFAULT_CONFIG = {
     "max_file_size_check":  52428800,
     "sqli_detection":       False,
     "xss_detection":        False,
-    "xss_type":             "all",  # "reflected" | "stored" | "dom" | "all"
+    "xss_type":             "all",
     "stealth_mode":         False,
     "user_agent_rotation":  True,
     "http_fingerprinting":  True,
@@ -289,23 +288,90 @@ DEFAULT_CONFIG = {
 }
 
 
-
 class UserAgentRotator:
     """Rotates User-Agent strings across Chrome, Firefox, Safari, and Edge profiles."""
     def __init__(self):
-        """Flatten all UA strings from USER_AGENTS into a single list; initialise the round-robin index."""
         self.agents        = [a for lst in USER_AGENTS.values() for a in lst]
         self.current_index = 0
 
     def get_random(self) -> str:
-        """Return a random User-Agent string from the pool."""
         return random.choice(self.agents)
 
     def get_next(self) -> str:
-        """Return the next User-Agent string in round-robin order."""
         agent              = self.agents[self.current_index]
         self.current_index = (self.current_index + 1) % len(self.agents)
         return agent
+
+
+# ══════════════════════════════════════════════════════════════
+#  SessionCheckpoint  ← NUOVO (punto 3)
+# ══════════════════════════════════════════════════════════════
+
+class SessionCheckpoint:
+    """
+    Salva e ripristina lo stato di una sessione di ricerca su disco.
+
+    Il file di checkpoint viene scritto nella cartella Dump/.checkpoints/
+    e rimosso automaticamente al completamento della sessione.
+    In caso di errore di I/O durante il salvataggio, viene stampato un
+    avviso ma la sessione continua senza interrompersi.
+    """
+
+    CHECKPOINT_DIR = Path(__file__).parent / "Dump" / ".checkpoints"
+
+    def __init__(self, session_id: str):
+        """Crea la directory di checkpoint e imposta il percorso del file."""
+        try:
+            self.CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            console.print(f"[yellow][~] Checkpoint dir non creabile: {e}[/yellow]")
+        self.path       = self.CHECKPOINT_DIR / f"{session_id}.pkl"
+        self.session_id = session_id
+
+    def save(
+        self,
+        completed_dorks: List[str],
+        results:         List[Dict],
+        stats:           dict,
+    ) -> None:
+        """Serializza lo stato corrente della sessione su disco via pickle."""
+        try:
+            with open(self.path, "wb") as f:
+                pickle.dump(
+                    {
+                        "completed_dorks": completed_dorks,
+                        "results":         results,
+                        "stats":           dict(stats),
+                        "saved_at":        datetime.now().isoformat(),
+                    },
+                    f,
+                    protocol=pickle.HIGHEST_PROTOCOL,
+                )
+        except Exception as e:
+            # Non fatale: la sessione prosegue anche senza checkpoint
+            console.print(f"[yellow][~] Checkpoint save fallito: {e}[/yellow]")
+
+    def load(self) -> Optional[dict]:
+        """
+        Carica il checkpoint da disco.
+
+        Ritorna None se il file non esiste o è corrotto.
+        """
+        if not self.path.exists():
+            return None
+        try:
+            with open(self.path, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            console.print(f"[yellow][~] Checkpoint corrotto, ignorato: {e}[/yellow]")
+            return None
+
+    def delete(self) -> None:
+        """Rimuove il file di checkpoint al completamento della sessione."""
+        try:
+            self.path.unlink(missing_ok=True)
+        except Exception:
+            pass  # Non critico
 
 
 # ══════════════════════════════════════════════════════════════
@@ -314,14 +380,9 @@ class UserAgentRotator:
 
 class FileAnalyzer:
     """
-Performs HEAD-request file analysis and optional SQLi checking on discovered URLs.
-
-    Categorises URLs by file extension, respects blacklist/whitelist filters, checks
-    HTTP accessibility, and delegates SQLi testing to the embedded SQLiDetector.
-
-"""
+    Performs HEAD-request file analysis and optional SQLi/XSS checking on discovered URLs.
+    """
     def __init__(self, config: Dict, ua_rotator: UserAgentRotator, fp_rotator: HTTPFingerprintRotator):
-        """Initialise with config, UA rotator, fingerprint rotator; build extension map and HTTP session."""
         self.config        = config
         self.ua_rotator    = ua_rotator
         self.fp_rotator    = fp_rotator
@@ -330,7 +391,6 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
             stealth = config.get("stealth_mode", False),
             timeout = config.get("request_timeout", 10)
         )
-        # ── XSS detector — lazy import avoids hard dependency ─────────────────
         self.xss_detector = None
         if config.get("xss_detection", False):
             try:
@@ -341,11 +401,10 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
                     xss_type = config.get("xss_type", "all"),
                 )
             except ImportError:
-                pass  # xss.py not found — XSS silently disabled
+                pass
         self.session = self._create_session()
 
     def _create_session(self) -> requests.Session:
-        """Build and return a requests.Session with retry logic for 429/5xx responses."""
         session = requests.Session()
         retry   = Retry(
             total            = self.config.get("max_retries", 3),
@@ -359,7 +418,6 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
         return session
 
     def _flatten_extensions(self) -> Dict[str, str]:
-        """Build and return a flat {extension: category} dict from the extensions config block."""
         ext_map = {}
         for category, extensions in self.config["extensions"].items():
             for ext in extensions:
@@ -367,7 +425,6 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
         return ext_map
 
     def get_file_extension(self, url: str) -> str:
-        """Extract and return the lowercased file extension from url, or "" if none."""
         try:
             path = unquote(urlparse(url).path)
             ext  = os.path.splitext(path)[1].lower()
@@ -376,26 +433,22 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
             return ""
 
     def categorize_url(self, url: str) -> str:
-        """Return the category name for url based on its file extension, or "webpage" if unrecognised."""
         ext = self.get_file_extension(url)
         if not ext:
             return "webpage"
         return self.extension_map.get(ext, "other")
 
     def is_blacklisted(self, url: str) -> bool:
-        """Return True if url's extension is in the configured blacklist."""
         if not self.config["blacklist"]:
             return False
         return self.get_file_extension(url) in self.config["blacklist"]
 
     def is_whitelisted(self, url: str) -> bool:
-        """Return True if url's extension passes the whitelist (always True when whitelist is empty)."""
         if not self.config["whitelist"]:
             return True
         return self.get_file_extension(url) in self.config["whitelist"]
 
     def analyze_file(self, url: str) -> Dict:
-        """Perform a HEAD request on url and return a dict with size, content_type, accessible, status_code."""
         result = {
             "url":          url,
             "extension":    self.get_file_extension(url),
@@ -437,13 +490,11 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
         return result
 
     def check_sqli(self, url: str) -> Dict:
-        """Run SQLi detection on url if sqli_detection is enabled in config; return the result dict."""
         if not self.config.get("sqli_detection", False):
             return {"tested": False}
         return self.sqli_detector.test_sqli(url)
 
     def check_xss(self, url: str) -> Dict:
-        """Run XSS detection on url if xss_detection is enabled in config; return the result dict."""
         if not self.config.get("xss_detection", False) or self.xss_detector is None:
             return {"tested": False}
         return self.xss_detector.test_xss(url)
@@ -454,15 +505,9 @@ Performs HEAD-request file analysis and optional SQLi checking on discovered URL
 # ══════════════════════════════════════════════════════════════
 
 class DorkEyeEnhanced:
-    """
-Main orchestrator: runs dork searches, file analysis, SQLi testing, and result persistence.
+    """Main orchestrator: dork searches, file analysis, SQLi/XSS testing, result persistence."""
 
-    Owns the deduplication hash set, statistics counters, and all output-format savers.
-    Delegates HTTP work to FileAnalyzer and SQLiDetector.
-
-"""
     def __init__(self, config: Dict, output_file: str = None):
-        """Initialise with config and optional output filename; set up rotators, analyzer, and counters."""
         self.config      = config
         self.output_file = output_file
         self.ua_rotator  = UserAgentRotator()
@@ -475,11 +520,9 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         self._total_results_at_last_extended_delay: int = 0
 
     def _hash_url(self, url: str) -> str:
-        """Return an MD5 hex digest of url for use as a deduplication key."""
         return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()
 
     def is_duplicate(self, url: str) -> bool:
-        """Return True if url has already been seen this session; record it if not."""
         h = self._hash_url(url)
         if h in self.url_hashes:
             return True
@@ -487,7 +530,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         return False
 
     def process_dorks(self, dork_input: str) -> List[str]:
-        """Return a list of dork strings from a plain string or a .txt file (one dork per line)."""
         if os.path.isfile(dork_input):
             try:
                 with open(dork_input, 'r', encoding='utf-8') as f:
@@ -498,7 +540,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         return [dork_input]
 
     def _compute_base_delay(self, results_found: int, stealth: bool) -> float:
-        """Compute the inter-dork delay based on result count and whether stealth mode is active."""
         if results_found < 10:
             low, high = 8, 14
         else:
@@ -509,18 +550,13 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         return round(delay, 2)
 
     def _should_trigger_extended_delay(self) -> bool:
-        """Return True when enough new results have accumulated to trigger an extended rate-limit pause."""
         threshold = self.config.get("extended_delay_every_n_results", 100)
         collected_since_last = len(self.results) - self._total_results_at_last_extended_delay
         return collected_since_last >= threshold
 
     def search_dork(self, dork: str, count: int,
                     dork_index: int = 1, total_dorks: int = 1) -> List[Dict]:
-        """Search DuckDuckGo for one dork via a daemon producer thread; return a list of result dicts.
-
-        Retries up to max_attempts times with exponential backoff. Deduplicates, filters
-        blacklist/whitelist, and respects the global interrupt flags throughout.
-        """
+        """Search DuckDuckGo for one dork via a daemon producer thread."""
         global _skip_current, _exit_requested
 
         _ts = datetime.now().strftime("%H:%M:%S")
@@ -535,7 +571,7 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
 
         results       = []
         total_fetched = 0
-        max_attempts  = 4  # 1 initial attempt + 3 retries
+        max_attempts  = 4
 
         _DONE = object()
 
@@ -561,7 +597,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
 
                     def _producer(dork=dork, batch_size=batch_size,
                                   q=result_queue, stop=stop_event):
-                        """Producer thread: iterate DDGS results and push them onto the shared queue; sentinel when done."""
                         try:
                             for item in DDGS().text(dork, max_results=batch_size):
                                 if stop.is_set():
@@ -648,7 +683,7 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         return results
 
     def analyze_results(self, results: List[Dict]) -> List[Dict]:
-        """Run file analysis and/or SQLi testing on a batch of result dicts; return the updated list."""
+        """Run file analysis and/or SQLi/XSS testing on a batch of result dicts."""
         global _skip_current, _exit_requested
 
         if not self.config.get("analyze_files", True) and not self.config.get("sqli_detection", False):
@@ -708,7 +743,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                             f"{style}[!] Potential SQLi found "
                             f"({confidence}): {_rich_escape(result['url'])}[/{style[1:]}"
                         )
-                        # ── Detail: print method + evidence for each positive test ──
                         for _t in sqli_result.get("tests", []):
                             if _t.get("vulnerable"):
                                 _method = _t.get("method", "unknown")
@@ -726,7 +760,7 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                     if self.config.get("stealth_mode", False):
                         _interruptible_sleep(random.uniform(3, 6))
 
-            # ── XSS Testing ─────────────────────────────────────────────────────
+            # ── XSS Testing ──────────────────────────────────────────────────
             urls_to_test_xss = [r for r in results if self.config.get("xss_detection", False)]
             if self.config.get("xss_detection", False) and urls_to_test_xss:
                 task3 = progress.add_task("[cyan]Testing for [bold yellow]XSS[cyan]...", total=len(urls_to_test_xss))
@@ -774,29 +808,81 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
 
     def run_search(self, dorks: List[str], count: int):
         """
-    Iterate over dorks, search each one, analyse results, and apply inter-dork delays.
+        Iterate over dorks, search each one, analyse results, apply inter-dork delays.
 
-            Respects the global _skip_current and _exit_requested interrupt flags throughout.
-            Saves incrementally after each dork if an output file is configured.
-
-    """
+        Integrates the Checkpoint/Resume system (point 3):
+        -   Generates a deterministic session_id from past dorks.
+        - If a valid checkpoint exists, prompts the user whether to resume.
+        - Saves the checkpoint to disk after each completed dork.
+        - Deletes the checkpoint at the end of the session (completed or terminated via exit).
+        """
         global _skip_current, _exit_requested
+
+        # ── Checkpoint setup ──────────────────────────────────────────────────
+        _session_seed   = "|".join(dorks[:5]) + str(len(dorks))
+        session_id      = hashlib.md5(
+            _session_seed.encode(), usedforsecurity=False
+        ).hexdigest()[:12]
+        checkpoint      = SessionCheckpoint(session_id)
+        saved_state     = checkpoint.load()
+        completed_dorks: Set[str] = set()
+
+        if saved_state:
+            n_done   = len(saved_state.get("completed_dorks", []))
+            saved_at = saved_state.get("saved_at", "?")
+            console.print(
+                f"\n[bold yellow]┌─[ CHECKPOINT FOUND ][/bold yellow]"
+            )
+            console.print(
+                f"[bold yellow]│[/bold yellow]"
+                f"  Saved: [dim]{saved_at}[/dim]"
+                f"  │  Dorks completed: [green]{n_done}[/green] / {len(dorks)}"
+            )
+            console.print(
+                "[bold yellow]│  Resume session? [Y/n]:[/bold yellow] ",
+                end="",
+            )
+            try:
+                _resume = input("").strip().lower() in ("", "y", "yes")
+            except KeyboardInterrupt:
+                _resume = False
+
+            if _resume:
+                completed_dorks = set(saved_state.get("completed_dorks", []))
+                self.results    = saved_state.get("results", [])
+                self.stats.update(saved_state.get("stats", {}))
+                # Rebuild url_hashes from the loaded results
+                # To ensure is_duplicate() works correctly
+                for r in self.results:
+                    _h = self._hash_url(r.get("url", ""))
+                    self.url_hashes.add(_h)
+                console.print(
+                    f"[bold yellow]└─>[/bold yellow] [green]Session resumed — "
+                    f"{len(self.results)} results already collected.[/green]\n"
+                )
+            else:
+                # User chose not to resume: delete old checkpoint
+                checkpoint.delete()
+                console.print(
+                    "[bold yellow]└─>[/bold yellow] [dim]New session started.[/dim]\n"
+                )
+        # ── Fine checkpoint setup ─────────────────────────────────────────────
 
         total_dorks = len(dorks)
         console.print(f"[bold cyan][*] Search with {total_dorks} dork(s)[/bold cyan]\n")
         console.print(
-            f"[dim]💡 Ctrl+C during a dork → skip it.  "
+            f"[dim]💡 Ctrl+C during a dork → skip.  "
             f"Double Ctrl+C → quit.[/dim]\n"
         )
         if self.config.get("stealth_mode", False):
-            console.print("[bold magenta][*] Stealth mode: ACTIVE[/bold magenta]")
+            console.print("[bold magenta][*] Stealth mode:[/bold magenta][bold green] OK[/bold green]")
         if self.config.get("http_fingerprinting", True):
-            console.print("[bold magenta][*] HTTP Fingerprinting: ENABLED[/bold magenta]")
+            console.print("[bold magenta][*] HTTP Fingerprinting:[/bold magenta][bold green] OK[/bold green]")
         if self.config.get("sqli_detection", False):
-            console.print("[bold red][*] SQL Injection Detection: ENABLED[/bold red]")
+            console.print("[bold red][*] SQL Injection Detection:[/bold red][bold green] OK[/bold green]")
         if self.config.get("xss_detection", False):
             xss_t = self.config.get("xss_type", "all").upper()
-            console.print(f"[bold yellow][*] XSS Detection: ENABLED  [dim](type: {xss_t})[/dim][/bold yellow]")
+            console.print(f"[bold yellow][*] XSS Detection:[/bold yellow][bold green] OK[/bold green] [dim](type: {xss_t})[/dim][/bold yellow]")
         if TERMUX_IS_ANDROID:
             console.print("[bold green][*] Android/Termux mode: battery-saver constants active[/bold green]")
 
@@ -805,6 +891,13 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
                 break
 
+            # ── Skip dorks already completed in the previous session ─────────
+            if dork in completed_dorks:
+                console.print(
+                    f"[dim][~] Dork {index}/{total_dorks} already completed — skip.[/dim]"
+                )
+                continue
+
             results = self.search_dork(dork, count,
                                        dork_index=index, total_dorks=total_dorks)
 
@@ -812,15 +905,25 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 self.results.extend(results)
                 if self.output_file:
                     self.save_results()
+                # Save checkpoint even if forced exit
+                checkpoint.save(list(completed_dorks), self.results, dict(self.stats))
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
                 break
 
-            if self.config.get("analyze_files", True) or self.config.get("sqli_detection", False) or self.config.get("xss_detection", False):
+            if (
+                self.config.get("analyze_files", True)
+                or self.config.get("sqli_detection", False)
+                or self.config.get("xss_detection", False)
+            ):
                 results = self.analyze_results(results)
 
             self.results.extend(results)
             if self.output_file:
                 self.save_results()
+
+            # ── Salva checkpoint dopo ogni dork completato ────────────────────
+            completed_dorks.add(dork)
+            checkpoint.save(list(completed_dorks), self.results, dict(self.stats))
 
             if _exit_requested:
                 console.print("[bold red][!!] Exit requested — stopping search.[/bold red]")
@@ -863,6 +966,13 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
 
                 self._total_results_at_last_extended_delay = len(self.results)
 
+        #   ──  Session completed: remove checkpoint ────────────────────────
+        # We only delete it if _exit_requested is False (session terminated
+        # normally or due to dork exhaustion). If it is True, the checkpoint has already
+        # been saved in the break above, so the session can be resumed.
+        if not _exit_requested:
+            checkpoint.delete()
+
     def save_results(self):
         """Persist self.results to disk in the format determined by the output file extension."""
         if not self.output_file:
@@ -888,7 +998,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             console.print(f"[dim]{_tb.format_exc()}[/dim]")
 
     def _save_csv(self, filename: str):
-        """Write results to a CSV file with all metadata columns."""
         if not self.results:
             return
         fieldnames = [
@@ -913,7 +1022,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 writer.writerow(row)
 
     def _save_json(self, filename: str):
-        """Write results plus session metadata to a structured JSON file."""
         data = {
             "metadata": {
                 "total_results":               len(self.results),
@@ -935,7 +1043,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     def _save_txt(self, filename: str):
-        """Write results to a plain-text numbered list with per-result details."""
         if not self.results:
             return
         with open(filename, "w", encoding="utf-8") as f:
@@ -961,7 +1068,7 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 f.write("\n")
 
     def _save_html(self, filename: str):
-        """Build and write the full interactive dark-theme HTML report to filename."""
+        """Build and write the full interactive dark-theme HTML report."""
         sqli_count = self.stats.get("sqli_vulnerable", 0)
         sqli_safe  = sum(
             1 for r in self.results
@@ -985,7 +1092,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         import json as _json
         import html as _html_mod
 
-        # ── Link export rows ──────────────────────────────────────────────
         export_rows = []
         for r in self.results:
             sqli_t = r.get("sqli_test", {})
@@ -1014,7 +1120,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 "xss_conf":  xss_t.get("overall_confidence", ""),
             })
 
-        # ── File export rows (non-webpage results with file info) ─────────
         file_rows = []
         for r in self.results:
             cat = r.get("category", "webpage")
@@ -1036,7 +1141,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         file_data_js   = _json.dumps(file_rows,   ensure_ascii=False).replace("</", "<\\/")
         report_base    = os.path.splitext(os.path.basename(filename))[0]
 
-        # ── Build HTML ────────────────────────────────────────────────────
         parts = []
         parts.append("""<!DOCTYPE html>
 <html>
@@ -1048,28 +1152,23 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         body { font-family: 'Courier New', monospace; background: #000; color: #00ff41; min-height: 100vh; overflow-x: hidden; }
         #matrix-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.32; pointer-events: none; }
         #content { position: relative; z-index: 1; padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
-        /* Header */
         .header { background: rgba(0,10,0,0.85); border: 1px solid #00ff41; border-left: 4px solid #00ff41;
             padding: 22px 28px; margin-bottom: 24px; box-shadow: 0 0 24px rgba(0,255,65,0.15); }
         .header h1 { font-size: 22px; color: #00ff41; text-shadow: 0 0 10px #00ff41; letter-spacing: 2px; }
         .header .subtitle { margin-top: 6px; font-size: 12px; color: #009922; letter-spacing: 1px; }
         .header .blink { animation: blink 1.1s step-end infinite; }
         @keyframes blink { 50% { opacity: 0; } }
-        /* Stats */
         .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }
         .stat-card { background: rgba(0,10,0,0.82); border: 1px solid #00aa2a; padding: 16px 18px; }
         .stat-card h3 { font-size: 11px; color: #009922; letter-spacing: 1px; text-transform: uppercase; }
         .stat-card p { font-size: 26px; font-weight: bold; color: #00ff41; margin-top: 8px; text-shadow: 0 0 8px rgba(0,255,65,0.5); }
-        /* Alerts */
         .sqli-alert { background: rgba(40,0,0,0.88); border: 1px solid #ff2222; border-left: 4px solid #ff2222;
             padding: 14px 20px; margin-bottom: 20px; color: #ff4444; }
         .sqli-alert h2 { font-size: 15px; letter-spacing: 2px; margin-bottom: 6px; }
         .sqli-alert p  { font-size: 13px; color: #ff6666; }
         .waf-alert { background: rgba(30,20,0,0.88); border: 1px solid #ffaa00; border-left: 4px solid #ffaa00;
             padding: 12px 20px; margin-bottom: 14px; color: #ffcc44; font-size: 13px; }
-        /* ══ TOOLBAR ══ */
         .toolbar { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-        /* LEFT: green filters */
         .filter-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; flex: 1; position: relative; }
         .filter-label { color: #009922; font-size: 12px; letter-spacing: 1px; margin-right: 4px; white-space: nowrap; }
         .filter-group { position: relative; display: inline-block; }
@@ -1097,7 +1196,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             border: 1px solid #003300; padding: 1px 5px; border-radius: 2px; min-width: 22px; text-align: center; }
         .active-sub-info { font-size: 11px; color: #005500; letter-spacing: 1px; margin-bottom: 10px; min-height: 16px; padding-left: 2px; }
         .active-sub-info span { color: #00aa44; }
-        /* RIGHT: three blue buttons */
         .right-btns { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; }
         .srch-wrap, .export-wrap, .files-wrap { position: relative; flex-shrink: 0; }
         .rbt { background: rgba(0,10,18,0.85); border: 1px solid #0077bb; color: #00aaff;
@@ -1105,7 +1203,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             letter-spacing: 2px; text-transform: uppercase; display: inline-flex; align-items: center;
             gap: 5px; transition: all .15s; white-space: nowrap; }
         .rbt:hover, .rbt.open { background: rgba(0,100,180,0.2); border-color: #00aaff; color: #fff; }
-        /* Generic floating panel */
         .rpanel { display: none; position: absolute; top: calc(100% + 4px); right: 0; z-index: 400;
             background: rgba(0,4,12,0.98); border: 1px solid #007acc; border-top: 2px solid #00aaff;
             box-shadow: 0 10px 40px rgba(0,120,200,0.25); min-width: 370px; }
@@ -1131,7 +1228,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         .exp-btn.txt  { color: #00ccff; border-color: #00ccff; } .exp-btn.txt:hover  { background: #00ccff; color: #000; }
         .exp-btn.json { color: #ffcc00; border-color: #ffcc00; } .exp-btn.json:hover { background: #ffcc00; color: #000; }
         .exp-btn.csv  { color: #00ff99; border-color: #00ff99; } .exp-btn.csv:hover  { background: #00ff99; color: #000; }
-        /* Search panel */
         .srch-panel { min-width: 320px; }
         .srch-inner { padding: 14px 16px; }
         .srch-title { font-size: 10px; color: #005588; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
@@ -1152,7 +1248,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             text-transform: uppercase; transition: all .12s; }
         .scope-btn.active { background: rgba(0,122,204,0.3); border-color: #007acc; color: #00aaff; }
         .scope-btn:hover { border-color: #0099cc; color: #0099cc; }
-        /* Files panel */
         .files-panel { min-width: 420px; max-height: 520px; flex-direction: column; }
         .rpanel.open.files-panel { display: flex; }
         .files-hdr { padding: 10px 16px; border-bottom: 1px solid rgba(0,100,180,0.2); flex-shrink: 0; }
@@ -1176,7 +1271,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             line-height: 1; padding: 0 2px; }
         .file-dl:hover { color: #00aaff; }
         .files-empty { padding: 20px 16px; font-size: 11px; color: #004466; text-align: center; letter-spacing: 1px; }
-        /* Table */
         .table-wrap { background: rgba(0,8,0,0.82); border: 1px solid #00aa2a; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; table-layout: auto; }
         col.c-num   { width: 36px; }
@@ -1187,20 +1281,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         col.c-xss   { min-width: 110px; width: 10%; }
         col.c-waf   { min-width: 70px;  width: 7%; }
         col.c-size  { min-width: 54px;  width: 6%; }
-        /* ── responsive breakpoints ── */
-        @media (max-width: 1100px) {
-            col.c-title { width: 130px; }
-            col.c-cat   { width: 95px; }
-            col.c-sqli  { width: 115px; }
-            col.c-waf   { width: 76px; }
-            col.c-size  { width: 58px; }
-        }
-        @media (max-width: 860px) {
-            col.c-title { display: none; }
-            col.c-waf   { display: none; }
-            td:nth-child(3), th:nth-child(3),
-            td:nth-child(6), th:nth-child(6) { display: none; }
-        }
         th { background: rgba(0,255,65,0.06); color: #00ff41; padding: 11px 10px; text-align: left;
             border-bottom: 1px solid #00aa2a; font-size: 11px; letter-spacing: 2px;
             text-transform: uppercase; white-space: nowrap; }
@@ -1235,7 +1315,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             font-size: 15px; cursor: pointer; text-decoration: none; line-height: 1;
             padding: 0; transition: color .12s; }
         .dl-btn:hover { color: #00aaff; }
-        /* Info popup */
         .info-btn { flex-shrink: 0; background: transparent; border: none; color: #004455;
             font-size: 13px; cursor: pointer; line-height: 1; padding: 0 1px;
             transition: color .12s; font-family: 'Courier New', monospace; }
@@ -1260,10 +1339,8 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
         .info-row { display: flex; gap: 8px; margin-bottom: 5px; align-items: flex-start; }
         .info-lbl { color: #005588; min-width: 90px; flex-shrink: 0; letter-spacing: 1px; }
         .info-val { color: #00aaff; word-break: break-all; }
-        /* Footer */
         .footer { margin-top: 28px; padding: 14px 0; border-top: 1px solid #002200;
             text-align: center; font-size: 11px; color: #004400; letter-spacing: 2px; }
-        /* Toast */
         #toast { position: fixed; bottom: 28px; right: 28px; z-index: 9999; background: rgba(0,20,0,0.95);
             border: 1px solid #00ff41; color: #00ff41; padding: 10px 20px; font-family: 'Courier New', monospace;
             font-size: 12px; letter-spacing: 1px; opacity: 0; transition: opacity .3s; pointer-events: none; }
@@ -1287,33 +1364,30 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             parts.append(f"""    <div class="sqli-alert">
         <h2>&#9888; SECURITY ALERT &#9888;</h2>
         <p><strong>{sqli_count}</strong> potential SQL injection vulnerabilities detected!</p>
-        <p>Review the results marked VULNERABLE below — use the Export panel to download them.</p>
+        <p>Review the results marked VULNERABLE below.</p>
     </div>
 """)
         if xss_count > 0:
             parts.append(f"""    <div class="xss-alert" style="background:rgba(40,20,0,0.88);border:1px solid #ffaa00;border-left:4px solid #ffaa00;padding:14px 20px;margin-bottom:20px;color:#ffcc44;">
         <h2 style="font-size:15px;letter-spacing:2px;margin-bottom:6px;">&#9888; XSS ALERT &#9888;</h2>
         <p style="font-size:13px;color:#ffdd88;"><strong>{xss_count}</strong> potential Cross-Site Scripting vulnerabilities detected!</p>
-        <p style="font-size:13px;color:#ffdd88;">Check results marked XSS VULN — types may include reflected, stored, or DOM-based.</p>
     </div>
 """)
         if waf_count > 0:
             parts.append(f"""    <div class="waf-alert">
-        &#9888; <strong>{waf_count}</strong> WAF-protected target(s) detected — SQLi results on those URLs may have false negatives.
+        &#9888; <strong>{waf_count}</strong> WAF-protected target(s) detected.
     </div>
 """)
         parts.append(f"""    <div class="stats">
         <div class="stat-card"><h3>&#9632; TOTAL RESULTS</h3><p>{len(self.results)}</p></div>
         <div class="stat-card"><h3>&#9632; DUPLICATES FILTERED</h3><p>{self.stats.get("duplicates", 0)}</p></div>
-        <div class="stat-card"><h3>&#9632; SQLI VULNERABILITIES</h3><p style="color:#ff3333;text-shadow:0 0 8px rgba(255,0,0,0.4)">{sqli_count}</p></div>
-        <div class="stat-card"><h3>&#9632; XSS VULNERABILITIES</h3><p style="color:#ffaa00;text-shadow:0 0 8px rgba(255,170,0,0.4)">{xss_count}</p></div>
-        <div class="stat-card"><h3>&#9632; WAF DETECTED</h3><p style="color:#ffaa00">{waf_count}</p></div>
+        <div class="stat-card"><h3>&#9632; SQLI VULNERABILITIES</h3><p style="color:#ff3333;">{sqli_count}</p></div>
+        <div class="stat-card"><h3>&#9632; XSS VULNERABILITIES</h3><p style="color:#ffaa00;">{xss_count}</p></div>
+        <div class="stat-card"><h3>&#9632; WAF DETECTED</h3><p style="color:#ffaa00;">{waf_count}</p></div>
         <div class="stat-card"><h3>&#9632; EXECUTION TIME</h3><p>{round(time.time() - self.start_time, 2)}s</p></div>
     </div>
 
-    <!-- TOOLBAR -->
     <div class="toolbar">
-      <!-- LEFT: green category filters -->
       <div class="filter-bar">
         <span class="filter-label">[ FILTER ]</span>
         <button class="filter-btn active" data-group="all" onclick="applyFilter(this)">ALL <span class="badge" id="badge-all">{cnt["all"]}</span></button>
@@ -1321,20 +1395,20 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             <button class="filter-btn has-sub" data-group="doc" onclick="applyFilter(this)">DOC <span class="badge" id="badge-doc">{cnt["doc"]}</span><span class="arrow">&#9660;</span></button>
             <div class="sub-menu" id="sub-doc">
                 <button class="sub-btn active" data-sub="doc-all"  onclick="applySubFilter(this,'doc')">ALL      <span class="sub-badge" id="sbadge-doc-all">{cnt["doc"]}</span></button>
-                <button class="sub-btn"        data-sub="doc-pdf"  onclick="applySubFilter(this,'doc')">PDF      <span class="sub-badge" id="sbadge-doc-pdf">–</span></button>
-                <button class="sub-btn"        data-sub="doc-docx" onclick="applySubFilter(this,'doc')">DOCX     <span class="sub-badge" id="sbadge-doc-docx">–</span></button>
-                <button class="sub-btn"        data-sub="doc-xlsx" onclick="applySubFilter(this,'doc')">XLSX     <span class="sub-badge" id="sbadge-doc-xlsx">–</span></button>
-                <button class="sub-btn"        data-sub="doc-ppt"  onclick="applySubFilter(this,'doc')">PPT      <span class="sub-badge" id="sbadge-doc-ppt">–</span></button>
-                <button class="sub-btn"        data-sub="doc-arc"  onclick="applySubFilter(this,'doc')">ARCHIVES <span class="sub-badge" id="sbadge-doc-arc">–</span></button>
+                <button class="sub-btn"        data-sub="doc-pdf"  onclick="applySubFilter(this,'doc')">PDF      <span class="sub-badge" id="sbadge-doc-pdf">-</span></button>
+                <button class="sub-btn"        data-sub="doc-docx" onclick="applySubFilter(this,'doc')">DOCX     <span class="sub-badge" id="sbadge-doc-docx">-</span></button>
+                <button class="sub-btn"        data-sub="doc-xlsx" onclick="applySubFilter(this,'doc')">XLSX     <span class="sub-badge" id="sbadge-doc-xlsx">-</span></button>
+                <button class="sub-btn"        data-sub="doc-ppt"  onclick="applySubFilter(this,'doc')">PPT      <span class="sub-badge" id="sbadge-doc-ppt">-</span></button>
+                <button class="sub-btn"        data-sub="doc-arc"  onclick="applySubFilter(this,'doc')">ARCHIVES <span class="sub-badge" id="sbadge-doc-arc">-</span></button>
             </div>
         </div>
         <div class="filter-group" id="fg-sqli">
             <button class="filter-btn has-sub" data-group="sqli" onclick="applyFilter(this)">SQLi <span class="badge" id="badge-sqli">{cnt["sqli"]}</span><span class="arrow">&#9660;</span></button>
             <div class="sub-menu" id="sub-sqli">
-                <button class="sub-btn active" data-sub="sqli-all"     onclick="applySubFilter(this,'sqli')">SQLi ALL      <span class="sub-badge" id="sbadge-sqli-all">{sqli_total}</span></button>
-                <button class="sub-btn"        data-sub="sqli-critical" onclick="applySubFilter(this,'sqli')">SQLi CRITICAL <span class="sub-badge sqli-critical" id="sbadge-sqli-critical">–</span></button>
-                <button class="sub-btn"        data-sub="sqli-vuln"    onclick="applySubFilter(this,'sqli')">SQLi VULN     <span class="sub-badge sqli-vuln" id="sbadge-sqli-vuln">{sqli_count}</span></button>
-                <button class="sub-btn"        data-sub="sqli-safe"    onclick="applySubFilter(this,'sqli')">SQLi SAFE     <span class="sub-badge" id="sbadge-sqli-safe">{sqli_safe}</span></button>
+                <button class="sub-btn active" data-sub="sqli-all"      onclick="applySubFilter(this,'sqli')">SQLi ALL      <span class="sub-badge" id="sbadge-sqli-all">{sqli_total}</span></button>
+                <button class="sub-btn"        data-sub="sqli-critical" onclick="applySubFilter(this,'sqli')">SQLi CRITICAL <span class="sub-badge sqli-critical" id="sbadge-sqli-critical">-</span></button>
+                <button class="sub-btn"        data-sub="sqli-vuln"     onclick="applySubFilter(this,'sqli')">SQLi VULN     <span class="sub-badge sqli-vuln" id="sbadge-sqli-vuln">{sqli_count}</span></button>
+                <button class="sub-btn"        data-sub="sqli-safe"     onclick="applySubFilter(this,'sqli')">SQLi SAFE     <span class="sub-badge" id="sbadge-sqli-safe">{sqli_safe}</span></button>
             </div>
         </div>
         <div class="filter-group" id="fg-xss">
@@ -1349,31 +1423,27 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             <button class="filter-btn has-sub" data-group="scripts" onclick="applyFilter(this)">SCRIPTS <span class="badge" id="badge-scripts">{cnt["scripts"]}</span><span class="arrow">&#9660;</span></button>
             <div class="sub-menu" id="sub-scripts">
                 <button class="sub-btn active" data-sub="scripts-all"    onclick="applySubFilter(this,'scripts')">ALL     <span class="sub-badge" id="sbadge-scripts-all">{cnt["scripts"]}</span></button>
-                <button class="sub-btn"        data-sub="scripts-php"    onclick="applySubFilter(this,'scripts')">PHP     <span class="sub-badge" id="sbadge-scripts-php">–</span></button>
-                <button class="sub-btn"        data-sub="scripts-asp"    onclick="applySubFilter(this,'scripts')">ASP     <span class="sub-badge" id="sbadge-scripts-asp">–</span></button>
-                <button class="sub-btn"        data-sub="scripts-sh"     onclick="applySubFilter(this,'scripts')">SH/BAT  <span class="sub-badge" id="sbadge-scripts-sh">–</span></button>
-                <button class="sub-btn"        data-sub="scripts-config" onclick="applySubFilter(this,'scripts')">CONFIGS <span class="sub-badge" id="sbadge-scripts-config">–</span></button>
-                <button class="sub-btn"        data-sub="scripts-creds"  onclick="applySubFilter(this,'scripts')">CREDS   <span class="sub-badge" id="sbadge-scripts-creds">–</span></button>
+                <button class="sub-btn"        data-sub="scripts-php"    onclick="applySubFilter(this,'scripts')">PHP     <span class="sub-badge" id="sbadge-scripts-php">-</span></button>
+                <button class="sub-btn"        data-sub="scripts-asp"    onclick="applySubFilter(this,'scripts')">ASP     <span class="sub-badge" id="sbadge-scripts-asp">-</span></button>
+                <button class="sub-btn"        data-sub="scripts-sh"     onclick="applySubFilter(this,'scripts')">SH/BAT  <span class="sub-badge" id="sbadge-scripts-sh">-</span></button>
+                <button class="sub-btn"        data-sub="scripts-config" onclick="applySubFilter(this,'scripts')">CONFIGS <span class="sub-badge" id="sbadge-scripts-config">-</span></button>
+                <button class="sub-btn"        data-sub="scripts-creds"  onclick="applySubFilter(this,'scripts')">CREDS   <span class="sub-badge" id="sbadge-scripts-creds">-</span></button>
             </div>
         </div>
         <button class="filter-btn" data-group="page" onclick="applyFilter(this)">PAGE <span class="badge" id="badge-page">{cnt["page"]}</span></button>
       </div>
-
-      <!-- RIGHT: three separate blue buttons -->
       <div class="right-btns">
-
-        <!-- 1. SEARCH DATA -->
         <div class="srch-wrap" id="srchWrap">
           <button class="rbt" id="srchToggle" onclick="toggleSearch()">&#128269; SEARCH</button>
           <div class="rpanel srch-panel" id="srchPanel">
             <button class="panel-close" onclick="document.getElementById('srchPanel').classList.remove('open');document.getElementById('srchToggle').classList.remove('open')" title="Close">&#10005;</button>
             <div class="srch-inner">
-              <div class="srch-title">&#9632; Search — Filter results by keyword</div>
+              <div class="srch-title">&#9632; Search</div>
               <div class="srch-input-wrap">
                 <input class="srch-input" id="srchInput" type="text" placeholder="Type to filter results..." oninput="doSearch()" autocomplete="off" spellcheck="false">
                 <button class="srch-clear" onclick="clearSearch()">CLEAR</button>
               </div>
-              <div class="srch-meta">Matching: <span id="srchCount">–</span> of {len(self.results)} results</div>
+              <div class="srch-meta">Matching: <span id="srchCount">-</span> of {len(self.results)} results</div>
               <div class="srch-scope">
                 <span class="srch-scope-lbl">SCOPE:</span>
                 <button class="scope-btn active" data-scope="url"      onclick="toggleScope(this)">URL</button>
@@ -1384,14 +1454,12 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             </div>
           </div>
         </div>
-
-        <!-- 2. EXPORT LINKS -->
         <div class="export-wrap" id="exportWrap">
           <button class="rbt" id="exportToggle" onclick="toggleExportPanel()">&#11015; LINKS</button>
           <div class="rpanel" id="exportPanel">
             <button class="panel-close" onclick="document.getElementById('exportPanel').classList.remove('open');document.getElementById('exportToggle').classList.remove('open')" title="Close">&#10005;</button>
             <div class="ep-section">
-              <div class="ep-title">&#9632; Export Links — All results</div>
+              <div class="ep-title">&#9632; Export Links - All</div>
               <div class="ep-row">
                 <span class="ep-label">All ({len(self.results)})</span>
                 <button class="exp-btn txt" onclick="doExport('txt','all')">TXT</button>
@@ -1400,49 +1468,49 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
               </div>
             </div>
             <div class="ep-section">
-              <div class="ep-title">&#9632; Export Links — SQLi by status</div>
+              <div class="ep-title">&#9632; Export Links - SQLi</div>
               <div class="ep-row">
-                <span class="ep-label warn">⚠ All tested <span id="epCntSqliAll"></span></span>
+                <span class="ep-label warn">All tested <span id="epCntSqliAll"></span></span>
                 <button class="exp-btn txt"  onclick="doExport('txt','sqli-all')">TXT</button>
                 <button class="exp-btn json" onclick="doExport('json','sqli-all')">JSON</button>
                 <button class="exp-btn csv"  onclick="doExport('csv','sqli-all')">CSV</button>
               </div>
               <div class="ep-row">
-                <span class="ep-label danger">&#9888; VULN only <span id="epCntSqliVuln"></span></span>
+                <span class="ep-label danger">VULN <span id="epCntSqliVuln"></span></span>
                 <button class="exp-btn txt"  onclick="doExport('txt','sqli-vuln')">TXT</button>
                 <button class="exp-btn json" onclick="doExport('json','sqli-vuln')">JSON</button>
                 <button class="exp-btn csv"  onclick="doExport('csv','sqli-vuln')">CSV</button>
               </div>
               <div class="ep-row">
-                <span class="ep-label safe-lbl">&#10003; SAFE only <span id="epCntSqliSafe"></span></span>
+                <span class="ep-label safe-lbl">SAFE <span id="epCntSqliSafe"></span></span>
                 <button class="exp-btn txt"  onclick="doExport('txt','sqli-safe')">TXT</button>
                 <button class="exp-btn json" onclick="doExport('json','sqli-safe')">JSON</button>
                 <button class="exp-btn csv"  onclick="doExport('csv','sqli-safe')">CSV</button>
               </div>
             </div>
             <div class="ep-section">
-              <div class="ep-title">&#9632; Export Links — XSS by status</div>
+              <div class="ep-title">&#9632; Export Links - XSS</div>
               <div class="ep-row">
-                <span class="ep-label warn" style="color:#ffbb44">&#9888; All tested <span id="epCntXssAll"></span></span>
+                <span class="ep-label warn">All tested <span id="epCntXssAll"></span></span>
                 <button class="exp-btn txt"  onclick="doExport('txt','xss-all')">TXT</button>
                 <button class="exp-btn json" onclick="doExport('json','xss-all')">JSON</button>
                 <button class="exp-btn csv"  onclick="doExport('csv','xss-all')">CSV</button>
               </div>
               <div class="ep-row">
-                <span class="ep-label" style="color:#ffaa00">&#9888; VULN only <span id="epCntXssVuln"></span></span>
+                <span class="ep-label" style="color:#ffaa00;">VULN <span id="epCntXssVuln"></span></span>
                 <button class="exp-btn txt"  onclick="doExport('txt','xss-vuln')">TXT</button>
                 <button class="exp-btn json" onclick="doExport('json','xss-vuln')">JSON</button>
                 <button class="exp-btn csv"  onclick="doExport('csv','xss-vuln')">CSV</button>
               </div>
               <div class="ep-row">
-                <span class="ep-label safe-lbl">&#10003; SAFE only <span id="epCntXssSafe"></span></span>
+                <span class="ep-label safe-lbl">SAFE <span id="epCntXssSafe"></span></span>
                 <button class="exp-btn txt"  onclick="doExport('txt','xss-safe')">TXT</button>
                 <button class="exp-btn json" onclick="doExport('json','xss-safe')">JSON</button>
                 <button class="exp-btn csv"  onclick="doExport('csv','xss-safe')">CSV</button>
               </div>
             </div>
             <div class="ep-section">
-              <div class="ep-title">&#9632; Export Links — Current view</div>
+              <div class="ep-title">&#9632; Current View</div>
               <div class="ep-row">
                 <span class="ep-label view-lbl">Visible <span id="epCntView"></span></span>
                 <button class="exp-btn txt"  onclick="doExport('txt','view')">TXT</button>
@@ -1452,13 +1520,11 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             </div>
           </div>
         </div>
-
-        <!-- 3. EXPORT FILES -->
         <div class="files-wrap" id="filesWrap">
           <button class="rbt" id="filesToggle" onclick="toggleFilesPanel()">&#128196; FILES</button>
           <div class="rpanel files-panel" id="filesPanel">
             <div class="files-hdr" style="position:relative">
-              <div class="ep-title" style="margin-bottom:0">&#9632; Download Files — Accessible results</div>
+              <div class="ep-title" style="margin-bottom:0">&#9632; Download Files</div>
               <button class="panel-close" onclick="document.getElementById('filesPanel').classList.remove('open');document.getElementById('filesToggle').classList.remove('open')" title="Close">&#10005;</button>
             </div>
             <div class="files-bulk">
@@ -1471,7 +1537,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             <div class="files-list" id="filesList">
 """)
 
-        # ── Build file rows inside the FILES panel ─────────────────────────
         if file_rows:
             for idx_f, fr in enumerate(file_rows):
                 size_str      = fr.get("size_str", "N/A")
@@ -1497,14 +1562,13 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
               </div>
 """)
         else:
-            parts.append('              <div class="files-empty">No file results in this report.<br>Run with --analyze to detect accessible files.</div>\n')
+            parts.append('              <div class="files-empty">No file results in this report.</div>\n')
 
-        parts.append(f"""            </div><!-- /files-list -->
-          </div><!-- /files-panel -->
-        </div><!-- /files-wrap -->
-
-      </div><!-- /right-btns -->
-    </div><!-- /toolbar -->
+        parts.append(f"""            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="active-sub-info" id="sub-info"></div>
     <div class="table-wrap">
@@ -1540,16 +1604,14 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
             xss_class   = "xss-untested"
             xss_data    = "untested"
 
-            # ── Build info payload for ⓘ popup ───────────────────────────────
-            _sqli_t   = result.get("sqli_test", {})
-            _vuln_str = ""
+            _sqli_t      = result.get("sqli_test", {})
+            _vuln_str    = ""
             _payload_str = ""
             if _sqli_t.get("tested"):
                 _vuln_str = "VULNERABLE" if _sqli_t.get("vulnerable") else "SAFE"
                 _conf_str = _sqli_t.get("overall_confidence", "")
                 if _conf_str:
                     _vuln_str += f" ({_conf_str})"
-                # collect method + evidence
                 _details = []
                 for _tt in _sqli_t.get("tests", []):
                     if _tt.get("vulnerable"):
@@ -1560,7 +1622,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 _payload_str = " ↳ ".join(_details[:3])
             _waf_info = _sqli_t.get("waf_detected", "") or ""
 
-            # ── XSS info for popup ────────────────────────────────────────────
             _xss_t       = result.get("xss_test", {})
             _xss_str     = ""
             _xss_det_str = ""
@@ -1578,7 +1639,8 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                         _xdet.append(_xt.get("type", "") + ": " + " | ".join(_xt.get("evidence", [])[:1]))
                 _xss_det_str = " ↳ ".join(_xdet[:3])
 
-            _info_obj = _json.dumps({
+            import json as _json_local
+            _info_obj = _json_local.dumps({
                 "url":       url,
                 "title":     result.get("title", "") or "",
                 "snippet":   (result.get("snippet", "") or "")[:200],
@@ -1616,7 +1678,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                     waf_label = f'<span class="waf-label">{_html_mod.escape(waf)}</span>'
 
             if "xss_test" in result and result["xss_test"].get("tested", False):
-                _xconf = result["xss_test"].get("overall_confidence", "none")
                 if result["xss_test"].get("vulnerable", False):
                     _xtypes_short = ",".join(result["xss_test"].get("xss_types_found", []))[:30]
                     xss_status = f"VULN [{_xtypes_short}]"
@@ -1638,7 +1699,7 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
                 <td>{waf_label}</td>
                 <td>{size}</td>
             </tr>
-""")  
+""")
 
         parts.append(f"""        </tbody>
     </table>
@@ -1647,8 +1708,6 @@ Main orchestrator: runs dork searches, file analysis, SQLi testing, and result p
 </div>
 
 <div id="toast"></div>
-
-<!-- ⓘ Info popup overlay -->
 <div class="info-overlay" id="infoOverlay" onclick="closeInfo()"></div>
 <div class="info-popup" id="infoPopup">
   <div class="info-popup-title">
@@ -1665,17 +1724,15 @@ const REPORT_BASE = "{report_base}";
 </script>
 
 <script>
-/* MATRIX */
 (function(){{
     const c=document.getElementById('matrix-canvas'),ctx=c.getContext('2d');
-    const CH='アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
+    const CH='アイウエオカキクケコ0123456789ABCDEF';
     const FS=14;let cols,drops;
     function resize(){{c.width=window.innerWidth;c.height=window.innerHeight;cols=Math.floor(c.width/FS);drops=Array.from({{length:cols}},()=>Math.random()*-100);}}
     function draw(){{ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);for(let i=0;i<cols;i++){{const ch=CH[Math.floor(Math.random()*CH.length)];ctx.fillStyle=Math.random()>.95?'#fff':'#00ff41';ctx.font=FS+'px monospace';ctx.fillText(ch,i*FS,drops[i]*FS);if(drops[i]*FS>c.height&&Math.random()>.975)drops[i]=0;drops[i]+=.5+Math.random()*.5;}}}}
     resize();window.addEventListener('resize',resize);setInterval(draw,45);
 }})();
 
-/* FILTER */
 const GROUP_CATS={{
   "doc":["documents","archives","backups"],
   "scripts":["scripts","configs","credentials"],
@@ -1703,7 +1760,7 @@ const SUB_PRED={{
   "scripts-creds":(r)=>[".env",".git",".svn",".htpasswd"].includes(r.dataset.ext)
 }};
 let activeGroup="all",activeSub=null;
-function closeAllSubMenus(){{document.querySelectorAll('.sub-menu.open').forEach(m=>m.classList.remove('open'));document.querySelectorAll('.filter-btn.has-sub').forEach(b=>b.classList.remove('active'));}}
+function closeAllSubMenus(){{document.querySelectorAll('.sub-menu.open').forEach(m=>m.classList.remove('open'));}}
 function applyFilter(btn){{
   const group=btn.dataset.group;
   if(btn.classList.contains('has-sub')){{
@@ -1771,8 +1828,6 @@ function updateInfoBar(){{
   const subLabel=(activeSub||'').split('-').slice(1).join(' ').toUpperCase();
   bar.innerHTML='&#10142; Filter: <span>'+activeGroup.toUpperCase()+'</span> &rsaquo; <span>'+subLabel+'</span> &mdash; <span>'+visible+'</span> result(s)';
 }}
-
-/* SEARCH */
 let activeScopes=new Set(['url','title','category','dork']);
 function toggleSearch(){{
   const p=document.getElementById('srchPanel'),t=document.getElementById('srchToggle');
@@ -1790,7 +1845,7 @@ function doSearch(){{
   const rows=document.querySelectorAll('#results-tbody tr');
   let match=0;
   rows.forEach(row=>{{if(!row.classList.contains('hidden')){{const found=applySearchToRow(row,q);if(found)match++;}}else{{row.classList.remove('srch-hidden');}}}});
-  const el=document.getElementById('srchCount');if(el)el.textContent=q?match:'–';
+  const el=document.getElementById('srchCount');if(el)el.textContent=q?match:'-';
   updateInfoBar();updateExportCounts();
 }}
 function applySearchToRow(row,q){{
@@ -1808,100 +1863,67 @@ function applySearchToRow(row,q){{
 function clearSearch(){{
   document.getElementById('srchInput').value='';
   document.querySelectorAll('#results-tbody tr').forEach(r=>r.classList.remove('srch-hidden'));
-  const el=document.getElementById('srchCount');if(el)el.textContent='–';
+  const el=document.getElementById('srchCount');if(el)el.textContent='-';
   updateInfoBar();updateExportCounts();
 }}
-
-/* EXPORT LINKS PANEL */
 function toggleExportPanel(){{
   const p=document.getElementById('exportPanel'),t=document.getElementById('exportToggle');
   const open=p.classList.contains('open');closeAllPanels();
   if(!open){{p.classList.add('open');t.classList.add('open');updateExportCounts();}}
 }}
 function updateExportCounts(){{
-  const sqliAll =EXPORT_DATA.filter(r=>["vuln","safe","critical"].includes(r.sqli));
+  const sqliAll=EXPORT_DATA.filter(r=>["vuln","safe","critical"].includes(r.sqli));
   const sqliVuln=EXPORT_DATA.filter(r=>["vuln","critical"].includes(r.sqli));
   const sqliSafe=EXPORT_DATA.filter(r=>r.sqli==="safe");
-  const xssAll  =EXPORT_DATA.filter(r=>["vuln","safe"].includes(r.xss));
-  const xssVuln =EXPORT_DATA.filter(r=>r.xss==="vuln");
-  const xssSafe =EXPORT_DATA.filter(r=>r.xss==="safe");
+  const xssAll=EXPORT_DATA.filter(r=>["vuln","safe"].includes(r.xss));
+  const xssVuln=EXPORT_DATA.filter(r=>r.xss==="vuln");
+  const xssSafe=EXPORT_DATA.filter(r=>r.xss==="safe");
   const viewIdxs=new Set(Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden):not(.srch-hidden)')).map(r=>parseInt(r.dataset.idx)));
   const s=(id,n)=>{{const el=document.getElementById(id);if(el)el.textContent='('+n+')';}}; 
-  s('epCntSqliAll', sqliAll.length);
-  s('epCntSqliVuln',sqliVuln.length);
-  s('epCntSqliSafe',sqliSafe.length);
-  s('epCntXssAll',  xssAll.length);
-  s('epCntXssVuln', xssVuln.length);
-  s('epCntXssSafe', xssSafe.length);
-  s('epCntView',    EXPORT_DATA.filter((_,i)=>viewIdxs.has(i)).length);
+  s('epCntSqliAll',sqliAll.length);s('epCntSqliVuln',sqliVuln.length);s('epCntSqliSafe',sqliSafe.length);
+  s('epCntXssAll',xssAll.length);s('epCntXssVuln',xssVuln.length);s('epCntXssSafe',xssSafe.length);
+  s('epCntView',EXPORT_DATA.filter((_,i)=>viewIdxs.has(i)).length);
 }}
 function _getRows(scope){{
-  if(scope==='all')       return EXPORT_DATA;
-  if(scope==='sqli-all')  return EXPORT_DATA.filter(r=>["vuln","safe","critical"].includes(r.sqli));
-  if(scope==='sqli-vuln') return EXPORT_DATA.filter(r=>["vuln","critical"].includes(r.sqli));
-  if(scope==='sqli-safe') return EXPORT_DATA.filter(r=>r.sqli==="safe");
-  if(scope==='xss-all')   return EXPORT_DATA.filter(r=>["vuln","safe"].includes(r.xss));
-  if(scope==='xss-vuln')  return EXPORT_DATA.filter(r=>r.xss==="vuln");
-  if(scope==='xss-safe')  return EXPORT_DATA.filter(r=>r.xss==="safe");
-  if(scope==='view'){{
-    const vis=new Set(Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden):not(.srch-hidden)')).map(r=>parseInt(r.dataset.idx)));
-    return EXPORT_DATA.filter((_,i)=>vis.has(i));
-  }}
+  if(scope==='all')return EXPORT_DATA;
+  if(scope==='sqli-all')return EXPORT_DATA.filter(r=>["vuln","safe","critical"].includes(r.sqli));
+  if(scope==='sqli-vuln')return EXPORT_DATA.filter(r=>["vuln","critical"].includes(r.sqli));
+  if(scope==='sqli-safe')return EXPORT_DATA.filter(r=>r.sqli==="safe");
+  if(scope==='xss-all')return EXPORT_DATA.filter(r=>["vuln","safe"].includes(r.xss));
+  if(scope==='xss-vuln')return EXPORT_DATA.filter(r=>r.xss==="vuln");
+  if(scope==='xss-safe')return EXPORT_DATA.filter(r=>r.xss==="safe");
+  if(scope==='view'){{const vis=new Set(Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden):not(.srch-hidden)')).map(r=>parseInt(r.dataset.idx)));return EXPORT_DATA.filter((_,i)=>vis.has(i));}}
   return EXPORT_DATA;
 }}
 function _scopeLabel(scope){{return{{'all':'all','sqli-all':'sqli_tested','sqli-vuln':'sqli_vuln','sqli-safe':'sqli_safe','xss-all':'xss_tested','xss-vuln':'xss_vuln','xss-safe':'xss_safe','view':'view'}}[scope]||scope;}}
-function _download(content,filename,mime){{
-  const blob=new Blob([content],{{type:mime}});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;
-  document.body.appendChild(a);a.click();setTimeout(()=>{{URL.revokeObjectURL(a.href);document.body.removeChild(a);}},100);
-}}
-function _showToast(msg){{
-  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2200);
-}}
+function _download(content,filename,mime){{const blob=new Blob([content],{{type:mime}});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{{URL.revokeObjectURL(a.href);document.body.removeChild(a);}},100);}}
+function _showToast(msg){{const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}}
 function doExport(fmt,scope){{
   const rows=_getRows(scope);
-  if(!rows.length){{_showToast('No results to export for this filter.');return;}}
+  if(!rows.length){{_showToast('No results to export.');return;}}
   const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
   const base=REPORT_BASE+'_links_'+_scopeLabel(scope)+'_'+ts;
   if(fmt==='txt'){{
-    const lines=rows.map((r,i)=>{{
-      let s=(i+1)+'. '+r.url+'\\n';
-      if(r.title)   s+='   Title    : '+r.title+'\\n';
-      if(r.category)s+='   Category : '+r.category+'\\n';
-      if(r.dork)    s+='   Dork     : '+r.dork+'\\n';
-      if(r.sqli&&r.sqli!=='untested')s+='   SQLi     : '+r.sqli.toUpperCase()+(r.conf?' ('+r.conf+')':'')+'\\n';
-      if(r.xss&&r.xss!=='untested') s+='   XSS      : '+r.xss.toUpperCase()+(r.xss_conf?' ('+r.xss_conf+')':'')+(r.xss_types?' ['+r.xss_types+']':'')+'\\n';
-      if(r.waf)     s+='   WAF      : '+r.waf+'\\n';
-      s+='   Time     : '+r.timestamp+'\\n';
-      return s;
-    }});
-    _download('DorkEye Export — Links\\nScope: '+scope+'\\nGenerated: '+ts+'\\nTotal: '+rows.length+'\\n\\n'+lines.join('\\n'),base+'.txt','text/plain');
-    _showToast('Exported '+rows.length+' links → '+base+'.txt');
+    const lines=rows.map((r,i)=>{{let s=(i+1)+'. '+r.url+'\\n';if(r.title)s+='   Title: '+r.title+'\\n';if(r.sqli&&r.sqli!=='untested')s+='   SQLi: '+r.sqli.toUpperCase()+'\\n';if(r.xss&&r.xss!=='untested')s+='   XSS: '+r.xss.toUpperCase()+'\\n';s+='   Time: '+r.timestamp+'\\n';return s;}});
+    _download('DorkEye Export\\nScope: '+scope+'\\nGenerated: '+ts+'\\nTotal: '+rows.length+'\\n\\n'+lines.join('\\n'),base+'.txt','text/plain');
+    _showToast('Exported '+rows.length+' links');
   }}else if(fmt==='json'){{
     _download(JSON.stringify({{meta:{{generated:ts,scope:scope,total:rows.length}},results:rows}},null,2),base+'.json','application/json');
-    _showToast('Exported '+rows.length+' links → '+base+'.json');
+    _showToast('Exported '+rows.length+' links');
   }}else if(fmt==='csv'){{
     const headers=['url','title','dork','category','ext','sqli','conf','waf','xss','xss_conf','xss_types','timestamp'];
     const esc=v=>{{const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\\n')?'"'+s.replace(/"/g,'""')+'"':s;}};
     _download([headers.join(','),...rows.map(r=>headers.map(h=>esc(r[h]||'')).join(','))].join('\\r\\n'),base+'.csv','text/csv');
-    _showToast('Exported '+rows.length+' links → '+base+'.csv');
+    _showToast('Exported '+rows.length+' links');
   }}
 }}
-
-/* FILES PANEL */
 function toggleFilesPanel(){{
   const p=document.getElementById('filesPanel'),t=document.getElementById('filesToggle');
   const open=p.classList.contains('open');closeAllPanels();
   if(!open){{p.classList.add('open');t.classList.add('open');updateSelCount();}}
 }}
-function updateSelCount(){{
-  const n=document.querySelectorAll('.file-chk:checked').length;
-  const el=document.getElementById('selCount');if(el)el.textContent=n;
-}}
-function selectAllFiles(val){{
-  document.querySelectorAll('.file-chk').forEach(c=>c.checked=val);updateSelCount();
-}}
+function updateSelCount(){{const n=document.querySelectorAll('.file-chk:checked').length;const el=document.getElementById('selCount');if(el)el.textContent=n;}}
+function selectAllFiles(val){{document.querySelectorAll('.file-chk').forEach(c=>c.checked=val);updateSelCount();}}
 function exportSelectedFiles(fmt){{
   const checked=Array.from(document.querySelectorAll('.file-chk:checked'));
   if(!checked.length){{_showToast('No files selected.');return;}}
@@ -1909,43 +1931,23 @@ function exportSelectedFiles(fmt){{
   const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
   const base=REPORT_BASE+'_files_selected_'+ts;
   if(fmt==='list'){{
-    const lines=rows.map((r,i)=>{{
-      let s=(i+1)+'. '+r.url+'\\n';
-      if(r.title)    s+='   Title    : '+r.title+'\\n';
-      if(r.category) s+='   Category : '+r.category+'\\n';
-      if(r.ext)      s+='   Ext      : '+r.ext+'\\n';
-      if(r.size_str) s+='   Size     : '+r.size_str+'\\n';
-      s+='   Status   : '+(r.accessible?'Accessible (HTTP '+r.status_code+')':'Not accessible')+'\\n';
-      s+='   Time     : '+r.timestamp+'\\n';
-      return s;
-    }});
-    _download('DorkEye File List\\nGenerated: '+ts+'\\nSelected: '+rows.length+'\\n\\n'+lines.join('\\n'),base+'.txt','text/plain');
-    _showToast('File list ('+rows.length+') → '+base+'.txt');
+    const lines=rows.map((r,i)=>(i+1)+'. '+r.url+'\\n   Category: '+r.category+'\\n   Size: '+r.size_str+'\\n');
+    _download('DorkEye File List\\nGenerated: '+ts+'\\n\\n'+lines.join('\\n'),base+'.txt','text/plain');
+    _showToast('File list ('+rows.length+') exported');
   }}else if(fmt==='json'){{
     _download(JSON.stringify({{meta:{{generated:ts,total:rows.length}},files:rows}},null,2),base+'.json','application/json');
-    _showToast('File list ('+rows.length+') → '+base+'.json');
+    _showToast('File list ('+rows.length+') exported');
   }}
 }}
-
-/* CLOSE ALL PANELS */
 function closeAllPanels(){{
   ['srchPanel','exportPanel','filesPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   ['srchToggle','exportToggle','filesToggle'].forEach(id=>document.getElementById(id).classList.remove('open'));
 }}
 document.addEventListener('click',(e)=>{{
-  if(!e.target.closest('.filter-group')&&!e.target.closest('.filter-btn[data-group]')){{
-    closeAllSubMenus();
-    document.querySelectorAll('.filter-btn').forEach(b=>{{if(b.dataset.group===activeGroup)b.classList.add('active');}});
-  }}
-  if(!e.target.closest('.srch-wrap')&&!e.target.closest('.export-wrap')&&!e.target.closest('.files-wrap')){{
-    closeAllPanels();
-  }}
+  if(!e.target.closest('.filter-group')&&!e.target.closest('.filter-btn[data-group]'))closeAllSubMenus();
+  if(!e.target.closest('.srch-wrap')&&!e.target.closest('.export-wrap')&&!e.target.closest('.files-wrap'))closeAllPanels();
 }});
-
-/* INIT */
 buildSubBadges();updateInfoBar();updateExportCounts();updateSelCount();
-
-/* ⓘ INFO POPUP */
 let _infoOpen=false;
 function showInfo(btn){{
   const d=JSON.parse(btn.getAttribute('data-info'));
@@ -1953,34 +1955,19 @@ function showInfo(btn){{
   const xssColor=d.xss&&d.xss.startsWith('VULN')?'#ffaa00':d.xss==='SAFE'?'#00ff41':'#444';
   let rows='';
   const row=(lbl,val,color)=>val?`<div class="info-row"><span class="info-lbl">${{lbl}}</span><span class="info-val" style="color:${{color||'#00aaff'}}">${{val}}</span></div>`:'';
-  rows+=row('URL',d.url.length>80?d.url.slice(0,80)+'…':d.url);
-  rows+=row('Title',d.title);
-  rows+=row('Category',d.category,'#00cc88');
-  rows+=row('Extension',d.ext,'#ffaa00');
-  rows+=row('Size',d.size,'#009922');
-  rows+=row('Timestamp',d.ts,'#666');
-  rows+=row('Dork',d.dork&&d.dork.length>80?d.dork.slice(0,80)+'…':d.dork,'#cc88ff');
-  rows+=row('Snippet',d.snippet&&d.snippet.length>120?d.snippet.slice(0,120)+'…':d.snippet,'#777');
-  if(d.sqli)rows+=row('SQLi Status',d.sqli,sqliColor);
-  if(d.payload)rows+=row('SQLi Method',d.payload.length>100?d.payload.slice(0,100)+'…':d.payload,'#ff6666');
-  if(d.xss)rows+=row('XSS Status',d.xss,xssColor);
-  if(d.xss_det)rows+=row('XSS Detail',d.xss_det.length>100?d.xss_det.slice(0,100)+'…':d.xss_det,'#ffcc66');
-  if(d.waf)rows+=row('WAF','⚠ '+d.waf,'#ffaa00');
+  rows+=row('URL',d.url.length>80?d.url.slice(0,80)+'...':d.url);
+  rows+=row('Title',d.title);rows+=row('Category',d.category,'#00cc88');rows+=row('Extension',d.ext,'#ffaa00');
+  rows+=row('Size',d.size,'#009922');rows+=row('Timestamp',d.ts,'#666');rows+=row('Dork',d.dork&&d.dork.length>80?d.dork.slice(0,80)+'...':d.dork,'#cc88ff');
+  rows+=row('Snippet',d.snippet&&d.snippet.length>120?d.snippet.slice(0,120)+'...':d.snippet,'#777');
+  if(d.sqli)rows+=row('SQLi',d.sqli,sqliColor);if(d.payload)rows+=row('SQLi Method',d.payload.length>100?d.payload.slice(0,100)+'...':d.payload,'#ff6666');
+  if(d.xss)rows+=row('XSS',d.xss,xssColor);if(d.xss_det)rows+=row('XSS Detail',d.xss_det.length>100?d.xss_det.slice(0,100)+'...':d.xss_det,'#ffcc66');
+  if(d.waf)rows+=row('WAF','! '+d.waf,'#ffaa00');
   document.getElementById('infoBody').innerHTML=rows||'<span style="color:#444">No details.</span>';
-  const popup=document.getElementById('infoPopup');
-  const overlay=document.getElementById('infoOverlay');
-  popup.classList.add('open');
-  overlay.classList.add('open');
-  _infoOpen=true;
-  // prevent page scroll when popup is open
-  document.body.style.overflow='hidden';
+  document.getElementById('infoPopup').classList.add('open');
+  document.getElementById('infoOverlay').classList.add('open');
+  _infoOpen=true;document.body.style.overflow='hidden';
 }}
-function closeInfo(){{
-  document.getElementById('infoPopup').classList.remove('open');
-  document.getElementById('infoOverlay').classList.remove('open');
-  document.body.style.overflow='';
-  _infoOpen=false;
-}}
+function closeInfo(){{document.getElementById('infoPopup').classList.remove('open');document.getElementById('infoOverlay').classList.remove('open');document.body.style.overflow='';_infoOpen=false;}}
 document.addEventListener('keydown',(e)=>{{if(_infoOpen&&e.key==='Escape')closeInfo();}});
 </script>
 </body>
@@ -1990,9 +1977,8 @@ document.addEventListener('keydown',(e)=>{{if(_infoOpen&&e.key==='Escape')closeI
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(html)
 
-
     def _format_size(self, size):
-        """Format a byte count into a human-readable string (B / KB / MB / GB / TB), or "N/A"."""
+        """Format byte count to human-readable string."""
         if size is None:
             return "N/A"
         try:
@@ -2008,7 +1994,7 @@ document.addEventListener('keydown',(e)=>{{if(_infoOpen&&e.key==='Escape')closeI
         return f"{size:.1f} TB"
 
     def print_statistics(self):
-        """Print a Rich-formatted statistics table with result counts, categories, and execution time."""
+        """Print a Rich-formatted statistics table."""
         table = Table(title="", show_header=False, box=None, padding=(0, 2))
         table.add_column("Metric", style="cyan")
         table.add_column("Value",  style="green", justify="right")
@@ -2044,12 +2030,8 @@ document.addEventListener('keydown',(e)=>{{if(_infoOpen&&e.key==='Escape')closeI
 # ══════════════════════════════════════════════════════════════
 
 def _load_results_from_file(path: str) -> List[Dict]:
-    """
-    Load DorkEye results from a .json or .txt file in the Dump/ folder.
-    Returns a list of result dicts (each must have at least 'url').
-    """
+    """Load DorkEye results from a .json or .txt file."""
     p = Path(path)
-    # Try Dump/ subfolder if not found directly
     if not p.exists():
         alt = Path(__file__).parent / "Dump" / path
         if alt.exists():
@@ -2063,7 +2045,6 @@ def _load_results_from_file(path: str) -> List[Dict]:
         if ext == ".json":
             with open(p, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # Support both raw list and {"results": [...]} formats
             if isinstance(data, list):
                 return data
             if isinstance(data, dict) and "results" in data:
@@ -2089,7 +2070,7 @@ def _load_results_from_file(path: str) -> List[Dict]:
 
 
 def load_config(config_file: str = None) -> Dict:
-    """Load and merge a YAML or JSON config file with DEFAULT_CONFIG; return the merged dict."""
+    """Load and merge a YAML or JSON config file with DEFAULT_CONFIG."""
     if not config_file:
         return DEFAULT_CONFIG.copy()
     try:
@@ -2105,7 +2086,7 @@ def load_config(config_file: str = None) -> Dict:
 
 
 def create_sample_config():
-    """Write a sample dorkeye_config.yaml to disk and confirm to the terminal."""
+    """Write a sample dorkeye_config.yaml to disk."""
     config_yaml = """# DorkEye Configuration
 
 extensions:
@@ -2134,7 +2115,7 @@ extended_delay_every_n_results: 100
 
 
 def resolve_templates_argument(template_arg):
-    """Resolve the --templates argument to a list of Path objects inside the Templates/ directory."""
+    """Resolve the --templates argument to a list of Path objects."""
     templates_dir = Path(__file__).parent / "Templates"
     if template_arg is None:
         return [templates_dir / "dorks_templates.yaml"]
@@ -2165,13 +2146,12 @@ def get_categories_from_templates(template_files) -> List[str]:
     return sorted(categories)
 
 
-
 # ══════════════════════════════════════════════════════════════
 #  WIZARD
 # ══════════════════════════════════════════════════════════════
 
 def run_wizard():
-    """Run the interactive guided wizard session (main menu, dork search, dork generator)."""
+    """Run the interactive guided wizard session."""
     print_banner()
     console.print(Panel(
         "[bold green]Interactive Wizard[/bold green] — Navigate with numbers, ENTER to confirm\n"
@@ -2180,10 +2160,7 @@ def run_wizard():
         title="[bold yellow][ DorkEye Wizard ][/bold yellow]"
     ))
 
-    # ── Internal wizard helpers ─────────────────────────────────────────────────
-
     def ask_yes_no(prompt: str, default_yes: bool = False) -> bool:
-        """Print prompt with a [Y/n] or [y/N] hint and return True/False from user input."""
         hint = "[Y/n]" if default_yes else "[y/N]"
         console.print(f"[cyan]{prompt} {hint}:[/cyan] ", end="")
         try:
@@ -2193,7 +2170,6 @@ def run_wizard():
         return default_yes if ans == "" else ans in ("y", "yes")
 
     def ask_choice(prompt: str, options: list, default: int = 0) -> int:
-        """Print a numbered option list and return the 0-based index chosen by the user."""
         for i, opt in enumerate(options, 1):
             marker = "[bold green]>[/bold green]" if i - 1 == default else " "
             console.print(f"  {marker} [yellow]{i})[/yellow] {opt}")
@@ -2206,7 +2182,6 @@ def run_wizard():
             return default
 
     def ask_string(prompt: str, placeholder: str = "") -> str:
-        """Print a prompt with an optional example and return the raw string entered by the user."""
         display = f" [dim](e.g. {placeholder})[/dim]" if placeholder else ""
         console.print(f"[cyan]{prompt}{display}:[/cyan] ", end="")
         try:
@@ -2215,14 +2190,12 @@ def run_wizard():
             return ""
 
     def ask_extensions(prompt: str) -> list:
-        """Ask for a space-separated list of file extensions; normalise and return as a list."""
         raw = ask_string(prompt, ".pdf .doc .zip")
         if not raw:
             return []
         return [ext if ext.startswith(".") else f".{ext}" for ext in raw.split()]
 
     def pick_output() -> str:
-        """Ask for an output filename; if no extension is given, prompt for format choice."""
         output = ask_string("Output filename", "results.json")
         if not output:
             return None
@@ -2234,7 +2207,6 @@ def run_wizard():
         return output + fmts[fmt_idx]
 
     def collect_run_options(config: dict, ask_count: bool = True) -> int:
-        """Prompt for all scan options (count, SQLi, stealth, fingerprinting, blacklist/whitelist)."""
         console.print("\n[bold cyan]┌─[ RUN OPTIONS ][/bold cyan]")
         console.print("[bold cyan]│[/bold cyan]")
         count = 50
@@ -2259,44 +2231,31 @@ def run_wizard():
         return count
 
     def _ask_analyze(output: str) -> bool:
-        """Ask the user whether to run the analysis pipeline — only if the output is .json."""
         if not output:
             return False
         if not str(output).lower().endswith(".json"):
             return False
         if not _ANALYZE_AVAILABLE:
             return False
-        console.print(
-            "\n[bold cyan]┌─[ RESULTS ANALYSIS ][/bold cyan]"
-        )
-        console.print(
-            "[bold cyan]│[/bold cyan]  Results will be analyzed after the search:"
-        )
-        console.print(
-            "[bold cyan]│[/bold cyan]  triage priority · secrets · credentials · HTML report"
-        )
+        console.print("\n[bold cyan]┌─[ RESULTS ANALYSIS ][/bold cyan]")
+        console.print("[bold cyan]│[/bold cyan]  triage priority · secrets · credentials · HTML report")
         try:
-            console.print(
-                "[bold cyan]│  Run analysis on results? y/N:[/bold cyan] ", end=""
-            )
+            console.print("[bold cyan]│  Run analysis on results? y/N:[/bold cyan] ", end="")
             ans = input("").strip().lower() in ("y", "yes")
         except KeyboardInterrupt:
             ans = False
         if ans:
-            console.print("[bold cyan]└─>[/bold cyan] [green]Analysis enabled — will run after the search.[/green]\n")
+            console.print("[bold cyan]└─>[/bold cyan] [green]Analysis enabled.[/green]\n")
         else:
             console.print("[bold cyan]└─>[/bold cyan] [dim]Analysis skipped.[/dim]\n")
         return ans
 
     def _run_analyze(results: list, output: str) -> None:
-        """Run the agents pipeline and save the HTML report next to the JSON output."""
         if not results or not _ANALYZE_AVAILABLE:
             return
         ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_out = str(output).replace(".json", f"_analysis_{ts}.html")
-        console.print(
-            f"\n[bold cyan][Agents] Starting analysis on {len(results)} result(s)...[/bold cyan]"
-        )
+        console.print(f"\n[bold cyan][Agents] Starting analysis on {len(results)} result(s)...[/bold cyan]")
         _wiz_args = type("A", (), {
             "analyze_fetch":          False,
             "analyze_fetch_max":      20,
@@ -2306,100 +2265,52 @@ def run_wizard():
             "analyze_out":            report_out,
         })()
         try:
-            out = _run_agents_pipeline(
-                results    = results,
-                llm_plugin = None,
-                args       = _wiz_args,
-            )
+            out = _run_agents_pipeline(results=results, llm_plugin=None, args=_wiz_args)
             if out.get("report_path"):
-                console.print(
-                    f"[bold green][✓] Analysis report → {out['report_path']}[/bold green]"
-                )
+                console.print(f"[bold green][✓] Analysis report → {out['report_path']}[/bold green]")
             n_sec = out.get("secrets_total", 0)
             if n_sec:
-                console.print(
-                    f"[bold red][!] {n_sec} secret(s) detected — see the report.[/bold red]"
-                )
+                console.print(f"[bold red][!] {n_sec} secret(s) detected.[/bold red]")
         except Exception as _ae:
             console.print(f"[yellow][Agents] Error: {_ae}[/yellow]")
 
     def _ask_crawl() -> dict | None:
-        """Ask whether to enable the adaptive recursive crawl after the search.
-
-        Returns:
-            dict with crawl options if confirmed, None otherwise.
-        """
         if not _ANALYZE_AVAILABLE:
             return None
-
         console.print("\n[bold cyan]┌─[ RECURSIVE CRAWL ][/bold cyan]")
-        console.print(
-            "[bold cyan]│[/bold cyan] [i] After the initial search, the crawler runs additional refinement rounds"
-        )
-
-        console.print(
-            "[bold cyan]│[/bold cyan]  [dim](refining dorks based on: domains · paths · technologies · extensions)[/dim]"
-        )
+        console.print("[bold cyan]│[/bold cyan]  [dim](refining dorks based on: domains · paths · technologies)[/dim]")
         try:
-            console.print(
-                "[bold cyan]│  Enable recursive crawl? y/N:[/bold cyan] ", end=""
-            )
+            console.print("[bold cyan]│  Enable recursive crawl? y/N:[/bold cyan] ", end="")
             ans = input("").strip().lower() in ("y", "yes")
         except KeyboardInterrupt:
             ans = False
-
         if not ans:
             console.print("[bold cyan]└─>[/bold cyan] [dim]Crawl skipped.[/dim]\n")
             return None
-
-        # ── Number of rounds ────────────────────────────────────────────────────
         console.print("[bold cyan]│[/bold cyan]")
-        console.print("[bold cyan]│  Number of rounds:[/bold cyan]")
-        rounds_idx = ask_choice(
-            "Rounds",
-            [
-                "2  [dim]— fast, minimal footprint[/dim]",
-                "4  [dim]— balanced (default)[/dim]",
-                "6  [dim]— thorough[/dim]",
-                "10 [dim]— maximum, very slow[/dim]",
-            ],
-            default=1,
-        )
+        rounds_idx = ask_choice("Rounds", [
+            "2  [dim]— fast[/dim]",
+            "4  [dim]— balanced (default)[/dim]",
+            "6  [dim]— thorough[/dim]",
+            "10 [dim]— maximum[/dim]",
+        ], default=1)
         rounds_map = [2, 4, 6, 10]
         rounds     = rounds_map[rounds_idx]
-
-        # ── Stealth ───────────────────────────────────────────────────────────
         console.print("[bold cyan]│[/bold cyan]")
-        stealth = ask_yes_no("│  Stealth mode for crawl (longer delays)? ")
-
-        # ── Final report ──────────────────────────────────────────────────────────
+        stealth   = ask_yes_no("│  Stealth mode for crawl? ")
         console.print("[bold cyan]│[/bold cyan]")
-        do_report = ask_yes_no("│  Generate HTML report at the end of the crawl?", default_yes=True)
-
-        console.print(
-            f"[bold cyan]└─>[/bold cyan] [green]Crawl enabled "
-            f"— {rounds} round(s){'  · stealth' if stealth else ''}[/green]\n"
-        )
-        return {
-            "rounds":     rounds,
-            "stealth":    stealth,
-            "do_report":  do_report,
-            "max":        300,
-            "per_dork":   20,
-        }
+        do_report = ask_yes_no("│  Generate HTML report at end of crawl?", default_yes=True)
+        console.print(f"[bold cyan]└─>[/bold cyan] [green]Crawl enabled — {rounds} round(s)[/green]\n")
+        return {"rounds": rounds, "stealth": stealth, "do_report": do_report, "max": 300, "per_dork": 20}
 
     def _run_crawl_wizard(seed_dorks: list, crawl_opts: dict, output: str) -> None:
-        """Run DorkCrawlerAgent with the options chosen in the wizard session."""
         if not crawl_opts or not _ANALYZE_AVAILABLE:
             return
-
         ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_path = None
         if crawl_opts["do_report"]:
             base        = os.path.splitext(output)[0] if output else f"dorkeye_crawl_{ts}"
             report_path = f"{base}_crawl_{ts}.html"
-
-        # Namespace compatible with run_crawl()
         _crawl_args = type("A", (), {
             "crawl_rounds":   crawl_opts["rounds"],
             "crawl_max":      crawl_opts["max"],
@@ -2408,33 +2319,18 @@ def run_wizard():
             "crawl_report":   crawl_opts["do_report"],
             "crawl_out":      report_path,
         })()
-
-        console.print(
-            f"\n[bold cyan][Crawl] Starting recursive crawl — "
-            f"{crawl_opts['rounds']} round max · "
-            f"stealth: {'on' if crawl_opts['stealth'] else 'off'}[/bold cyan]"
-        )
+        console.print(f"\n[bold cyan][Crawl] Starting recursive crawl — {crawl_opts['rounds']} round max[/bold cyan]")
         try:
-            crawl_out = run_crawl(
-                seed_dorks = seed_dorks,
-                args       = _crawl_args,
-                target     = "",
-            )
-            n_new = len(crawl_out.get("results", []))
+            crawl_out = run_crawl(seed_dorks=seed_dorks, args=_crawl_args, target="")
             console.print(
                 f"[bold green][Crawl] Completed — "
                 f"{crawl_out.get('rounds', 0)} round(s) · "
-                f"{n_new} result(s) · "
-                f"stop: {crawl_out.get('stop_reason', '?')}[/bold green]"
+                f"{len(crawl_out.get('results', []))} result(s)[/bold green]"
             )
             if crawl_out.get("report_path"):
-                console.print(
-                    f"[bold green][✓] Report crawl → {crawl_out['report_path']}[/bold green]"
-                )
+                console.print(f"[bold green][✓] Report crawl → {crawl_out['report_path']}[/bold green]")
         except Exception as _ce:
             console.print(f"[yellow][Crawl] Error: {_ce}[/yellow]")
-
-    # ── Main menu ────────────────────────────────────────────────────────────
 
     MAIN_MENU = [
         ("Google Dork Search",   "Search DuckDuckGo with dork(s)"),
@@ -2463,20 +2359,9 @@ def run_wizard():
         if choice == "4":
             EXIT_MESSAGES = [
                 ("Logs don't lie. Neither do we.", "dim"),
-                ("Close the terminal. Not the curiosity.", "bold green"),
                 ("Stay ghost.", "bold cyan"),
-                ("What you found stays between you and the data.", "dim"),
-                ("The internet remembers. Do you?", "bold yellow"),
-                ("Session closed. Footprints: yours to manage.", "dim"),
-                ("Offline is the new safe.", "bold magenta"),
-                ("Until next time. Watch your back.", "bold red"),
-                ("The dork never sleeps. You can.", "dim"),
                 ("Cover your tracks.", "bold cyan"),
                 ("Good hunt.", "bold green"),
-                ("VPN off? Bad idea.", "bold red"),
-                ("They're still out there. So are the vulnerabilities.", "dim"),
-                ("Knowledge is the only payload that matters.", "bold yellow"),
-                ("Exit clean.", "bold cyan"),
             ]
             msg, color = random.choice(EXIT_MESSAGES)
             console.print(f"[{color}]{msg}[/{color}]")
@@ -2484,26 +2369,23 @@ def run_wizard():
 
         config = load_config(None)
 
-        # ── Choice 1: Google Dork Search ─────────────────────────────────────
         if choice == "1":
             console.print("\n[bold cyan]┌─[ GOOGLE DORK SEARCH ][/bold cyan]")
-            console.print("[bold cyan]│[/bold cyan]  [yellow]0)[/yellow] [dim]← Back to main menu[/dim]")
-            console.print("[bold cyan]│[/bold cyan]  [yellow]1)[/yellow] Single dork  [dim](type a dork string)[/dim]")
-            console.print("[bold cyan]│[/bold cyan]  [yellow]2)[/yellow] Load from file  [dim](.txt, one dork per line)[/dim]")
+            console.print("[bold cyan]│[/bold cyan]  [yellow]0)[/yellow] [dim]← Back[/dim]")
+            console.print("[bold cyan]│[/bold cyan]  [yellow]1)[/yellow] Single dork")
+            console.print("[bold cyan]│[/bold cyan]  [yellow]2)[/yellow] Load from file")
             console.print("[bold cyan]└─>[/bold cyan] ", end="")
-
             try:
                 sub = input("").strip()
             except KeyboardInterrupt:
                 console.print("\n[red]Aborted.[/red]")
                 return
-
             if sub == "0":
                 continue
             if sub == "1":
                 dork_input = ask_string("Enter dork string")
                 if not dork_input:
-                    console.print("[red][!] Empty dork. Aborting.[/red]")
+                    console.print("[red][!] Empty dork.[/red]")
                     continue
             elif sub == "2":
                 dork_input = ask_string("ex: dorks.txt")
@@ -2514,18 +2396,15 @@ def run_wizard():
                 console.print("[red][!] Invalid choice.[/red]")
                 continue
 
-            count  = collect_run_options(config, ask_count=True)
-            output = pick_output()
-
-            # ── Ask for analysis before starting (only if .json output) ────────
+            count       = collect_run_options(config, ask_count=True)
+            output      = pick_output()
             do_analyze  = _ask_analyze(output)
-            # ── Ask for recursive crawl ──────────────────────────────────────
             crawl_opts  = _ask_crawl()
 
             dorkeye = DorkEyeEnhanced(config, output)
             dorks   = dorkeye.process_dorks(dork_input)
             console.print(f"\n[bold cyan]┌─[ LOADED {len(dorks)} DORK(s) ][/bold cyan]")
-            console.print("[bold cyan]└─>[/bold cyan] Starting ...\n")
+            console.print("[bold cyan]└─>[/bold cyan] Starting...\n")
             try:
                 dorkeye.run_search(dorks, count)
             except KeyboardInterrupt:
@@ -2533,31 +2412,24 @@ def run_wizard():
             dorkeye.print_statistics()
             if output:
                 console.print(f"\n[bold green][✓] Results saved: {output}[/bold green]")
-
-            # ── Post-search analysis ─────────────────────────────────────────────
             if do_analyze and dorkeye.results:
                 _run_analyze(dorkeye.results, output)
-
-            # ── Adaptive recursive crawl ─────────────────────────────────────
             if crawl_opts and dorks:
                 _run_crawl_wizard(dorks, crawl_opts, output or "")
             continue
 
-        # ── Choice 2: Dork Generator ─────────────────────────────────────────
         if choice == "2":
-            console.print("\n[bold cyan]┌─[ DORK GENERATOR — TEMPLATE ][/bold cyan]")
-            console.print("[bold cyan]│[/bold cyan]  [yellow]0)[/yellow] [dim]← Back to main menu[/dim]")
+            console.print("\n[bold cyan]┌─[ DORK GENERATOR ][/bold cyan]")
+            console.print("[bold cyan]│[/bold cyan]  [yellow]0)[/yellow] [dim]← Back[/dim]")
             console.print("[bold cyan]│[/bold cyan]  [yellow]1)[/yellow] Default template")
             console.print("[bold cyan]│[/bold cyan]  [yellow]2)[/yellow] All templates")
             console.print("[bold cyan]│[/bold cyan]  [yellow]3)[/yellow] Specific template file")
             console.print("[bold cyan]└─>[/bold cyan] ", end="")
-
             try:
                 tmpl_choice = input("").strip()
             except KeyboardInterrupt:
                 console.print("\n[red]Aborted.[/red]")
                 return
-
             if tmpl_choice == "0":
                 continue
             if tmpl_choice == "1":
@@ -2576,21 +2448,19 @@ def run_wizard():
 
             VALID_CATEGORIES = get_categories_from_templates(template_files)
             if not VALID_CATEGORIES:
-                console.print("[red][!] No categories found in templates.[/red]")
+                console.print("[red][!] No categories found.[/red]")
                 continue
 
-            console.print("\n[bold cyan]┌─[ DORK GENERATOR — CATEGORY ][/bold cyan]")
+            console.print("\n[bold cyan]┌─[ CATEGORY ][/bold cyan]")
             console.print("[bold cyan]│[/bold cyan]  [yellow]0)[/yellow] ALL categories")
             for i, cat in enumerate(VALID_CATEGORIES, 1):
                 console.print(f"[bold cyan]│[/bold cyan]  [yellow]{i})[/yellow] {cat}")
             console.print("[bold cyan]└─>[/bold cyan] ", end="")
-
             try:
                 cat_choice = input("").strip()
             except KeyboardInterrupt:
                 console.print("\n[red]Aborted.[/red]")
                 return
-
             if cat_choice == "0":
                 selected_categories = VALID_CATEGORIES
             else:
@@ -2601,19 +2471,11 @@ def run_wizard():
                     console.print("[red][!] Invalid selection.[/red]")
                     continue
 
-            console.print("\n[bold cyan]┌─[ DORK GENERATOR — MODE ][/bold cyan]")
-            mode_idx = ask_choice(
-                "Choose mode",
-                ["soft  (safe, minimal footprint)", "medium  (balanced coverage)", "aggressive  (maximum coverage)"]
-            )
-            mode = VALID_MODES[mode_idx]
-
+            mode_idx = ask_choice("Mode", ["soft", "medium", "aggressive"])
+            mode     = VALID_MODES[mode_idx]
             collect_run_options(config, ask_count=False)
-            output = pick_output()
-
-            # ── Ask for analysis before starting (only if .json output) ────────
+            output      = pick_output()
             do_analyze  = _ask_analyze(output)
-            # ── Ask for recursive crawl ──────────────────────────────────────
             crawl_opts  = _ask_crawl()
 
             all_dorks = []
@@ -2622,10 +2484,6 @@ def run_wizard():
                 all_dorks.extend(generator.generate(categories=selected_categories, mode=mode))
 
             console.print(f"\n[cyan][*] Generated {len(all_dorks)} dorks (mode: {mode})[/cyan]")
-            console.print(f"[cyan][*] Categories: {', '.join(selected_categories)}[/cyan]")
-            console.print(f"\n[bold cyan]┌─[ LOADED {len(all_dorks)} DORK(s) ][/bold cyan]")
-            console.print("[bold cyan]└─>[/bold cyan] Starting ...\n")
-
             dorkeye = DorkEyeEnhanced(config, output)
             try:
                 dorkeye.run_search(all_dorks, 50)
@@ -2634,12 +2492,8 @@ def run_wizard():
             dorkeye.print_statistics()
             if output:
                 console.print(f"\n[bold green][✓] Results saved: {output}[/bold green]")
-
-            # ── Post-search analysis ─────────────────────────────────────────────
             if do_analyze and dorkeye.results:
                 _run_analyze(dorkeye.results, output)
-
-            # ── Adaptive recursive crawl ─────────────────────────────────────
             if crawl_opts and all_dorks:
                 _run_crawl_wizard(all_dorks, crawl_opts, output or "")
             continue
@@ -2652,7 +2506,7 @@ def run_wizard():
 # ══════════════════════════════════════════════════════════════
 
 def main():
-    """Entry point: dispatch to --wizard mode or parse CLI flags and run the appropriate pipeline."""
+    """Entry point."""
     if "--wizard" in sys.argv:
         greet_user()
         run_wizard()
@@ -2664,107 +2518,47 @@ def main():
         description="DorkEye v4.9 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-
-  # Interactive wizard
-    %(prog)s --wizard
-
-  # Dork Search  (-o .json enables automatic analysis)
-    %(prog)s -d "site:example.com filetype:pdf" -o results.json
-    %(prog)s -d dorks.txt -c 100 -o output.html
-
-  # Direct SQLi test on a URL
-    %(prog)s -u "https://example.com/page.php?id=1" --sqli -o sqli_result.json
-    %(prog)s -u "https://example.com/page.php?id=1" --sqli --stealth
-
-  # Load saved results file for SQLi / analysis / crawl
-    %(prog)s -f Dump/results.json --sqli -o retest.json
-    %(prog)s -f Dump/results.json --analyze --analyze-fetch-max=5000 -o reanalyzed.json
-    %(prog)s -f Dump/results.json --sqli --crawl -o full_retest.json
-
-  # XSS detection
-    %(prog)s -d "inurl:search?q=" --xss -o results.json
-    %(prog)s -d dorks.txt --xss --xss-type=reflected --stealth -o results.json
-    %(prog)s -u "https://target.com/search?q=test" --xss
-    %(prog)s -f Dump/results.json --xss --xss-type=dom -o xss_retest.json
-    %(prog)s --dg=all --sqli --xss -o full_scan.json
-
-  # Dork Generator
-    %(prog)s --dg=all
-    %(prog)s --dg=sqli --mode=medium --sqli --stealth -o results.json
-    %(prog)s --dg=backups --templates=dorks_templates_research.yaml -o output.json
-    %(prog)s --dg=all --mode=aggressive -o results.json
-    %(prog)s --dg=all --dg-max=10000 -o big.json
-
-  # Search + integrated automatic analysis (output .json)
-    %(prog)s -d dorks.txt -o results.json --analyze
-    %(prog)s --dg=sqli --mode=medium -o results.json --analyze --analyze-fetch
-
-  # Adaptive recursive crawl (automatic multi-round refinement, no AI)
-    %(prog)s -d "site:example.com inurl:admin" --crawl -o crawl.json
-    %(prog)s --dg=sqli --crawl --crawl-rounds=5 --crawl-report -o crawl.json
-    %(prog)s -d dorks.txt --crawl --crawl-stealth --crawl-max=200 --crawl-out=report.html
-
-  # Standalone analysis on a saved results file
-    python dorkeye_analyze.py Dump/results.json --fetch --fmt=html
-
+  %(prog)s --wizard
+  %(prog)s -d "site:example.com filetype:pdf" -o results.json
+  %(prog)s -d dorks.txt -c 100 -o output.html
+  %(prog)s -u "https://example.com/page.php?id=1" --sqli
+  %(prog)s -f Dump/results.json --sqli -o retest.json
+  %(prog)s --dg=all --sqli --xss -o full_scan.json
 """
     )
 
-    parser.add_argument("--wizard",          action="store_true", help="Launch interactive wizard")
+    parser.add_argument("--wizard",          action="store_true")
     parser.add_argument("-d", "--dork",      help="Single dork or file containing dorks")
-    parser.add_argument("-u", "--url",       help="Direct URL to test for SQLi/XSS (use with --sqli / --xss)")
-    parser.add_argument("-f", "--file",      help="Load results from a DorkEye .json or .txt file (combine with --sqli, --analyze, --crawl)")
-    parser.add_argument("-o", "--output",    help="Output filename (.json enables automatic analysis prompt)")
-    parser.add_argument("-c", "--count",     type=int, default=50, help="Results per dork (default: 50)")
-    parser.add_argument("--config",          help="Configuration file (YAML or JSON)")
-    parser.add_argument("--no-analyze",      action="store_true", help="Disable file analysis")
-    parser.add_argument("--sqli",            action="store_true", help="Enable SQL injection detection")
-    parser.add_argument("--xss",             action="store_true", help="Enable XSS detection (reflected, stored, DOM)")
-    parser.add_argument("--xss-type",        choices=["reflected","stored","dom","all"], default="all",
-                        help="XSS detection type (default: all)")
-    parser.add_argument("--stealth",         action="store_true", help="Enable stealth mode (slower, safer)")
-    parser.add_argument("--no-fingerprint",  action="store_true", help="Disable HTTP fingerprinting")
-    parser.add_argument("--templates",       type=str, help="Template file in Templates/")
-    parser.add_argument("--dg",              action="append", nargs="?", const="all", help="Activate Dork Generator")
-    parser.add_argument("--dg-max",          type=int, default=800, help="Max dork combinations per template (default: 800)")
-    parser.add_argument("--mode",            nargs="?", const="soft", default="soft", help="Generation mode: soft | medium | aggressive")
-    parser.add_argument("--blacklist",       nargs="+", help="Extensions to blacklist")
-    parser.add_argument("--whitelist",       nargs="+", help="Extensions to whitelist")
-    parser.add_argument("--create-config",   action="store_true", help="Create sample configuration file")
-    # ── Integrated analysis ───────────────────────────────────────────────────────
-    parser.add_argument(
-        "--analyze",
-        action="store_true",
-        help="Run post-search analysis pipeline (triage + secrets). Forced when -o is .json"
-    )
-    parser.add_argument(
-        "--analyze-fetch",
-        action="store_true",
-        help="Download page content for HIGH/CRITICAL results for deeper analysis"
-    )
-    parser.add_argument(
-        "--analyze-fetch-max",
-        type=int, default=20,
-        help="Maximum pages to download (default: 20)"
-    )
-    parser.add_argument(
-        "--analyze-fmt",
-        choices=["html", "md", "json", "txt"],
-        default="html",
-        help="Analysis report format (default: html)"
-    )
-    parser.add_argument(
-        "--analyze-out",
-        type=str, default=None,
-        help="Analysis report path (default: auto-generated next to the -o file)"
-    )
+    parser.add_argument("-u", "--url",       help="Direct URL to test")
+    parser.add_argument("-f", "--file",      help="Load results from .json or .txt file")
+    parser.add_argument("-o", "--output",    help="Output filename")
+    parser.add_argument("-c", "--count",     type=int, default=50)
+    parser.add_argument("--config",          help="Configuration file")
+    parser.add_argument("--no-analyze",      action="store_true")
+    parser.add_argument("--sqli",            action="store_true")
+    parser.add_argument("--xss",             action="store_true")
+    parser.add_argument("--xss-type",        choices=["reflected","stored","dom","all"], default="all")
+    parser.add_argument("--stealth",         action="store_true")
+    parser.add_argument("--no-fingerprint",  action="store_true")
+    parser.add_argument("--templates",       type=str)
+    parser.add_argument("--dg",              action="append", nargs="?", const="all")
+    parser.add_argument("--dg-max",          type=int, default=800)
+    parser.add_argument("--mode",            nargs="?", const="soft", default="soft")
+    parser.add_argument("--blacklist",       nargs="+")
+    parser.add_argument("--whitelist",       nargs="+")
+    parser.add_argument("--create-config",   action="store_true")
+    parser.add_argument("--analyze",         action="store_true")
+    parser.add_argument("--analyze-fetch",   action="store_true")
+    parser.add_argument("--analyze-fetch-max", type=int, default=20)
+    parser.add_argument("--analyze-fmt",     choices=["html","md","json","txt"], default="html")
+    parser.add_argument("--analyze-out",     type=str, default=None)
     add_crawler_args(parser)
 
     args = parser.parse_args()
 
     for arg in sys.argv:
         if arg.startswith("--templates") and not arg.startswith("--templates="):
-            console.print("[red][!] Use --templates=filename.yaml format (no spaces)[/red]")
+            console.print("[red][!] Use --templates=filename.yaml format[/red]")
             sys.exit(1)
 
     VALID_CATEGORIES: List[str] = []
@@ -2813,27 +2607,15 @@ def main():
     output_file = args.output
     if not output_file:
         output_file = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-        console.print(
-            f"[dim][~] No -o specified — saving to [bold]{output_file}[/bold][/dim]"
-        )
+        console.print(f"[dim][~] No -o specified — saving to [bold]{output_file}[/bold][/dim]")
 
-    # ── Auto-detect .json output: ask for analysis BEFORE the search ─────────────
     _is_json_output = str(output_file).lower().endswith(".json")
     _do_analyze     = args.analyze or _is_json_output
 
     if _is_json_output and not args.analyze and _ANALYZE_AVAILABLE:
-        console.print(
-            "\n[bold cyan]┌─[ RESULTS ANALYSIS ][/bold cyan]"
-        )
-        console.print(
-            "[bold cyan]│[/bold cyan]  .json output detected — analysis available after the search:"
-        )
-        console.print(
-            "[bold cyan]│[/bold cyan]  triage priority · secrets · credentials · HTML report"
-        )
-        console.print(
-            "[bold cyan]│  Run analysis on results? [y/N]:[/bold cyan] ", end=""
-        )
+        console.print("\n[bold cyan]┌─[ RESULTS ANALYSIS ][/bold cyan]")
+        console.print("[bold cyan]│[/bold cyan]  .json output detected — analysis available after search.")
+        console.print("[bold cyan]│  Run analysis on results? [y/N]:[/bold cyan] ", end="")
         try:
             _do_analyze = input("").strip().lower() in ("y", "yes")
         except KeyboardInterrupt:
@@ -2848,18 +2630,17 @@ def main():
 
     dorkeye = DorkEyeEnhanced(config, output_file)
 
-    # ── -u / --url: direct SQLi + XSS test on a single URL ───────────────────
+    # ── -u / --url: direct test ───────────────────────────────────────────────
     if getattr(args, "url", None):
-        target_url = args.url
+        target_url   = args.url
         _do_url_sqli = config.get("sqli_detection", False)
         _do_url_xss  = config.get("xss_detection",  False)
 
         console.print(f"\n[bold cyan]┌─[ DIRECT URL TEST ][/bold cyan]")
         console.print(f"[bold cyan]│[/bold cyan]  Target → [cyan]{_rich_escape(target_url)}[/cyan]")
 
-        # Auto-enable SQLi when neither flag given (legacy behaviour)
         if not _do_url_sqli and not _do_url_xss:
-            console.print("[bold cyan]│[/bold cyan]  [yellow][!] No test flag — enabling SQLi detection automatically[/yellow]")
+            console.print("[bold cyan]│[/bold cyan]  [yellow][!] No test flag — enabling SQLi automatically[/yellow]")
             config["sqli_detection"] = True
             dorkeye.config["sqli_detection"] = True
             dorkeye.analyzer.config["sqli_detection"] = True
@@ -2878,7 +2659,6 @@ def main():
             "category":  dorkeye.analyzer.categorize_url(target_url),
         }
 
-        # ── SQLi ──────────────────────────────────────────────────────────────
         if _do_url_sqli:
             _detector    = SQLiDetector(
                 stealth=config.get("stealth_mode", False),
@@ -2886,7 +2666,6 @@ def main():
             )
             _sqli_result = _detector.test_sqli(target_url)
             _entry["sqli_test"] = _sqli_result
-
             console.print("\n[bold yellow]┌─[ SQLi Test Result ][/bold yellow]")
             _tested = _sqli_result.get("tested", False)
             _vuln   = _sqli_result.get("vulnerable", False)
@@ -2913,35 +2692,26 @@ def main():
                 dorkeye.stats["waf_detected"] += 1
             console.print(f"[bold yellow]└─>[/bold yellow]  {_msg}")
 
-        # ── XSS ───────────────────────────────────────────────────────────────
         if _do_url_xss:
             try:
                 from xss import XSSDetector
-                _xss_det = XSSDetector(
+                _xss_det    = XSSDetector(
                     stealth  = config.get("stealth_mode", False),
                     timeout  = config.get("request_timeout", 10),
                     xss_type = config.get("xss_type", "all"),
                 )
                 _xss_result = _xss_det.test_xss(target_url)
                 _entry["xss_test"] = _xss_result
-
                 console.print("\n[bold yellow]┌─[ XSS Test Result ][/bold yellow]")
-                _xvuln   = _xss_result.get("vulnerable", False)
-                _xconf   = _xss_result.get("overall_confidence", "none")
-                _xtypes  = ", ".join(_xss_result.get("xss_types_found", []))
-                _xwaf    = _xss_result.get("waf_detected")
-                _xmsg    = _xss_result.get("message", "")
+                _xvuln  = _xss_result.get("vulnerable", False)
+                _xconf  = _xss_result.get("overall_confidence", "none")
+                _xtypes = ", ".join(_xss_result.get("xss_types_found", []))
+                _xwaf   = _xss_result.get("waf_detected")
+                _xmsg   = _xss_result.get("message", "")
                 if not _xss_result.get("tested"):
                     console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] Not tested — {_xmsg}[/yellow]")
                 elif _xvuln:
                     console.print(f"[bold yellow]│[/bold yellow]  [bold yellow][!] VULNERABLE ({_xconf}) [{_xtypes}][/bold yellow]  {_rich_escape(target_url)}")
-                    for _xt in _xss_result.get("tests", []):
-                        if _xt.get("vulnerable"):
-                            _xtype   = _xt.get("type", "?")
-                            _xev     = " | ".join(_xt.get("evidence", [])[:2])
-                            _xpayld  = _xt.get("payload", "")
-                            _xp_str  = f" [payload: {_xpayld[:60]}]" if _xpayld else ""
-                            console.print(f"[bold yellow]│[/bold yellow]    [dim]↳ type: [yellow]{_xtype}[/yellow]{_xp_str}  evidence: [italic]{_rich_escape(_xev[:120])}[/italic][/dim]")
                     dorkeye.stats["xss_vulnerable"] += 1
                 else:
                     console.print(f"[bold yellow]│[/bold yellow]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
@@ -2949,41 +2719,32 @@ def main():
                     console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] WAF detected: {_xwaf}[/yellow]")
                 console.print(f"[bold yellow]└─>[/bold yellow]  {_xmsg}")
             except ImportError:
-                console.print("[yellow][!] xss.py not found in Tools/ — XSS test skipped.[/yellow]")
+                console.print("[yellow][!] xss.py not found — XSS test skipped.[/yellow]")
 
-        # ── Save ──────────────────────────────────────────────────────────────
         if output_file:
             dorkeye.results.append(_entry)
             dorkeye.save_results()
             console.print(f"\n[bold green][✓] Result saved → Dump/{output_file}[/bold green]")
         return
 
-    # ── -f / --file: load results from saved file + re-run analysis/sqli/crawl ─
+    # ── -f / --file ───────────────────────────────────────────────────────────
     if getattr(args, "file", None):
         _file_path = args.file
         console.print(f"\n[bold cyan]┌─[ FILE MODE ][/bold cyan]")
-        console.print(f"[bold cyan]│[/bold cyan]  Loading results from: [cyan]{_file_path}[/cyan]")
+        console.print(f"[bold cyan]│[/bold cyan]  Loading: [cyan]{_file_path}[/cyan]")
         _loaded = _load_results_from_file(_file_path)
         if not _loaded:
             console.print("[bold cyan]└─>[/bold cyan] [red]No results loaded — aborting.[/red]")
             return
         console.print(f"[bold cyan]│[/bold cyan]  Loaded [green]{len(_loaded)}[/green] result(s)")
 
-        # Determine what to do with the loaded URLs
         _do_sqli    = config.get("sqli_detection", False)
         _do_xss     = config.get("xss_detection", False)
         _do_analyze = args.analyze or str(output_file).lower().endswith(".json")
         _do_crawl   = getattr(args, "crawl", False)
 
-        console.print(
-            f"[bold cyan]│[/bold cyan]  SQLi: {'[bold red]ON[/bold red]' if _do_sqli else '[dim]off[/dim]'} │ "
-            f"XSS: {'[bold yellow]ON[/bold yellow]' if _do_xss else '[dim]off[/dim]'} │ "
-            f"Analyze: {'[bold green]ON[/bold green]' if _do_analyze and _ANALYZE_AVAILABLE else '[dim]off[/dim]'} │ "
-            f"Crawl: {'[bold green]ON[/bold green]' if _do_crawl and _ANALYZE_AVAILABLE else '[dim]off[/dim]'}"
-        )
         console.print("[bold cyan]└─>[/bold cyan] Processing...\n")
 
-        # Reconstruct url_hashes to avoid false duplicates in save
         for _r in _loaded:
             _h = dorkeye._hash_url(_r.get("url", ""))
             dorkeye.url_hashes.add(_h)
@@ -3000,11 +2761,7 @@ def main():
             dorkeye.save_results()
             console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
 
-        # ── Integrated analysis on loaded file ───────────────────────────────────
         if _do_analyze and dorkeye.results and _ANALYZE_AVAILABLE:
-            console.print(
-                f"\n[bold cyan][Agents] Starting analysis on {len(dorkeye.results)} result(s)...[/bold cyan]"
-            )
             ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
             fmt        = args.analyze_fmt
             report_out = args.analyze_out
@@ -3020,69 +2777,43 @@ def main():
                 "analyze_out":           report_out,
             })()
             try:
-                _result_f = _run_agents_pipeline(
-                    results    = dorkeye.results,
-                    llm_plugin = None,
-                    args       = _analyze_args_f,
-                )
+                _result_f = _run_agents_pipeline(results=dorkeye.results, llm_plugin=None, args=_analyze_args_f)
                 if _result_f.get("report_path"):
-                    console.print(
-                        f"[bold green][✓] Analysis report → {_result_f['report_path']}[/bold green]"
-                    )
-                _n_sec = _result_f.get("secrets_total", 0)
-                if _n_sec:
-                    console.print(
-                        f"[bold red][!] {_n_sec} secret(s) detected — see the report.[/bold red]"
-                    )
+                    console.print(f"[bold green][✓] Analysis report → {_result_f['report_path']}[/bold green]")
             except Exception as _fae:
                 console.print(f"[yellow][Analyzer] Error: {_fae}[/yellow]")
 
-        # ── Recursive crawl on loaded results ─────────────────────────────────
         if _do_crawl and _ANALYZE_AVAILABLE:
-            console.print("\n[bold cyan][Crawl] Starting crawl on loaded results...[/bold cyan]")
             _seed_dorks = list({r.get("dork", "") for r in dorkeye.results if r.get("dork")})
             if not _seed_dorks:
                 _seed_dorks = [r.get("url", "") for r in dorkeye.results[:10]]
             try:
-                _crawl_out_f = run_crawl(
-                    seed_dorks = _seed_dorks,
-                    args       = args,
-                    target     = "",
-                )
+                _crawl_out_f = run_crawl(seed_dorks=_seed_dorks, args=args, target="")
                 if _crawl_out_f.get("results"):
                     _existing_urls = {r.get("url") for r in dorkeye.results}
                     _new_crawl     = [r for r in _crawl_out_f["results"] if r.get("url") not in _existing_urls]
                     dorkeye.results.extend(_new_crawl)
                     if output_file:
                         dorkeye.save_results()
-                    console.print(
-                        f"\n[bold green][Crawl] Completed — "
-                        f"{_crawl_out_f['rounds']} round(s) | "
-                        f"+{len(_new_crawl)} new result(s) | "
-                        f"stop: {_crawl_out_f['stop_reason']}[/bold green]"
-                    )
+                    console.print(f"\n[bold green][Crawl] Completed — +{len(_new_crawl)} new result(s)[/bold green]")
             except Exception as _fce:
                 console.print(f"[yellow][Crawl] Error: {_fce}[/yellow]")
-
         return
 
     # ── Dork source ───────────────────────────────────────────────────────────
     if args.dg:
         template_files = resolve_templates_argument(args.templates)
-        console.print(f"[cyan][*] Loaded template(s): {', '.join([t.name for t in template_files])}[/cyan]")
         all_dorks = []
         for template_file in template_files:
             generator = DorkGenerator(str(template_file), max_combinations=args.dg_max)
             all_dorks.extend(generator.generate(categories=selected_categories, mode=args.mode))
         dorks = all_dorks
         console.print(f"[cyan][*] Generated {len(dorks)} dorks (mode: {args.mode})[/cyan]")
-        if selected_categories:
-            console.print(f"[cyan][*] Categories: {', '.join(selected_categories)}[/cyan]")
     else:
         dorks = dorkeye.process_dorks(args.dork)
 
     console.print(f"[bold cyan]┌─[ LOADED {len(dorks)} DORK(s) ][/bold cyan]")
-    console.print(f"[bold cyan]└─>[/bold cyan] Starting ... \n")
+    console.print(f"[bold cyan]└─>[/bold cyan] Starting...\n")
 
     try:
         dorkeye.run_search(dorks, args.count)
@@ -3091,18 +2822,13 @@ def main():
 
     dorkeye.print_statistics()
 
-    # ── Integrated post-search analysis ──────────────────────────────────────────
     if _do_analyze and dorkeye.results and _ANALYZE_AVAILABLE:
-        console.print(
-            f"\n[bold cyan][Agents] Starting analysis on {len(dorkeye.results)} result(s)...[/bold cyan]"
-        )
         ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
         fmt        = args.analyze_fmt
         report_out = args.analyze_out
         if not report_out:
             base       = str(output_file).replace(".json", "")
             report_out = f"{base}_analysis_{ts}.{fmt}"
-
         _analyze_args = type("A", (), {
             "analyze_fetch":         args.analyze_fetch,
             "analyze_fetch_max":     args.analyze_fetch_max,
@@ -3112,62 +2838,36 @@ def main():
             "analyze_out":           report_out,
         })()
         try:
-            result = _run_agents_pipeline(
-                results    = dorkeye.results,
-                llm_plugin = None,
-                args       = _analyze_args,
-            )
+            result = _run_agents_pipeline(results=dorkeye.results, llm_plugin=None, args=_analyze_args)
             if result.get("report_path"):
-                console.print(
-                    f"[bold green][✓] Analysis report → {result['report_path']}[/bold green]"
-                )
-            n_sec = result.get("secrets_total", 0)
-            if n_sec:
-                console.print(
-                    f"[bold red][!] {n_sec} secret(s) detected — see the report.[/bold red]"
-                )
+                console.print(f"[bold green][✓] Analysis report → {result['report_path']}[/bold green]")
         except Exception as _ae:
             console.print(f"[yellow][Agents] Error: {_ae}[/yellow]")
 
-    # ── Adaptive recursive crawl (--crawl) ───────────────────────────────────────
     if getattr(args, "crawl", False):
         if not _ANALYZE_AVAILABLE:
             console.print("[yellow][!] dorkeye_agents.py not found — crawl not available.[/yellow]")
         else:
-            console.print("\n[bold cyan][Crawl] Starting adaptive recursive crawl...[/bold cyan]")
             try:
-                crawl_out = run_crawl(
-                    seed_dorks = dorks,
-                    args       = args,
-                    target     = "",
-                )
+                crawl_out = run_crawl(seed_dorks=dorks, args=args, target="")
                 if crawl_out.get("results"):
-                    # Merge crawl results with the initial search results
-                    existing_urls = {r.get("url") for r in dorkeye.results}
-                    new_from_crawl = [
-                        r for r in crawl_out["results"]
-                        if r.get("url") not in existing_urls
-                    ]
+                    existing_urls  = {r.get("url") for r in dorkeye.results}
+                    new_from_crawl = [r for r in crawl_out["results"] if r.get("url") not in existing_urls]
                     dorkeye.results.extend(new_from_crawl)
                     if dorkeye.output_file:
                         dorkeye.save_results()
                     console.print(
                         f"\n[bold green][Crawl] Completed — "
                         f"{crawl_out['rounds']} round(s) | "
-                        f"+{len(new_from_crawl)} new result(s) | "
-                        f"stop: {crawl_out['stop_reason']}[/bold green]"
+                        f"+{len(new_from_crawl)} new result(s)[/bold green]"
                     )
-                    if crawl_out.get("report_path"):
-                        console.print(
-                            f"[bold green][✓] Crawl report → {crawl_out['report_path']}[/bold green]"
-                        )
             except Exception as _ce:
                 console.print(f"[yellow][Crawl] Error: {_ce}[/yellow]")
 
     if dorkeye.output_file:
         console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
     else:
-        console.print(f"\n[dim][~] No output file specified — results not saved to disk.[/dim]")
+        console.print(f"\n[dim][~] No output file specified.[/dim]")
 
 
 if __name__ == "__main__":
