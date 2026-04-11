@@ -3,10 +3,10 @@
 # Powered by Anthropic Claude Code Action v1 | DorkEye Project
 #
 # TRIGGERS:
-#   • Ogni PR aperta/aggiornata → review automatica con analisi bug + security
-#   • @claude nei commenti/issues → assistente interattivo
-#   • Ogni lunedì alle 09:00 UTC → audit settimanale completo del repo
-#   • workflow_dispatch → esecuzione manuale dell'audit
+#   • Every opened/updated PR is automatically reviewed with bug and security analysis.
+#   • @claude in comments/issues interactive assistant
+#   • Every Monday at 09:00 UTC full weekly repo audit
+#   • workflow_dispatch manual audit execution
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: 🦅 DorkEye AI Agent
@@ -25,17 +25,17 @@ on:
     types: [assigned]
 
   schedule:
-    - cron: "0 9 * * 1" # Ogni lunedì alle 09:00 UTC
+    - cron: "0 9 * * 1" # Every Monday at 09:00 UTC
 
-  workflow_dispatch: # Trigger manuale dall'interfaccia GitHub
+  workflow_dispatch: # Manual trigger from the GitHub interface
 
 concurrency:
   group: dorkeye-ai-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 # ─────────────────────────────────────────────────────────────────────────────
-# JOB 1 — PR Review automatica
-# Analisi completa di ogni PR: bug, vuln, sicurezza, qualità del codice
+# JOB 1 — PR Review
+# Complete analysis of each PR: bugs, vulnerabilities, security, code quality
 # ─────────────────────────────────────────────────────────────────────────────
 jobs:
   pr-review:
