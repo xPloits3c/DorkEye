@@ -1,7 +1,7 @@
 """
-DorkEye Agents v3.1
+DorkEye Agents
 
-Post-search analysis pipeline for DorkEye v4.8+
+Post-search analysis pipeline for DorkEye Project
 
 Agents are invoked AFTER DorkEye has completed the search.
 They do not interfere with the search flow — they work on already collected results.
