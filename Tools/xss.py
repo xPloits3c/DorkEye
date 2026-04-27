@@ -1,5 +1,5 @@
 """
-DorkEye XSS  v5.3
+DorkEye XSS v5.3
 ═══════════════════════════════════════════════════════════════
 Multi-method XSS testing engine for DorkEye Project
 
@@ -8,30 +8,6 @@ Detection methods:
   2. stored     — POST payload per individual param, then refetch and check for marker
   3. dom        — static analysis of JS source-to-sink patterns (inline + external scripts)
   4. header     — inject marker into X-Forwarded-For / Referer / User-Agent / etc.
-
-Changes vs v5.2:
-  [NEW-A]  _FallbackFingerprintRotator: User-Agent pool now loaded from
-           http_fingerprints.json via sqli.load_http_fingerprints() (22 real-browser
-           UAs covering Chrome/Firefox/Safari/Edge/Opera/Brave on all platforms).
-           Hardcoded 3-entry list is now the emergency fallback only.
-  [NEW-B]  XSSDetector.__init__: new optional parameter waf_detected (str|None).
-           When DorkEye pipeline pre-probes WAF with probe_waf() and passes the
-           result here, every _test_* method skips immediately instead of running
-           a redundant per-method WAF detection request. Internal _detect_waf()
-           is kept as a fallback for standalone/CLI use only.
-  [NEW-C]  WAF early-return added to _test_reflected, _test_stored, _test_dom,
-           _test_header_xss — avoids wasted HTTP requests against blocked targets.
-
-Changes vs v5.1 (carried from v5.2):
-  [FIX-1..8]  False-positive fixes (see v5.2 changelog for details).
-
-  [FIX-9]  _test_dom: inline_scripts regex updated from
-           r"<script[^>]*>([\s\S]*?)</script>" to
-           r"<script[^>]*>([\s\S]*?)</script\s*>"
-           Fixes CodeQL alert #27 (py/bad-tag-filter, CWE-20/116/185/186):
-           the original pattern did not match closing tags with whitespace
-           before '>' (e.g. </script >), allowing potential bypass in
-           filtering/extraction contexts. Severity: High.
 
   Author: xPloits3c I.C.W.T | https://github.com/xPloits3c/DorkEye
 """
