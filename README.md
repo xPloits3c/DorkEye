@@ -151,14 +151,16 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
   python dorkeye.py -f Dump/results.json --sqli --analyze -o retest.html
 ```
 
-<img width="938" height="832" alt="de-hex" src="https://github.com/user-attachments/assets/da253967-45a7-4249-aed2-9726eaa37b79" />
-
 🔹 # Web UI
 ```json
   python dorkeye.py --ui
 ```
 
 <img width="1549" height="609" alt="image" src="https://github.com/user-attachments/assets/aae464c0-3320-4050-b11b-d83c4e3f9c54" />
+
+
+## Examples:
+<img width="938" height="832" alt="de-hex" src="https://github.com/user-attachments/assets/da253967-45a7-4249-aed2-9726eaa37b79" />
 
 ---
 
@@ -174,8 +176,10 @@ DorkEye/
 │    ├── dorkeye_agents.py     ← Agents v3.1 pipeline
 │    ├── dorkeye_patterns.py   ← Shared pattern library
 │    ├── dorkeye_analyze.py    ← Standalone analysis CLI
-│    ├── sqli.py     ← 5 method sqli injection(105 payloads)
-│    └── xss.py     ← 4 method xss injection (111 payloads)
+│    ├── db_portscan.py   ← Scans exposed database ports
+│    ├── dorkeye_web.py   ← Local web interface
+│    ├── sqli.py     ← 5 Method sqli injection(105 payloads)
+│    └── xss.py     ← 4 Method xss injection (111 payloads)
 │ /Templates/
 │    ├── dorks_templates.yaml
 │    ├── sqli.yaml
@@ -212,13 +216,16 @@ DorkEye/
 │    ├── REPORT_HTML.md
 │    ├── USAGE.md
 │    └── DDGSEE.md
+│ /Screeshots
+│    ├── img0
+│    └── img1
 ```
 ---
 
 ## Example HTML Report
 ![image](https://github.com/user-attachments/assets/28b71d4e-0cb2-478d-a1f2-f49c98f9f8aa)
 
-## Example final Report
+## DorkEye Report
 ![image](https://github.com/user-attachments/assets/20055807-2f9d-4979-b221-e0cfad32828a)
 
 ---
