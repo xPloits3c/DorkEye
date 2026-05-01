@@ -153,6 +153,13 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
 
 <img width="938" height="832" alt="de-hex" src="https://github.com/user-attachments/assets/da253967-45a7-4249-aed2-9726eaa37b79" />
 
+🔹 # Web UI
+```json
+  python dorkeye.py --ui
+```
+
+
+
 ---
 
 ## 📁 Project Structure
