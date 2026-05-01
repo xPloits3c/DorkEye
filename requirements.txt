@@ -25,5 +25,5 @@ rich>=13.7.0,<14.0.0
 ddgs>=6.0.0
 
 # Local web dashboard (--ui)
-# Required only if you use: python dorkeye.py --local
+# Required only if you use: python dorkeye.py --ui
 flask>=3.0.0,<4.0.0
