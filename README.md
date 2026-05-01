@@ -65,7 +65,7 @@
 | 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
 | 💉 SQL Injection | [5 methods: 105 payloads](Docs/sqli.md) |
 | 💉 XSS Injection | [4 methods: 111 payloads](Docs/xss.md) |
-| 🤖 Agents v3.1 Pipeline | [11-step autonomous analysis](Docs/agents.md) |
+| 🤖 Agents Pipeline | [13-step autonomous analysis](Docs/agents.md) |
 | 🛡️ HeaderIntelAgent | [Info leaks, missing security headers, outdated server](Docs/agents.md#headerintelagent) |
 | 🧬 TechFingerprintAgent | [35 technologies detected, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
 | 📧 EmailHarvesterAgent | [Collects and categorizes emails: admin / security / info..](Docs/agents.md#emailharvesteragent) |
