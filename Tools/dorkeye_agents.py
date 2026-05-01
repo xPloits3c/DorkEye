@@ -19,6 +19,7 @@ Pipeline (activated with --analyze):
 10. ReportAgent            — report HTML/MD/JSON with all new sections (incl. security)
 11. DorkCrawlerAgent       — adaptive recursive crawl (fed by TechFP + SubHarvest)
 12. DBScan                 — Agent database port scan (open ports)
+13. LLM Analysis           — All triaged results | `analysis` dict optional — requires dorkeye_llm_plugin.py
 
 SecurityAgent operates as a middleware — it hooks into BOTH:
 
