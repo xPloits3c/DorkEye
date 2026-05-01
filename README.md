@@ -82,8 +82,11 @@
 ## Quick Install
 ```json
 "Update:"
+
+```
   sudo apt update
   sudo apt install -y python3 python3-pip python3-venv git
+```json
 
 "Git Clone:"
   git clone https://github.com/xPloits3c/DorkEye.git
