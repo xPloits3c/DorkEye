@@ -158,7 +158,7 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
   python dorkeye.py --ui
 ```
 
-
+<img width="1549" height="609" alt="image" src="https://github.com/user-attachments/assets/aae464c0-3320-4050-b11b-d83c4e3f9c54" />
 
 ---
 
