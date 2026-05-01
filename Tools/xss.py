@@ -1,5 +1,5 @@
 """
-DorkEye XSS v5.3
+DorkEye XSS
 ═══════════════════════════════════════════════════════════════
 Multi-method XSS testing engine for DorkEye Project
 
