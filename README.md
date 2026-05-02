@@ -61,10 +61,12 @@
 |---------|---------|
 | 🧙 Wizard | [Interactive guided session — all options](Docs/wizard.md) |
 | ⚙️ Dork Generator | [YAML template modes: `soft` / `medium` / `aggressive`](Docs/dork_generator.md) |
-| 🎯 Direct SQLi Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
-| 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
+| 🎯 Direct SQLi-XSS Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
+| 📂 File Re-Processing | [Re-run SQLi/XSS/analysis/crawl on saved result files with `-f`](Docs/cli.md) |
 | 💉 SQL Injection | [5 methods: 105 payloads](Docs/sqli.md) |
 | 💉 XSS Injection | [4 methods: 111 payloads](Docs/xss.md) |
+| ➜] Web Console | [Matrix-Style local dashboard via browser `--ui`](Docs/webconsole.md) |
+| 🚪 DB Port Scan | [15 services,no-auth probes. 3 levels severity `--dbscan`](Docs/dbscan.md) |
 | 🤖 Agents Pipeline | [13-step autonomous analysis](Docs/agents.md) |
 | 🛡️ HeaderIntelAgent | [Info leaks, missing security headers, outdated server](Docs/agents.md#headerintelagent) |
 | 🧬 TechFingerprintAgent | [35 technologies detected, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
@@ -75,7 +77,7 @@
 | 🔑 HTTP Fingerprinting | [22 browser/OS profiles — Chrome,Firefox,Safari,mobile..](Docs/fingerprinting.md) |
 | 📊 Output Formats | [HTML interactive report — all saved to `Dump/`](Docs/output_formats.md) |
 | 🗂️ File Categories | [7 auto-detected categories - whitelist / blacklist filtering](Docs/file_categories.md) |
-| 🖥️ Full CLI Reference | [All 31 flags and every possible combination](Docs/cli.md) |
+| 🖥️ Full CLI Reference | [All 38 flags and every possible combination](Docs/cli.md) |
 
 ---
 
@@ -148,7 +150,7 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
 ```
 🔹 # Re-process a saved result file
 ```json
-  python dorkeye.py -f Dump/results.json --sqli --analyze -o retest.html
+  python dorkeye.py -f Dump/results.json --sqli --xss --dbscan --analyze -o retest.html
 ```
 
 🔹 # Web UI
