@@ -488,7 +488,7 @@ class PageFetchAgent(BaseAgent):
 
             content = self._fetch(url)
             r["page_content"] = content
-            # v4.8 — save raw headers for HeaderIntelAgent
+            # Save raw headers for HeaderIntelAgent
             if self._last_headers:
                 r["response_headers"] = self._last_headers
                 r["fetch_status"]     = self._last_status
@@ -563,7 +563,7 @@ class PageFetchAgent(BaseAgent):
         return ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECURITY AGENT — Threat detection middleware (v3.1)
+# SECURITY AGENT — Threat detection middleware
 # ══════════════════════════════════════════════════════════════════════════════
 #
 # Operates as a pipeline middleware that hooks into BOTH flows:
@@ -2527,7 +2527,7 @@ _EXT_DORK_TEMPLATES: Dict[str, List[str]] = {
     ".git":    ['site:{domain} inurl:.git/config', 'site:{domain} inurl:.git/HEAD', 'site:{domain} inurl:.git/COMMIT_EDITMSG'],
 }
 
-# FIX #12: *TECH_DETECTION → _TECH_DETECTION + regex logici
+# TECH_DETECTION → _TECH_DETECTION + regex logic
 _TECH_DETECTION: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"wp-content|wp-admin|wordpress",                re.I), "wordpress"),
     # FIX: "option=com*" → "option=com_\w*"
@@ -2577,8 +2577,8 @@ class DorkCrawlerAgent(BaseAgent):
       6. Restart from step 1 with the new dorks
 
     Stop conditions (all evaluated before triggering):
-      - Raggiunto max_rounds
-      - Raggiunto max_results totali
+      - Max rounds reached
+      - Max total results reached
       - No new HIGH/CRITICAL results in the last round
       - No new dorks can be generated (all already used)
     """
@@ -3160,7 +3160,7 @@ def run_analysis_pipeline(
         total_subs = sum(len(v) for v in all_subdomains.values())
         _log(f"[Agents] Subdomain: {total_subs} subdomains found.", style="cyan")
 
-    # ── 11. DB Port Scanner (optional — attivato con --dbscan) ────────────────
+    # ── 11. DB Port Scanner (optional — activate with --dbscan) ────────────────
     if getattr(args, "dbscan", False):
         if not _DBSCAN_OK:
             _log("[Agents] db_portscan.py non trovato in Tools/ — DBScan saltato.", style="yellow")
