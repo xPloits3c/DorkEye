@@ -48,10 +48,10 @@ except ImportError:
 # Risaliamo cercando dorkeye.py per trovare la root corretta.
 def _find_project_root() -> Path:
     """
-    Risale l'albero partendo da __file__ cercando dorkeye.py.
-    Funziona sia se dorkeye_web.py e' in Tools/ che nella root.
+    Go up the tree starting from __file__ looking for dorkeye.py.
+    This works whether dorkeye_web.py is in Tools/ or the root.
       DorkEye/
-          dorkeye.py          <- root cercata
+          dorkeye.py          <- root searched
           Tools/
               dorkeye_web.py  <- __file__
     """
@@ -59,7 +59,7 @@ def _find_project_root() -> Path:
     for candidate in [here, here.parent, here.parent.parent]:
         if (candidate / "dorkeye.py").exists():
             return candidate
-    return here  # fallback: stessa directory
+    return here  # fallback: same directory
 
 ROOT          = _find_project_root()
 DUMP_DIR      = ROOT / "Dump"
@@ -387,15 +387,15 @@ def _get_dork_generator():
 
 def _resolve_template(tpl_str: str):
     """
-    Risolve l'argomento --templates in una lista di Path.
+    Resolves the --templates argument to a Path list.
 
-    BUG FIX: il vecchio codice hardcodava 'dorks_templates.yaml' che
-    spesso non esiste. Ora:
-      - 'default' / ''  -> primo yaml disponibile in Templates/
-                           (dorks_templates.yaml se presente, altrimenti
-                            il primo in ordine alfabetico)
-      - 'all'           -> tutti i *.yaml in Templates/
-      - nome specifico  -> quel file; se non esiste, fallback a tutti
+    BUG FIX: Old code hardcoded 'dorks_templates.yaml' which
+    often it doesn't exist. Time:
+      - 'default' / ''  -> first yaml available in Templates/
+                           (dorks_templates.yaml if present, otherwise
+                            first in alphabetical order)
+      - 'all'           -> all *.yaml in Templates/
+      - specific name -> that file; if it doesn't exist, fallback to all
     """
     all_yaml = sorted(TEMPLATES_DIR.glob('*.yaml')) if TEMPLATES_DIR.exists() else []
     preferred = TEMPLATES_DIR / 'dorks_templates.yaml'
@@ -422,7 +422,7 @@ def _resolve_template(tpl_str: str):
         return [preferred] if preferred.exists() else all_yaml
     if p.exists():
         return [p]
-    # fallback se il nome specifico non esiste
+    # fallback if the specific name does not exist
     return [preferred] if preferred.exists() else all_yaml
 
 
