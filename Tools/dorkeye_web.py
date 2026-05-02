@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 DorkEye Web Dashboard
@@ -21,12 +22,15 @@ import json
 import time
 import uuid
 import socket
+import logging
 import threading
 import subprocess
 import webbrowser
 from pathlib import Path
 from datetime import datetime
 from collections import deque
+
+_log = logging.getLogger(__name__)
 
 # ── Flask check ───────────────────────────────────────────────────────────────
 try:
@@ -404,7 +408,18 @@ def _resolve_template(tpl_str: str):
     if tpl_str == 'all':
         return all_yaml
 
-    p = TEMPLATES_DIR / tpl_str
+    # Security: reject absolute paths and ensure the resolved path stays
+    # inside TEMPLATES_DIR (prevents directory traversal via tpl_str).
+    candidate = Path(tpl_str)
+    if candidate.is_absolute():
+        return [preferred] if preferred.exists() else all_yaml
+    base_dir = TEMPLATES_DIR.resolve()
+    p = (TEMPLATES_DIR / candidate).resolve()
+    try:
+        p.relative_to(base_dir)
+    except ValueError:
+        # Resolved path escapes TEMPLATES_DIR — treat as invalid
+        return [preferred] if preferred.exists() else all_yaml
     if p.exists():
         return [p]
     # fallback se il nome specifico non esiste
@@ -534,7 +549,8 @@ def create_app(port: int) -> 'Flask':
             return jsonify({'job_id': jid, 'label': lbl, 'output': out})
 
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            _log.error('api_run error: %s', e, exc_info=True)
+            return jsonify({'error': f'Job launch failed: {type(e).__name__}'}), 500
 
     # ── Dump listing ─────────────────────────────────────────────────────────
     @app.route('/api/dump')
@@ -566,7 +582,8 @@ def create_app(port: int) -> 'Flask':
                 'files_found': [tf.name for tf in tpl_files if tf.exists()],
             })
         except Exception as e:
-            return jsonify({'categories': [], 'error': str(e)})
+            _log.error('api_tpl_cats error: %s', e, exc_info=True)
+            return jsonify({'categories': [], 'error': f'Template load failed: {type(e).__name__}'})
 
     # ── DorkGen preview ───────────────────────────────────────────────────────
     @app.route('/api/dorkgen/preview', methods=['POST'])
@@ -617,7 +634,8 @@ def create_app(port: int) -> 'Flask':
                 'warning': warn.strip() if warn else None,
             })
         except Exception as e:
-            return jsonify({'error': str(e), 'dorks': []})
+            _log.error('api_dg_preview error: %s', e, exc_info=True)
+            return jsonify({'error': f'Dork generation failed: {type(e).__name__}', 'dorks': []})
 
     # ── DorkGen export (plain text) ───────────────────────────────────────────
     @app.route('/api/dorkgen/export', methods=['POST'])
@@ -645,7 +663,8 @@ def create_app(port: int) -> 'Flask':
                 headers={'Content-Disposition': f'attachment; filename="{fname}"'},
             )
         except Exception as e:
-            return Response(f'Error: {e}', status=500)
+            _log.error('api_dg_export error: %s', e, exc_info=True)
+            return Response(f'Export failed: {type(e).__name__}', status=500)
 
     return app
 
@@ -1445,7 +1464,7 @@ def launch_web(start_port: int = 8080, no_browser: bool = False) -> None:
     print(f'  ██║  ██║██║   ██║██╔══██╗██╔═██╗ ██╔══╝    ╚██╔╝  ██╔══╝  ')
     print(f'  ██████╔╝╚██████╔╝██║  ██║██║  ██╗███████╗   ██║   ███████╗')
     print(f'  ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝')
-    print(f'\n  [ WEB CONSOLE ]  v4.9\n')
+    print(f'\n  [ WEB CONSOLE ]\n')
     print(f'  ▸ URL     →  {url}')
     print(f'  ▸ Port    →  {port}{"  (auto-selected)" if port != start_port else ""}')
     print(f'  ▸ Root    →  {ROOT}')
@@ -1461,17 +1480,17 @@ def launch_web(start_port: int = 8080, no_browser: bool = False) -> None:
                 pass
         threading.Thread(target=_open, daemon=True).start()
 
-    # ── Ripristina il handler SIGINT di default prima di avviare Flask.
-    # dorkeyes.py installa un handler custom (skip/exit) che intercetta
-    # Ctrl+C senza propagare KeyboardInterrupt → Werkzeug non riceve
-    # mai il segnale di shutdown e la porta rimane appesa.
+    # ── Reset the default SIGINT handler before starting Flask.
+    # dorkeyes.py installs a custom handler (skip/exit) that intercepts
+    # Ctrl+C without propagating KeyboardInterrupt → Werkzeug does not receive
+    # never the shutdown signal and the door remains hanging.
     import signal as _sig
     _sig.signal(_sig.SIGINT, _sig.SIG_DFL)
 
-    # ── Usa make_server invece di app.run() per poter impostare
-    # SO_REUSEADDR direttamente sul socket del server Flask,
-    # garantendo il rilascio immediato della porta anche dopo un
-    # kill forzato (TIME_WAIT).
+    # ── Use make_server instead of app.run() to set
+    # SO_REUSEADDR directly on the Flask server socket,
+    # ensuring immediate release of the door even after a
+    # force kill (TIME_WAIT).
     try:
         from werkzeug.serving import make_server as _make_server
     except ImportError:
