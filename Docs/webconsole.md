@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/286d4893-e1e6-4dc4-b112-03f0c19287c6" />
+
 # Web Console — DorkEye
 
 > Matrix-themed local web dashboard for all DorkEye operations.
