@@ -1,4 +1,6 @@
-# Wizard — DorkEye v4.8
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/e99120da-b52b-44b5-ad50-c2b7d9d1c46a" />
+
+# Wizard — DorkEye Project
 
 The wizard is an interactive guided session that walks through every option without requiring any CLI knowledge. Recommended for first use or exploratory sessions.
 
