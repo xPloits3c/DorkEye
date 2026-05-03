@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/33f47b3f-55c9-4661-be19-8b107e315d13" />
+
 # DorkEye — Complete Usage Reference
 
 Every flag, every mode, every combination — explained.
