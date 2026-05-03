@@ -1,4 +1,4 @@
-<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/4f68b807-ec23-4477-9f4b-1882b2811cb3" />
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/da43ca6a-d3bd-4df6-b9dd-5f35b9d97316" />
 
 # Adaptive Recursive Crawler — DorkEye Project
 
