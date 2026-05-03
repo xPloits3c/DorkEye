@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/4f68b807-ec23-4477-9f4b-1882b2811cb3" />
+
 # Adaptive Recursive Crawler — DorkEye Project
 
 The crawler runs additional rounds of DuckDuckGo searches after the initial result set, automatically refining its dorks based on what it found in each round. No AI — everything is driven by pattern matching and template logic.
