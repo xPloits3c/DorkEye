@@ -222,11 +222,10 @@ DorkEye/
 ```
 ---
 
-## Example HTML Report
-![image](https://github.com/user-attachments/assets/28b71d4e-0cb2-478d-a1f2-f49c98f9f8aa)
+## Example DorkEye Report
 
-## DorkEye Report
-![image](https://github.com/user-attachments/assets/20055807-2f9d-4979-b221-e0cfad32828a)
+![image](https://github.com/user-attachments/assets/28b71d4e-0cb2-478d-a1f2-f49c98f9f8aa)
+<img width="1142" height="730" alt="image" src="https://github.com/user-attachments/assets/1f694bbc-af46-4bec-8654-6ff0b762f199" />
 
 ---
 
