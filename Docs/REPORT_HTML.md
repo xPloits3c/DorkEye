@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/17c738da-27e5-490b-8938-749377458d11" />
+
 # DorkEye — HTML Report Interface
 
 > **File:** `report_YYYYMMDD_HHMMSS.html` (generated automatically, or via `-o filename.html`)
