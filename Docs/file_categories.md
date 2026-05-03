@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/642bbee1-c6f3-4bd5-98b7-4c7186089fd8" />
+
 # File Categories — DorkEye Project
 
 DorkEye automatically categorizes every URL it finds by examining the file extension. Categories drive filtering in the HTML report, export scopes, and the file analysis pipeline.
