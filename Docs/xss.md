@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/d05c4509-1c34-4a3a-9e1e-0638e7e30df9" />
+
 # XSS Detection — DorkEye Project
 
 DorkEye includes a built-in multi-method XSS detection engine supporting reflected, stored, DOM-based, and header-based injection — no browser or external tool required.
