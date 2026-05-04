@@ -1,7 +1,7 @@
 """
-DorkEye SQLi
+DorkEye SQLi Detector
 ═══════════════════════════════════════════════════════════════
-Multi-method SQL injection
+Multi-method SQL injection for DorkEye Project
 
 Contains:
   - SQLiConfidence         enum
@@ -14,27 +14,6 @@ Contains:
   - WAF_SIGNATURES
   - _HIGH_PRIORITY_PARAMS / _MEDIUM_PRIORITY_PARAMS
   - SQLiDetector           (main class)
-
-Changes:
-  [NEW-1]  Error-based payloads: 3 → 22 (MySQL extractvalue/updatexml/floor,
-           MSSQL convert/xp_cmdshell, PostgreSQL cast, Oracle utl_http,
-           generic stacked queries + 4 WAF-bypass comment variants)
-  [NEW-2]  SQL error signatures: extended per DB — MySQL +4, PostgreSQL +3,
-           MSSQL +3, SQLite +2, Oracle +2; added generic "syntax error" bucket
-  [NEW-3]  Time-based: DB-specific payloads — PostgreSQL pg_sleep,
-           MSSQL WAITFOR DELAY, Oracle heavy-query, SQLite heavy-query
-  [NEW-4]  Boolean blind: dual-metric FP reduction (length diff + similarity
-           ratio; both must pass threshold to declare vulnerable)
-  [NEW-5]  Boolean blind: 8 pairs instead of 4 (DB-specific AND/OR conditions,
-           comment-terminated variants to handle different parsers)
-  [NEW-6]  Stacked-query probe: lightweight new method — sends ";" separator
-           payloads and looks for state-change evidence
-  [NEW-7]  Probe fast-path: length delta > 50 bytes → variation confirmed
-           immediately; difflib capped at first 8 KB (mirrors XSS module)
-  [NEW-8]  UNION string columns: tests 'a','b','c'… columns alongside NULL
-           columns for targets that reject NULL but accept string literals
-  [NEW-9]  post/json methods: promote to multi-method (error + time-based)
-           instead of error-only, matching GET-param coverage
 
 Author: xPloits3c I.C.W.T | https://github.com/xPloits3c/DorkEye
 """
@@ -434,6 +413,16 @@ _BOOL_SAMPLES        = 2 if TERMUX_IS_ANDROID else 3
 _TIMEBASED_CONFIRM   = 1 if TERMUX_IS_ANDROID else 2
 _UNION_COLUMNS_MAX   = 6       # raised from 5 — most real apps use ≤6 cols
 
+# ── [FP-1] Page-stability threshold ──────────────────────────────────────────
+# Minimum similarity between two clean requests to consider the page stable
+# enough for boolean-blind testing. Below this → boolean blind is skipped.
+_PAGE_STABILITY_MIN  = 0.82
+
+# ── [FP-7] Probe fast-path threshold ─────────────────────────────────────────
+# Raised from 50 → 150 bytes: small deltas (timestamps, nonces, ad counters)
+# were triggering unnecessary full-suite runs on every dynamic parameter.
+_FP_FAST_PATH_BYTES  = 150
+
 
 # ══════════════════════════════════════════════════════════════
 #  SQLiDetector
@@ -799,8 +788,10 @@ class SQLiDetector:
 
         baseline_status: int       = r_init.status_code
 
-        # Fast-path: significant length difference → variation confirmed
-        if abs(len(baseline_content) - len(r_init.text)) > 50:
+        # [FP-7] Fast-path threshold raised to _FP_FAST_PATH_BYTES (150 B).
+        # The old 50-byte threshold was too easily hit by timestamps, nonces,
+        # and counter values embedded in the page body.
+        if abs(len(baseline_content) - len(r_init.text)) > _FP_FAST_PATH_BYTES:
             # Still build noise baseline — just mark this sample as noisy
             noise_samples: List[float] = [0.05]
         else:
@@ -815,7 +806,7 @@ class SQLiDetector:
             r = self._get(url)
             if r is None:
                 return False
-            if abs(len(baseline_content) - len(r.text)) > 50:
+            if abs(len(baseline_content) - len(r.text)) > _FP_FAST_PATH_BYTES:
                 noise_samples.append(0.05)
             else:
                 b1  = baseline_content[: _PROBE_SAMPLE_BYTES]
@@ -842,7 +833,7 @@ class SQLiDetector:
         if r_payload.status_code != baseline_status:
             return False
 
-        if abs(len(baseline_content) - len(r_payload.text)) > 50:
+        if abs(len(baseline_content) - len(r_payload.text)) > _FP_FAST_PATH_BYTES:
             return True
 
         b1           = baseline_content[: _PROBE_SAMPLE_BYTES]
@@ -850,6 +841,51 @@ class SQLiDetector:
         payload_noise = 1.0 - difflib.SequenceMatcher(None, b1, b2).ratio()
 
         return payload_noise > adaptive_threshold
+
+    # ──────────────────────────────────────────────────────────
+    #  [FP-1] Page-stability pre-check
+    # ──────────────────────────────────────────────────────────
+
+    def _check_page_stability(self, url: str) -> float:
+        """
+        Fetch url twice with no injection and measure content similarity.
+        Returns a ratio in [0.0, 1.0]:  1.0 = identical, 0.0 = completely
+        different.
+
+        [FP-1] Inspired by sqlmap's checkStability(): dynamic pages (ads,
+        rotating content, timestamps) produce constant natural variation that
+        is indistinguishable from boolean-blind SQLi signals. If stability
+        falls below _PAGE_STABILITY_MIN the caller should skip boolean blind.
+        """
+        r1 = self._get(url)
+        if r1 is None:
+            return 0.0
+        _interruptible_sleep(0.4)
+        r2 = self._get(url)
+        if r2 is None:
+            return 0.0
+        b1 = r1.text[:_PROBE_SAMPLE_BYTES]
+        b2 = r2.text[:_PROBE_SAMPLE_BYTES]
+        return difflib.SequenceMatcher(None, b1, b2).ratio()
+
+    # ──────────────────────────────────────────────────────────
+    #  [FP-2] Baseline SQL-error guard
+    # ──────────────────────────────────────────────────────────
+
+    def _baseline_has_sql_errors(self, url: str) -> bool:
+        """
+        Return True if the CLEAN url already contains SQL error signatures.
+
+        [FP-2] Apps running in debug mode, broken queries in the backend, or
+        verbose ORMs can emit SQL error text on every request. Running the
+        error-based suite against such targets will always match, producing
+        100% false positives. This guard detects that condition before any
+        injection payload is sent.
+        """
+        r = self._get(url)
+        if r is None:
+            return False
+        return self._match_sql_errors(r.text) is not None
 
     # ──────────────────────────────────────────────────────────
     #  [1] Error-based — [NEW-1] expanded payload set
@@ -869,6 +905,16 @@ class SQLiDetector:
             "evidence":   [],
             "waf":        None,
         }
+
+        # ── [FP-2] Baseline SQL-error guard ──────────────────────────────────
+        # If the clean page already shows SQL errors, every payload will match
+        # → guaranteed false positives. Skip entirely.
+        if self._baseline_has_sql_errors(url):
+            result["evidence"].append(
+                "[FP-guard] SQL error signatures found in clean baseline — "
+                "error-based test skipped to avoid false positives"
+            )
+            return result
 
         # ── [NEW-1] Full payload set ──────────────────────────────────────────
         payloads = [
@@ -947,10 +993,21 @@ class SQLiDetector:
             if match:
                 db_type, pattern = match
                 result["vulnerable"] = True
-                result["confidence"] = SQLiConfidence.HIGH.value
-                result["evidence"].append(
-                    f"{db_type.upper()} error signature matched: {pattern[:60]}"
-                )
+                # [FP-6] Generic SQL error signatures ("syntax error near",
+                # "data type mismatch", etc.) can appear in framework errors,
+                # JavaScript output, or ORM messages without any injection.
+                # Cap their confidence at LOW and flag the risk.
+                if db_type == "generic":
+                    result["confidence"] = SQLiConfidence.LOW.value
+                    result["evidence"].append(
+                        f"GENERIC error signature matched: {pattern[:60]} — "
+                        f"confidence capped at LOW (high FP risk; verify manually)"
+                    )
+                else:
+                    result["confidence"] = SQLiConfidence.HIGH.value
+                    result["evidence"].append(
+                        f"{db_type.upper()} error signature matched: {pattern[:60]}"
+                    )
                 return result
 
             if self.stealth:
@@ -1093,20 +1150,31 @@ class SQLiDetector:
             "evidence":   [],
         }
 
-        # [NEW-5] Extended boolean payload pairs
+        # [NEW-5] + [FP-3] Boolean payload pairs.
+        # The original "OR 1=1 / OR 1=2" pair has been REMOVED: OR-based
+        # payloads can legitimately expand the result set (returning more DB
+        # rows) without any injection, producing length changes that are
+        # indistinguishable from real SQLi signals.
+        # Replacements use arithmetic-only conditions that evaluate in the
+        # WHERE clause without adding rows: AND (1)=(1) vs AND (1)=(2), and
+        # a CASE WHEN variant for backends that fold simple arithmetic.
         bool_payloads = [
             # Standard string-context pairs
-            ("1' AND '1'='1",   "true"),
-            ("1' AND '1'='2",   "false"),
+            ("1' AND '1'='1",          "true"),
+            ("1' AND '1'='2",          "false"),
             # Numeric context
-            ("1 AND 1=1",       "true"),
-            ("1 AND 1=2",       "false"),
+            ("1 AND 1=1",              "true"),
+            ("1 AND 1=2",              "false"),
             # Comment-terminated variants (handles parsers that need -- to close)
-            ("1' AND 1=1--",    "true"),
-            ("1' AND 1=2--",    "false"),
-            # OR-based (useful when AND strips result entirely)
-            ("1 OR 1=1",        "true"),
-            ("1 OR 1=2",        "false"),
+            ("1' AND 1=1--",           "true"),
+            ("1' AND 1=2--",           "false"),
+            # [FP-3] Parenthesized arithmetic — no row-set expansion, safe replacement
+            # for the removed OR pair; CASE WHEN handles backends that optimize away
+            # simple integer comparisons
+            ("1 AND (1)=(1)",          "true"),
+            ("1 AND (1)=(2)",          "false"),
+            ("1 AND CASE WHEN 1=1 THEN 1 ELSE 0 END=1", "true"),
+            ("1 AND CASE WHEN 1=2 THEN 1 ELSE 0 END=1", "false"),
         ]
 
         true_lengths:    List[int]   = []
@@ -1177,15 +1245,67 @@ class SQLiDetector:
         sim_condition = sim_diff > 0.05  # 5 percentage points
 
         if len_condition and sim_condition:
-            result["vulnerable"] = True
-            result["confidence"] = SQLiConfidence.MEDIUM.value
-            result["evidence"].append(
-                f"Boolean dual-metric: "
-                f"len TRUE={median_true_len:.0f}B  FALSE={median_false_len:.0f}B  "
-                f"Δlen={len_diff:.0f}B  "
-                f"sim_diff={sim_diff:.3f}  "
-                f"iv_t={iv_true:.0f}B  iv_f={iv_false:.0f}B"
+            # ── [FP-4] Triple-confirmation ────────────────────────────────────
+            # Re-send the first valid true/false pair two more times and check
+            # that the signal is reproducible. A single network fluctuation or
+            # CDN cache miss can produce a one-off length change that passes
+            # dual-metric. Two consistent rounds = confirmed; any inconsistency
+            # = downgrade to LOW.
+            confirm_ok = True
+            first_true_payload  = next(
+                (p for p, t in bool_payloads if t == "true"), "1 AND 1=1"
             )
+            first_false_payload = next(
+                (p for p, t in bool_payloads if t == "false"), "1 AND 1=2"
+            )
+            confirm_true_lens:  List[int] = []
+            confirm_false_lens: List[int] = []
+
+            for _ in range(2):
+                if _exit_requested or _skip_current:
+                    confirm_ok = False
+                    break
+                rt = self._get(self._inject_payload(url, param_name, first_true_payload))
+                rf = self._get(self._inject_payload(url, param_name, first_false_payload))
+                if rt is None or rf is None:
+                    confirm_ok = False
+                    break
+                confirm_true_lens.append(len(rt.text))
+                confirm_false_lens.append(len(rf.text))
+                _interruptible_sleep(0.4)
+
+            if confirm_ok and confirm_true_lens and confirm_false_lens:
+                confirm_len_diff = abs(
+                    statistics.median(confirm_true_lens) -
+                    statistics.median(confirm_false_lens)
+                )
+                if confirm_len_diff > baseline_len * 0.10:
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.MEDIUM.value
+                    result["evidence"].append(
+                        f"Boolean dual-metric + triple-confirm: "
+                        f"len TRUE={median_true_len:.0f}B  FALSE={median_false_len:.0f}B  "
+                        f"Δlen={len_diff:.0f}B  sim_diff={sim_diff:.3f}  "
+                        f"confirm_Δ={confirm_len_diff:.0f}B  "
+                        f"iv_t={iv_true:.0f}B  iv_f={iv_false:.0f}B"
+                    )
+                else:
+                    # Triple-confirm failed → downgrade
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.LOW.value
+                    result["evidence"].append(
+                        f"Boolean dual-metric PASSED but triple-confirm FAILED "
+                        f"(confirm_Δ={confirm_len_diff:.0f}B < 10% baseline) — "
+                        f"downgraded to LOW; likely dynamic-page FP"
+                    )
+            else:
+                result["vulnerable"] = True
+                result["confidence"] = SQLiConfidence.LOW.value
+                result["evidence"].append(
+                    "Boolean dual-metric passed; triple-confirm inconclusive "
+                    "(network error during re-check) — LOW confidence"
+                )
+
         elif len_condition:
             # Length passed but similarity did not — LOW confidence only
             result["vulnerable"] = True
@@ -1322,11 +1442,35 @@ class SQLiDetector:
                 confirm_threshold = baseline + _TIMEBASED_MARGIN
 
                 if confirm_avg <= confirm_threshold:
+                    # ── [FP-5] Double-SLEEP confirmation ─────────────────────
+                    # Re-send the sleep payload ONE more time. A single network
+                    # spike can delay a response without any SQLi. If the second
+                    # hit also exceeds the threshold → HIGH confidence.
+                    # If not → discard the finding (spike eliminated as FP).
+                    t_recheck  = time.monotonic()
+                    r_recheck  = self._get(test_url, extra_read=extra_read)
+                    el_recheck = time.monotonic() - t_recheck
+
+                    recheck_triggered = (
+                        (r_recheck is None and el_recheck >= threshold * 0.9)
+                        or (r_recheck is not None and el_recheck >= threshold)
+                    )
+
+                    if not recheck_triggered:
+                        result["evidence"].append(
+                            f"[FP-guard] Time-based: first hit elapsed={elapsed:.1f}s "
+                            f"confirmed neutral but SLEEP re-check did NOT trigger "
+                            f"(recheck={el_recheck:.1f}s) — discarded as network spike"
+                        )
+                        continue   # don't declare vulnerable
+
                     result["vulnerable"] = True
-                    result["confidence"] = SQLiConfidence.MEDIUM.value
+                    result["confidence"] = SQLiConfidence.HIGH.value
                     result["evidence"].append(
-                        f"Time-based confirmed: payload=[{sleep_payload[:50]}]  "
-                        f"elapsed={elapsed:.1f}s  threshold={threshold:.1f}s  "
+                        f"Time-based double-confirmed: "
+                        f"payload=[{sleep_payload[:50]}]  "
+                        f"hit1={elapsed:.1f}s  hit2={el_recheck:.1f}s  "
+                        f"threshold={threshold:.1f}s  "
                         f"neutral={confirm_avg:.2f}s  baseline={baseline:.2f}s"
                     )
                     return result
@@ -1466,6 +1610,14 @@ class SQLiDetector:
 
         per_param_scores: List[int] = []
 
+        # ── [FP-1] Page-stability pre-check ──────────────────────────────────
+        # Measure how stable the page is between two clean requests.
+        # Boolean-blind is skipped per-param if stability < _PAGE_STABILITY_MIN
+        # because dynamic content (ads, rotating feeds, timestamps) produces
+        # natural length/similarity changes that perfectly mimic blind SQLi.
+        _page_stability = self._check_page_stability(url)
+        _boolean_allowed = _page_stability >= _PAGE_STABILITY_MIN
+
         for param_name in self._prioritize_params(params):
             if self.circuit_breaker.is_dead(url):
                 result["message"] = "Host became unreachable during testing"
@@ -1512,10 +1664,24 @@ class SQLiDetector:
                     param_score += 1
 
             # ── Boolean blind ─────────────────────────────────────────────────
-            # [NEW-4] Pass baseline_content for similarity-ratio metric
-            bool_result = self._test_boolean_blind(
-                url, param_name, baseline_len, baseline_content
-            )
+            # [FP-1] Skip boolean blind on dynamically unstable pages to avoid
+            # false positives from natural page variation.
+            if _boolean_allowed:
+                # [NEW-4] Pass baseline_content for similarity-ratio metric
+                bool_result = self._test_boolean_blind(
+                    url, param_name, baseline_len, baseline_content
+                )
+            else:
+                bool_result = {
+                    "method":     "boolean_blind",
+                    "vulnerable": False,
+                    "confidence": SQLiConfidence.NONE.value,
+                    "evidence":   [
+                        f"[FP-guard] Boolean blind skipped — page stability "
+                        f"{_page_stability:.2f} < threshold {_PAGE_STABILITY_MIN} "
+                        f"(dynamic content would cause false positives)"
+                    ],
+                }
             bool_result["parameter"] = param_name
             result["tests"].append(bool_result)
             if bool_result["vulnerable"]:

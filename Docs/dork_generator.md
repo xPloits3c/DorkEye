@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/5771d0bb-5341-48d7-a3e1-9d75a98872da" />
+
 # Dork Generator — DorkEye Project
 
 The Dork Generator produces structured Google dorks automatically from YAML template files. Instead of writing dorks manually, you define variables and templates once and let DorkEye generate every combination.

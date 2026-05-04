@@ -1,7 +1,6 @@
 """
 DorkEye Agents
-
-Post-search analysis pipeline for DorkEye Project
+Post-search analysis pipeline for DorkEye Project+
 
 Agents are invoked AFTER DorkEye has completed the search.
 They do not interfere with the search flow — they work on already collected results.
@@ -19,6 +18,8 @@ Pipeline (activated with --analyze):
 9. SubdomainHarvesterAgent — extracts subdomains and generates dorks for DorkCrawler
 10. ReportAgent            — report HTML/MD/JSON with all new sections (incl. security)
 11. DorkCrawlerAgent       — adaptive recursive crawl (fed by TechFP + SubHarvest)
+12. DBScan                 — Agent database port scan (open ports)
+13. LLM Analysis           — All triaged results | `analysis` dict optional — requires dorkeye_llm_plugin.py
 
 SecurityAgent operates as a middleware — it hooks into BOTH:
 
@@ -58,6 +59,13 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
+
+# ── Optional DB Port Scanner ──────────────────────────────────────────────────
+try:
+    from db_portscan import DBPortScanAgent as _DBPortScanAgent, save_dbscan_report as _save_dbscan
+    _DBSCAN_OK = True
+except ImportError:
+    _DBSCAN_OK = False
 
 # ── Rich console ──────────────────────────────────────────────────────────────
 
@@ -480,7 +488,7 @@ class PageFetchAgent(BaseAgent):
 
             content = self._fetch(url)
             r["page_content"] = content
-            # v4.8 — save raw headers for HeaderIntelAgent
+            # Save raw headers for HeaderIntelAgent
             if self._last_headers:
                 r["response_headers"] = self._last_headers
                 r["fetch_status"]     = self._last_status
@@ -555,7 +563,7 @@ class PageFetchAgent(BaseAgent):
         return ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECURITY AGENT — Threat detection middleware (v3.1)
+# SECURITY AGENT — Threat detection middleware
 # ══════════════════════════════════════════════════════════════════════════════
 #
 # Operates as a pipeline middleware that hooks into BOTH flows:
@@ -1819,7 +1827,7 @@ class ReportAgent(BaseAgent):
 
         return f"""<!DOCTYPE html>
 <html lang="it"><head><meta charset="UTF-8">
-<title>DorkEye Report — {target or 'Session'}</title>
+<title>DorkEye Agents Report — {target or 'Session'}</title>
 <style>
 :root{{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--text:#c9d1d9;--acc:#58a6ff;--brd:#30363d}}
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -1843,7 +1851,7 @@ ul{{padding-left:18px}}li{{margin:3px 0}}
 footer{{margin-top:36px;font-size:11px;color:#8b949e;text-align:center}}
 </style></head><body>
 <h1>&#128065; DorkEye Report</h1>
-<div class="meta">Generated: {now} &nbsp;|&nbsp; Target: <code>{target or 'N/A'}</code> &nbsp;|&nbsp; DorkEye v4.8 + Agents v3.1</div>
+<div class="meta">Generated: {now} &nbsp;|&nbsp; Target: <code>{target or 'N/A'}</code> &nbsp;|&nbsp; DorkEye Project</div>
 {'<h2>Summary</h2><div class="card">'+summary+'</div>' if summary else ''}
 <h2>Metrics</h2>
 <div class="metrics">
@@ -1867,7 +1875,7 @@ footer{{margin-top:36px;font-size:11px;color:#8b949e;text-align:center}}
 {'<h2>Recommendations</h2><div class="card"><ul>'+recs_html+'</ul></div>' if recs else ''}
 <h2>All Results ({len(results)})</h2>
 <div class="card"><table><tr><th>Score</th><th>Label</th><th>URL</th><th>Title</th></tr>{rows_all}</table></div>
-<footer>DorkEye v4.8 + Agents v3.1 &mdash; {now}</footer>
+<footer>DorkEye Project | Agents v3.1 &mdash; {now}</footer>
 </body></html>"""
 
     def _json(self, results, analysis, secrets, counts, target, extra=None) -> str:
@@ -1876,7 +1884,7 @@ footer{{margin-top:36px;font-size:11px;color:#8b949e;text-align:center}}
             "meta": {
                 "generated_at": datetime.now().isoformat(),
                 "target":       target or "",
-                "engine":       "DorkEye v4.8 + Agents v3.1",
+                "engine":       "DorkEye v5.0 + Agents v3.1",
             },
             "metrics": {
                 "total":     len(results),
@@ -1906,7 +1914,7 @@ footer{{margin-top:36px;font-size:11px;color:#8b949e;text-align:center}}
         return str(p) if p.suffix.lower() == wanted else str(p.with_suffix(wanted))
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HEADER INTEL AGENT (v4.8)
+# HEADER INTEL AGENT
 # ══════════════════════════════════════════════════════════════════════════════
 
 _SECURITY_HEADERS_REQUIRED = {
@@ -2003,7 +2011,7 @@ class HeaderIntelAgent(BaseAgent):
         return intel
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TECH FINGERPRINT AGENT (v4.8)
+# TECH FINGERPRINT AGENT
 # ══════════════════════════════════════════════════════════════════════════════
 
 # FIX #3: * → _ (naming error from copy/paste)
@@ -2166,7 +2174,7 @@ class TechFingerprintAgent(BaseAgent):
         return dorks
 
 # ══════════════════════════════════════════════════════════════════════════════
-# EMAIL HARVESTER AGENT (v4.8)
+# EMAIL HARVESTER AGENT
 # ══════════════════════════════════════════════════════════════════════════════
 
 # FIX #10: *EMAIL_RE → _EMAIL_RE
@@ -2249,7 +2257,7 @@ class EmailHarvesterAgent(BaseAgent):
         return sorted(self._global_emails.values(), key=lambda e: order.get(e["category"], 9))
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PII DETECTOR AGENT (v4.8)
+# PII DETECTOR AGENT
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PiiDetectorAgent(BaseAgent):
@@ -2336,7 +2344,7 @@ class PiiDetectorAgent(BaseAgent):
         return findings
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SUBDOMAIN HARVESTER AGENT (v4.8)
+# SUBDOMAIN HARVESTER AGENT
 # ══════════════════════════════════════════════════════════════════════════════
 
 class SubdomainHarvesterAgent(BaseAgent):
@@ -2519,7 +2527,7 @@ _EXT_DORK_TEMPLATES: Dict[str, List[str]] = {
     ".git":    ['site:{domain} inurl:.git/config', 'site:{domain} inurl:.git/HEAD', 'site:{domain} inurl:.git/COMMIT_EDITMSG'],
 }
 
-# FIX #12: *TECH_DETECTION → _TECH_DETECTION + regex logici
+# TECH_DETECTION → _TECH_DETECTION + regex logic
 _TECH_DETECTION: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"wp-content|wp-admin|wordpress",                re.I), "wordpress"),
     # FIX: "option=com*" → "option=com_\w*"
@@ -2569,8 +2577,8 @@ class DorkCrawlerAgent(BaseAgent):
       6. Restart from step 1 with the new dorks
 
     Stop conditions (all evaluated before triggering):
-      - Raggiunto max_rounds
-      - Raggiunto max_results totali
+      - Max rounds reached
+      - Max total results reached
       - No new HIGH/CRITICAL results in the last round
       - No new dorks can be generated (all already used)
     """
@@ -2989,6 +2997,7 @@ def run_analysis_pipeline(
         8.  EmailHarvesterAgent     — collects and categorises emails
         9.  SubdomainHarvesterAgent — extracts subdomains, generates follow-up dorks
         10. ReportAgent             — generates complete HTML/MD/JSON report (incl. security)
+        11. DBPortScanAgent         — scans exposed DB ports (opt-in: --dbscan)
     """
     if args is None:
         args = type("A", (), {
@@ -3001,6 +3010,11 @@ def run_analysis_pipeline(
             "no_security":           False,
             "security_mode":         "passive",
             "security_quarantine":   False,
+            "dbscan":                False,
+            "dbscan_timeout":        2.5,
+            "dbscan_threads":        60,
+            "dbscan_ports":          None,
+            "dbscan_max_hosts":      200,
         })()
 
     output = {
@@ -3014,6 +3028,8 @@ def run_analysis_pipeline(
         "analysis":         {},
         "security_stats":   {},
         "security_threats": [],
+        "dbscan_report":    None,
+        "dbscan_stats":     {},
     }
 
     if not results:
@@ -3144,6 +3160,36 @@ def run_analysis_pipeline(
         total_subs = sum(len(v) for v in all_subdomains.values())
         _log(f"[Agents] Subdomain: {total_subs} subdomains found.", style="cyan")
 
+    # ── 11. DB Port Scanner (optional — activate with --dbscan) ────────────────
+    if getattr(args, "dbscan", False):
+        if not _DBSCAN_OK:
+            _log("[Agents] db_portscan.py non trovato in Tools/ — DBScan saltato.", style="yellow")
+        else:
+            _log("[Agents] Step 11 — DB Port Scanner", style="bold cyan")
+            _db_agent = _DBPortScanAgent(
+                timeout   = getattr(args, "dbscan_timeout",   2.5),
+                threads   = getattr(args, "dbscan_threads",   60),
+                ports     = getattr(args, "dbscan_ports",     None),
+                max_hosts = getattr(args, "dbscan_max_hosts", 200),
+            )
+            _db_report = _db_agent.run(triaged)
+            if _db_report:
+                output["dbscan_report"] = _db_report.to_dict()
+                output["dbscan_stats"]  = _db_report.stats
+                _db_report.print_summary()
+                n_crit = _db_report.stats.get("critical", 0)
+                n_high = _db_report.stats.get("high", 0)
+                if n_crit or n_high:
+                    _panel(
+                        "\n".join(
+                            f"  [{f.severity}]  {f.host}:{f.port}  [{f.service}]  {f.detail[:80]}"
+                            for f in _db_report.critical_findings + _db_report.high_findings
+                        ),
+                        title=f"[bold magenta][ DBScan — {n_crit} CRITICAL / {n_high} HIGH ][/bold magenta]",
+                        border="magenta" if n_crit else "red",
+                    )
+    # ─────────────────────────────────────────────────────────────────────────
+
     # ── LLM analysis (only if llm_plugin available) ────────────────────────────
     analysis: dict = {}
     if llm_plugin:
@@ -3258,6 +3304,19 @@ if __name__ == "__main__":
 
     add_security_args(parser)
 
+    # ── DB Port Scanner ───────────────────────────────────────────────────────
+    parser.add_argument("--dbscan",           action="store_true",
+                        help="Scan open DB ports on hosts from results (step 11)")
+    parser.add_argument("--dbscan-timeout",   type=float, default=2.5,
+                        help="TCP connect timeout in seconds (default: 2.5)")
+    parser.add_argument("--dbscan-threads",   type=int,   default=60,
+                        help="Worker threads per host (default: 60)")
+    parser.add_argument("--dbscan-ports",     type=int,   nargs="+", default=None,
+                        help="Override port list (default: all known DB ports)")
+    parser.add_argument("--dbscan-max-hosts", type=int,   default=200,
+                        help="Max hosts to scan (default: 200)")
+    # ─────────────────────────────────────────────────────────────────────────
+
     _llm_available = False
     try:
         from dorkeye_llm_plugin import add_llm_args, init_llm_plugin
@@ -3323,6 +3382,13 @@ if __name__ == "__main__":
         print(f"[✓] Security scanned:  {sec_stats.get('total_scanned', 0)}")
         print(f"[✓] Security threats:  {len(out.get('security_threats', []))}")
         print(f"[✓] Security blocked:  {sec_stats.get('blocked', 0)}")
+
+    db_stats = out.get("dbscan_stats", {})
+    if db_stats:
+        print(f"[✓] DBScan hosts:      {db_stats.get('hosts_scanned', 0)}")
+        print(f"[✓] DBScan open ports: {db_stats.get('open_ports', 0)}")
+        print(f"[✓] DBScan CRITICAL:   {db_stats.get('critical', 0)}  (no-auth)")
+        print(f"[✓] DBScan HIGH:       {db_stats.get('high', 0)}")
 
     if out.get("triaged"):
         from collections import Counter

@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/391a4aeb-a91d-44e5-b493-ad4821f0c606" />
+
 # AI Agents | DorkEye Project
 
 The Agents pipeline runs automatically after a dork search when `--analyze` is active (or when the output file is `.json`). It requires no external AI — every step uses regex, heuristics, and structural analysis only.
@@ -22,13 +24,13 @@ python dorkeye_agents.py Dump/results.json --analyze-fetch --analyze-fmt html
 
 ---
 
-## Pipeline — 11 Steps
+## Pipeline — 13 Steps
 
 | Step | Agent | Input | Output |
 |------|-------|-------|--------|
 | 1 | **TriageAgent** | All results | `triage_score`, `triage_label`, `triage_reason` per result |
 | 2 | **PageFetchAgent** | HIGH / CRITICAL results | `page_content`, `response_headers`, `fetch_status` |
-| 3 | **SecurityAgent** *(new v3.1)* | `page_content` + `response_headers` + URL | `security_verdict` dict with `threat_level`, `threat_score`, `indicators` |
+| 3 | **SecurityAgent** | `page_content` + `response_headers` + URL | `security_verdict` dict with `threat_level`, `threat_score`, `indicators` |
 | 4 | **HeaderIntelAgent** | `response_headers` | `header_intel` (info leaks, missing headers, outdated versions) |
 | 5 | **TechFingerprintAgent** | `page_content` + headers + URL | `tech_fingerprint` (techs, versions, CVE dorks) |
 | 6 | **SecretsAgent** | `page_content` + snippet | `secrets` list with type, value, severity, context |
@@ -37,6 +39,8 @@ python dorkeye_agents.py Dump/results.json --analyze-fetch --analyze-fmt html
 | 9 | **SubdomainHarvesterAgent** | All text fields | `subdomains` list per result, global map |
 | 10 | **LLM Analysis** | All triaged results | `analysis` dict (optional — requires `dorkeye_llm_plugin.py`) |
 | 11 | **ReportAgent** | Everything above | HTML / MD / JSON / TXT report |
+| 12 | **DBScanAgent** | Hosts extracted from results | `db_scan` per-host findings, `DBScanReport` |
+| 13 | **DorkCrawlerAgent** | CVE dorks + subdomain seeds | Follow-up dork results merged into pipeline |
 
 ---
 
@@ -90,7 +94,7 @@ Phase 2 — runtime bonuses from existing result data:
 
 ---
 
-## SecurityAgent *(new in v3.1)*
+## SecurityAgent
 
 Threat-detection middleware that operates in **two modes**:
 
@@ -186,7 +190,7 @@ verdict = agent.scan_single(url, content, headers)
 
 Downloads the actual HTML content of HIGH and CRITICAL results for deeper analysis.
 
-**v4.8 improvements:**
+**Features:**
 - Up to 3 attempts per URL (1 initial + 2 retries with 1.5s / 3s backoff)
 - UA rotation across 5 browser profiles on each attempt
 - Saves `response_headers` dict and `fetch_status` code into the result — consumed by HeaderIntelAgent at zero extra HTTP cost
@@ -293,7 +297,7 @@ Scans `page_content` and snippet for 50+ credential and secret patterns.
 | MEDIUM | Generic API keys, tokens, Slack keys, webhooks, SSH credentials, `.env` variables, Mailgun, Heroku |
 | LOW | MD5 / SHA1 / SHA256 / SHA512 hashes, internal IPs |
 
-**v4.8 improvements:**
+**Features:**
 - Dedup by normalized value — same secret found 10 times = 1 finding
 - `severity` field on every finding
 - Hash detection: bcrypt `$2y$`, MD5 (32 hex), SHA1 (40 hex), SHA256 (64 hex), SHA512 (128 hex), NTLM pairs
@@ -321,27 +325,32 @@ Scans `page_content` and snippet for 50+ credential and secret patterns.
 
 ## PiiDetectorAgent
 
-Detects personally identifiable information. Separated from SecretsAgent by design — PII requires different handling than technical credentials.
+Detects personally identifiable information, separated from SecretsAgent by design — PII requires different handling than technical credentials. Patterns are organised by geographic area.
 
 **Detected types:**
 
 | Type | Coverage |
 |------|----------|
-| `EMAIL` | Standard email format |
-| `PHONE_IT` | Italian mobile (+39 3xx) and landline (0x…) |
-| `PHONE_EU` | FR, ES, GB, DE, NL, BE, CH, AT, PL, PT, IE |
-| `PHONE_US` | US format with optional +1 |
-| `IBAN` | Generic IBAN — country code + check digits + BBAN |
-| `CF_IT` | Italian codice fiscale |
+| `EMAIL` | Standard email format — global |
+| `PHONE_US` | US/Canada — NANP format with optional +1 |
+| `PHONE_EU` | EU + UK + CH + NO — 22 country codes (+30 to +421) |
+| `PHONE_ME` | Middle East — EG, TR, AF, IR, LB, JO, SY, IQ, KW, SA, YE, OM, PS, AE, IL, BH, QA |
+| `PHONE_AS` | Asia-Pacific — MY, AU, ID, PH, NZ, SG, TH, JP, KR, VN, CN, HK, MO, KH, LA, BD, TW, IN, PK, LK, MM |
+| `IBAN` | Generic IBAN — covers EU, UK, and Middle East banking formats |
+| `TAX_ID_US` | SSN (`NNN-NN-NNNN`) and EIN (`NN-NNNNNNN`) |
+| `TAX_ID_EU` | EU VAT number with ISO country prefix (DE, FR, IT, ES, PL, and 18 more) |
+| `TAX_ID_ME` | Keyword-anchored: SA VAT (15 digits), AE TRN, EG, TR, IR |
+| `TAX_ID_AS` | IN PAN card, CN USCC (18 chars), JP My Number, KR TRN, SG UEN, AU ABN |
+| `NIN_EU` | EU national identity numbers — BSN, PESEL, personnummer, SVNR, NIR |
+| `NID_ME` | Emirates ID (784-format), SA national ID, keyword-anchored |
+| `NID_AS` | SG NRIC, KR RRN, IN Aadhaar (XXXX XXXX XXXX), keyword-anchored |
 | `CREDIT_CARD` | Visa, Mastercard, Discover, Amex — **Luhn-validated** |
 | `SSN_US` | US SSN with exclusion of invalid blocks (000, 666, 9xx) |
-| `DOB` | Date of birth in context keywords |
-| `PASSPORT` | Generic EU passport pattern |
-| `PUBLIC_IP` | Non-RFC-1918, non-loopback IPv4 |
+| `DOB` | Date of birth — keyword-anchored, multilingual labels (EN/ES/DE/AR/ZH/KO) |
+| `PASSPORT` | Generic machine-readable passport format — global |
+| `PUBLIC_IP` | Non-RFC-1918, non-loopback IPv4 — global |
 
-Credit card numbers are validated with the Luhn algorithm — false positives from random numeric strings are eliminated.
-
-Values are censored to 3 visible characters per end.
+Credit card numbers are validated with the Luhn algorithm — false positives from random numeric strings are eliminated. Values are censored to 4 visible characters per end.
 
 ---
 
@@ -379,6 +388,168 @@ These are merged with TechFingerprintAgent's CVE dorks and passed to DorkCrawler
 
 ---
 
+## DBScanAgent
+
+Scans exposed database ports on all unique hosts extracted from dork results. Runs after the main analysis pipeline and produces a dedicated `DBScanReport` saved alongside the main output file.
+
+**Location:** `DorkEye/Tools/db_portscan.py`
+
+**Detection coverage:**
+
+| Service | Port(s) | Probe type |
+|---------|---------|-----------|
+| MySQL | 3306 | TCP banner |
+| PostgreSQL | 5432 | TCP banner |
+| MongoDB | 27017, 27018\*, 27019\* | OP_MSG isMaster handshake |
+| Redis | 6379 | `PING` → `+PONG` |
+| Elasticsearch | 9200, 9300 | HTTP GET `/` — checks `cluster_name`, `version` |
+| CouchDB | 5984 | HTTP GET `/` — checks `couchdb`, `Welcome` |
+| InfluxDB | 8086 | HTTP GET `/ping` (204 = alive) |
+| Neo4j | 7474 | HTTP GET `/` — checks `neo4j`, `bolt` |
+| Memcached | 11211 | `stats\r\n` → `STAT` |
+| MSSQL | 1433 | TCP banner |
+| Oracle | 1521 | TCP banner |
+| Cassandra | 9042 | TCP banner |
+| RethinkDB | 28015, 5000\* | TCP banner |
+| DB2 | 50000\* | TCP banner |
+| Riak | 8098 | HTTP GET `/` |
+
+\* non-default — included only when `--ports` is set explicitly.
+
+**Severity model:**
+
+| Outcome | Severity | Meaning |
+|---------|----------|---------|
+| Port open + no-auth confirmed | **CRITICAL** | Data directly accessible without credentials |
+| Port open + service banner confirmed | **HIGH** | Auth likely required but service is exposed |
+| Port open, service unconfirmed | **MEDIUM** | Port responding, service unclear from banner |
+| Port closed / filtered / timeout | INFO | Not reported in findings |
+
+**No-auth probe logic per service:**
+
+| Service | No-auth trigger |
+|---------|----------------|
+| Redis | `+PONG` received after `PING` |
+| Elasticsearch | HTTP 200 with `cluster_name` + `version` in body |
+| CouchDB | HTTP 200 with `couchdb` + `Welcome` in body |
+| InfluxDB | HTTP 204 on `/ping` |
+| Neo4j | HTTP 200 with `neo4j` + `bolt` in body |
+| MongoDB | `isMaster` / `isWritablePrimary` in OP_MSG reply |
+| Memcached | `STAT` lines returned on `stats` command |
+
+**Dork-to-port hints** — if a result's URL, title, or snippet matches a known DB keyword, those ports are promoted to the front of the scan queue for that host:
+
+| Keyword pattern | Hinted ports |
+|----------------|-------------|
+| `phpmyadmin`, `mysqladmin` | 3306 |
+| `pgadmin`, `postgresql` | 5432 |
+| `mongodb`, `robo3t` | 27017, 27018 |
+| `redis`, `redisinsight` | 6379 |
+| `elasticsearch`, `kibana` | 9200, 9300 |
+| `couchdb`, `fauxton` | 5984 |
+| `influx` | 8086 |
+| `neo4j` | 7474 |
+| `mssql`, `sqlserver` | 1433 |
+| `oracle`, `tns listener` | 1521 |
+| `cassandra` | 9042 |
+| `memcache` | 11211 |
+
+**CLI flags:**
+
+```bash
+--dbscan                       # Enable DBScanAgent in the pipeline
+--dbscan-timeout 2.5           # TCP connect timeout in seconds (default: 2.5)
+--dbscan-threads 60            # Worker threads per host (default: 60)
+--dbscan-ports 3306 5432 6379  # Override default port list
+--dbscan-max-hosts 200         # Max hosts to scan (default: 200)
+--dbscan-stealth               # Add 1.5–3.5s random delay between hosts
+```
+
+**Standalone usage:**
+
+```bash
+# Scan all hosts in a results file (default ports)
+python db_portscan.py results.json
+
+# Custom timeout and thread count
+python db_portscan.py results.json --timeout 3 --threads 80
+
+# Target specific ports only
+python db_portscan.py results.json --ports 3306 5432 27017 6379
+
+# Stealth mode with host cap
+python db_portscan.py results.json --stealth --max-hosts 50
+
+# Custom output path
+python db_portscan.py results.json --out Dump/custom_scan
+```
+
+**Output files:**
+
+```
+Dump/<stem>_dbscan_<ts>.json   # Full structured report
+Dump/<stem>_dbscan_<ts>.txt    # Human-readable summary, usable as reference list
+```
+
+**Output structure (JSON):**
+
+```json
+{
+  "generated_at": "2025-01-01 12:00:00",
+  "stats": {
+    "hosts_scanned": 12,
+    "ports_scanned": 192,
+    "open_ports":    7,
+    "critical":      2,
+    "high":          3,
+    "medium":        2
+  },
+  "hosts": [
+    {
+      "host":      "target.com",
+      "scanned":   16,
+      "duration":  4.12,
+      "critical":  1,
+      "high":      1,
+      "open_ports": [6379, 9200],
+      "findings": [
+        {
+          "host":       "target.com",
+          "port":       6379,
+          "service":    "Redis",
+          "status":     "open",
+          "severity":   "CRITICAL",
+          "probe":      "redis",
+          "no_auth":    true,
+          "banner":     "",
+          "detail":     "Unauthenticated PING/PONG — data directly accessible",
+          "source_url": "https://target.com/redisinsight/",
+          "timestamp":  "2025-01-01 12:00:01"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Python integration:**
+
+```python
+from Tools.db_portscan import DBPortScanAgent, save_dbscan_report
+
+agent = DBPortScanAgent(
+    timeout   = 2.5,
+    threads   = 60,
+    stealth   = False,
+    max_hosts = 200,
+)
+report = agent.run(results)          # results: list[dict] from DorkEye pipeline
+report.print_summary()               # terminal summary with CRITICAL highlights
+save_dbscan_report(report, out_path) # writes .json + .txt
+```
+
+---
+
 ## ReportAgent
 
 Produces the final analysis report. Accepts `html`, `md`, `json`, `txt`.
@@ -391,13 +562,14 @@ Produces the final analysis report. Accepts `html`, `md`, `json`, `txt`.
 - Emails Harvested
 - Subdomains Found
 - CVE / Follow-up Dorks
+- DB Port Scan Summary (when DBScanAgent has run)
 - All Results table
 
 **JSON report top-level keys:**
 
 ```json
 {
-  "meta":       { "generated_at": "...", "target": "...", "engine": "DorkEye v4.8 + Agents v3.1" },
+  "meta":       { "generated_at": "...", "target": "...", "engine": "DorkEye + Agents" },
   "metrics":    { "total": N, "by_label": {...}, "secrets": N, "pii": N, "emails": N, "subdomains": N },
   "analysis":   {},
   "secrets":    [...],
@@ -405,6 +577,7 @@ Produces the final analysis report. Accepts `html`, `md`, `json`, `txt`.
   "emails":     [...],
   "subdomains": { "target.com": ["api.target.com", "..."] },
   "cve_dorks":  [...],
+  "db_scan":    { "stats": {...}, "hosts": [...] },
   "results":    [...]
 }
 ```
@@ -431,4 +604,7 @@ python dorkeye_agents.py Dump/results.json --target "example.com" --analyze-fetc
 
 # Skip LLM triage (regex only, even if LLM plugin available)
 python dorkeye_agents.py Dump/results.json --analyze-no-llm-triage
+
+# Full pipeline including DB port scan
+python dorkeye_agents.py Dump/results.json --analyze-fetch --dbscan --dbscan-stealth
 ```

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-DorkEye Analyzer v1.0
+DorkEye Analyzer 
 ======================
-Fully autonomous post-search analysis — zero AI, zero Ollama.
+Fully autonomous post-search analysis for DorkEye Project
 
 Works with Python + requests + rich only (already in requirements.txt).
 Reads results saved by DorkEye (-o results.json) and produces:
@@ -12,7 +12,7 @@ Reads results saved by DorkEye (-o results.json) and produces:
   3. Secrets   — credentials and sensitive data scan (40+ regex patterns)
   4. Report    — HTML with dark theme / Markdown / JSON / text
 
-Uso diretto su file:
+Es:
     python dorkeye_analyze.py Dump/results.json
     python dorkeye_analyze.py Dump/results.json --fetch --fmt=html --out=report.html
     python dorkeye_analyze.py Dump/results.json --fetch --fetch-max=30 --fmt=md
@@ -21,7 +21,7 @@ Integrated into dorkeye.py with --analyze-local:
     python dorkeye.py --dg=all -o results.html --analyze-local
     python dorkeye.py -d dorks.txt --analyze-local --analyze-local-fetch --analyze-local-fmt=html
 
-Autore: DorkEye Project
+Autore: @xPloits3c
 """
 
 from __future__ import annotations

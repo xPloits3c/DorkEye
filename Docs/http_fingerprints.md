@@ -1,3 +1,5 @@
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/21b9be47-690b-429b-93f9-44c658ce6ceb" />
+
 # DorkEye — HTTP Fingerprints
 
 > **File:** `http_fingerprints.json`
@@ -502,4 +504,4 @@ When fingerprinting is disabled, standard User-Agent rotation via `UserAgentRota
 
 ---
 
-*DorkEye v4.6 — For authorized security research only.*
+*DorkEye Project — For authorized security research only.*

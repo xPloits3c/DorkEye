@@ -1,5 +1,4 @@
-<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/96b442db-cb6d-4b26-8d5c-be968c97197b" />
-
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/6f4db1bb-6d7b-4225-af92-31060c14989d" />
 
 # 📦 DorkEye — Installation Guide
 

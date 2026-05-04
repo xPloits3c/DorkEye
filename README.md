@@ -1,6 +1,5 @@
 <div align="center">
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/cceb7da1-c8cc-4a42-836e-30acc9443ff6" />
-
+<img width="1264" height="843" alt="image" src="https://github.com/user-attachments/assets/c8e26967-3cd6-44f8-91d5-90c7ea13c47a" />
 </div>
 
 ---
@@ -32,8 +31,8 @@
 ---
 
 ## What is DorkEye
-**DorkEye** is an advanced automated dorking and OSINT recon tool that leverages DuckDuckGo to discover exposed web resources through intelligent search queries.
-- It combines a powerful dork generator, a full SQL injection detection engine, a 11-step autonomous analysis pipeline, and an adaptive recursive crawler — all without requiring any external AI or cloud services.
+**DorkEye** is an advanced, automated `OSINT DORKING TOOL` that leverages its capabilities to discover exposed web assets through intelligent search queries.
+- It combines a powerful dork generator, a full SQL,XSS injection detection engine, a 13-step autonomous analysis pipeline, an adaptive recursive crawler and Database port scanner.
 
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, configuration files, credentials, PII data, subdomains, and technology fingerprints — efficiently and with stealth controls.
 
@@ -48,7 +47,6 @@
 - Advanced .html report interactive
 - Maintain anonymity and avoid IP blocking
 - Clean and unfiltered search results
-- Advanced analysis and automated SQLi testing
 - Continue Dorking for hours, DorkEye won’t get banned.
 
 <img width="1437" height="652" alt="564558417-37385827-9112-4efe-aa0a-f8941da0a2d9" src="https://github.com/user-attachments/assets/df21ead3-dd90-4692-9eab-259c6582ae86" />
@@ -61,11 +59,13 @@
 |---------|---------|
 | 🧙 Wizard | [Interactive guided session — all options](Docs/wizard.md) |
 | ⚙️ Dork Generator | [YAML template modes: `soft` / `medium` / `aggressive`](Docs/dork_generator.md) |
-| 🎯 Direct SQLi Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
-| 📂 File Re-Processing | [Re-run SQLi / analysis / crawl on saved result files with `-f`](Docs/cli.md) |
+| 🎯 Direct SQLi-XSS Test | [Test a single URL directly with `-u`](Docs/sqli.md) |
+| 📂 File Re-Processing | [Re-run SQLi/XSS/analysis/crawl on saved result files with `-f`](Docs/cli.md) |
 | 💉 SQL Injection | [5 methods: 105 payloads](Docs/sqli.md) |
 | 💉 XSS Injection | [4 methods: 111 payloads](Docs/xss.md) |
-| 🤖 Agents v3.1 Pipeline | [11-step autonomous analysis](Docs/agents.md) |
+| ➜] Web Console | [Matrix-Style local dashboard via browser `--ui`](Docs/webconsole.md) |
+| 🚪 DB Port Scan | [15 services,no-auth probes. 3 levels severity `--dbscan`](Docs/dbscan.md) |
+| 🤖 Agents Pipeline | [13-step autonomous analysis](Docs/agents.md) |
 | 🛡️ HeaderIntelAgent | [Info leaks, missing security headers, outdated server](Docs/agents.md#headerintelagent) |
 | 🧬 TechFingerprintAgent | [35 technologies detected, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
 | 📧 EmailHarvesterAgent | [Collects and categorizes emails: admin / security / info..](Docs/agents.md#emailharvesteragent) |
@@ -75,7 +75,7 @@
 | 🔑 HTTP Fingerprinting | [22 browser/OS profiles — Chrome,Firefox,Safari,mobile..](Docs/fingerprinting.md) |
 | 📊 Output Formats | [HTML interactive report — all saved to `Dump/`](Docs/output_formats.md) |
 | 🗂️ File Categories | [7 auto-detected categories - whitelist / blacklist filtering](Docs/file_categories.md) |
-| 🖥️ Full CLI Reference | [All 31 flags and every possible combination](Docs/cli.md) |
+| 🖥️ Full CLI Reference | [All 38 flags and every possible combination](Docs/cli.md) |
 
 ---
 
@@ -148,9 +148,18 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
 ```
 🔹 # Re-process a saved result file
 ```json
-  python dorkeye.py -f Dump/results.json --sqli --analyze -o retest.html
+  python dorkeye.py -f Dump/results.json --sqli --xss --dbscan --analyze -o retest.html
 ```
 
+🔹 # Web UI
+```json
+  python dorkeye.py --ui
+```
+
+<img width="1549" height="609" alt="image" src="https://github.com/user-attachments/assets/aae464c0-3320-4050-b11b-d83c4e3f9c54" />
+
+
+## Examples:
 <img width="938" height="832" alt="de-hex" src="https://github.com/user-attachments/assets/da253967-45a7-4249-aed2-9726eaa37b79" />
 
 ---
@@ -167,8 +176,10 @@ DorkEye/
 │    ├── dorkeye_agents.py     ← Agents v3.1 pipeline
 │    ├── dorkeye_patterns.py   ← Shared pattern library
 │    ├── dorkeye_analyze.py    ← Standalone analysis CLI
-│    ├── sqli.py     ← 5 method sqli injection(105 payloads)
-│    └── xss.py     ← 4 method xss injection (111 payloads)
+│    ├── db_portscan.py   ← Scans exposed database ports
+│    ├── dorkeye_web.py   ← Local web interface
+│    ├── sqli.py     ← 5 Method sqli injection(105 payloads)
+│    └── xss.py     ← 4 Method xss injection (111 payloads)
 │ /Templates/
 │    ├── dorks_templates.yaml
 │    ├── sqli.yaml
@@ -205,14 +216,16 @@ DorkEye/
 │    ├── REPORT_HTML.md
 │    ├── USAGE.md
 │    └── DDGSEE.md
+│ /Screeshots
+│    ├── img0
+│    └── img1
 ```
 ---
 
-## Example HTML Report
-![image](https://github.com/user-attachments/assets/28b71d4e-0cb2-478d-a1f2-f49c98f9f8aa)
+## Example DorkEye Report
 
-## Example final Report
-![image](https://github.com/user-attachments/assets/20055807-2f9d-4979-b221-e0cfad32828a)
+![image](https://github.com/user-attachments/assets/28b71d4e-0cb2-478d-a1f2-f49c98f9f8aa)
+<img width="1142" height="730" alt="image" src="https://github.com/user-attachments/assets/1f694bbc-af46-4bec-8654-6ff0b762f199" />
 
 ---
 

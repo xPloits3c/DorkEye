@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v4.9 | OSINT Dorking Tool
+DorkEye Project v5.0 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
@@ -83,6 +83,23 @@ import socket
 import getpass
 
 console = Console()
+
+# ── DB Port Scanner ───────────────────────────────────────────────────────────
+# Importato DOPO console per poter stampare avvisi dall'interno dello stub.
+# except Exception (non solo ImportError) cattura anche SyntaxError /
+# AttributeError che si verificherebbero se db_portscan.py fosse corrotto.
+try:
+    from db_portscan import DBPortScanAgent, save_dbscan_report
+    _DBSCAN_AVAILABLE = True
+except Exception:
+    _DBSCAN_AVAILABLE = False
+    class DBPortScanAgent:              # type: ignore[no-redef]
+        """Stub: db_portscan.py assente o non importabile."""
+        def __init__(self, **kw): pass
+        def run(self, *a, **kw): return None
+    def save_dbscan_report(*a, **kw):   # type: ignore[no-redef]
+        return ""
+# ─────────────────────────────────────────────────────────────────────────────
 
 VALID_MODES = ["soft", "medium", "aggressive"]
 
@@ -177,7 +194,7 @@ def print_banner():
 
     INFO = (
         "[bold red]OSINT[/bold red][bold white] DORKING TOOL[/bold white]\n"
-        "[bold green]v4.9[/bold green]  [dim]stable[/dim]\n"
+        "[bold green]v5.0[/bold green]  [dim]stable[/dim]\n"
         "\n"
         "[dim]▸ Author  │[/dim]  [yellow]xPloits3c I.C.W.T[/yellow]\n"
         "[dim]▸ GitHub  │[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
@@ -309,18 +326,18 @@ class UserAgentRotator:
 
 class SessionCheckpoint:
     """
-    Salva e ripristina lo stato di una sessione di ricerca su disco.
+    Saves and restores the state of a disk search session.
 
-    Il file di checkpoint viene scritto nella cartella Dump/.checkpoints/
-    e rimosso automaticamente al completamento della sessione.
-    In caso di errore di I/O durante il salvataggio, viene stampato un
-    avviso ma la sessione continua senza interrompersi.
+    The checkpoint file is written to the Dump/.checkpoints/ folder
+    and automatically removed when the session is complete.
+    If an I/O error occurs during saving, a warning is printed
+    but the session continues without interruption.
     """
 
     CHECKPOINT_DIR = Path(__file__).parent / "Dump" / ".checkpoints"
 
     def __init__(self, session_id: str):
-        """Crea la directory di checkpoint e imposta il percorso del file."""
+        """Create the checkpoint directory and set the file path."""
         try:
             self.CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
         except OSError as e:
@@ -362,7 +379,7 @@ class SessionCheckpoint:
             return None
 
     def delete(self) -> None:
-        """Rimuove il file di checkpoint al completamento della sessione."""
+        """Removes the checkpoint file upon session completion."""
         try:
             self.path.unlink(missing_ok=True)
         except Exception:
@@ -518,6 +535,11 @@ class DorkEyeEnhanced:
         self.url_hashes: Set[str]  = set()
         self.start_time  = time.time()
         self._total_results_at_last_extended_delay: int = 0
+        # ── Dedup terminale SQLi / XSS ──────────────────────────────────────
+        # Evitano di ristampare la stessa vulnerabilità se lo stesso URL
+        # riemerge in un dork successivo o in modalità -f / resume.
+        self._reported_sqli_urls: Set[str] = set()
+        self._reported_xss_urls:  Set[str] = set()
 
     def _hash_url(self, url: str) -> str:
         return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()
@@ -735,29 +757,39 @@ class DorkEyeEnhanced:
                         self.stats["waf_detected"] += 1
 
                     if sqli_result.get("vulnerable", False):
-                        self.stats["sqli_vulnerable"] += 1
-                        confidence = sqli_result.get("overall_confidence", "?")
-                        style = (
-                            "[bold magenta]" if confidence == SQLiConfidence.CRITICAL.value
-                            else "[bold red]"
-                        )
-                        console.print(
-                            f"{style}[!] Potential SQLi found "
-                            f"({confidence}): {_rich_escape(result['url'])}[/{style[1:]}"
-                        )
-                        for _t in sqli_result.get("tests", []):
-                            if _t.get("vulnerable"):
-                                _method = _t.get("method", "unknown")
-                                _ev_list = _t.get("evidence", [])
-                                _ev_str = " | ".join(_ev_list[:2]) if _ev_list else ""
-                                _param = _t.get("parameter", "")
-                                _param_str = f" [param: {_param}]" if _param else ""
-                                console.print(
-                                    f"[dim]    ↳ method: [yellow]{_method}[/yellow]"
-                                    f"{_param_str}"
-                                    + (f"  evidence: [italic]{_rich_escape(_ev_str[:120])}[/italic]" if _ev_str else "")
-                                    + "[/dim]"
-                                )
+                        _sqli_url = result["url"]
+                        # ── Dedup URL-level ──────────────────────────────────
+                        if _sqli_url not in self._reported_sqli_urls:
+                            self._reported_sqli_urls.add(_sqli_url)
+                            self.stats["sqli_vulnerable"] += 1
+                            confidence = sqli_result.get("overall_confidence", "?")
+                            style = (
+                                "[bold magenta]" if confidence == SQLiConfidence.CRITICAL.value
+                                else "[bold red]"
+                            )
+                            console.print(
+                                f"{style}[!] Potential SQLi found "
+                                f"({confidence}): {_rich_escape(_sqli_url)}[/{style[1:]}"
+                            )
+                            # ── Dedup sub-test: un solo ↳ per (method, param) ─
+                            _seen_sqli: set = set()
+                            for _t in sqli_result.get("tests", []):
+                                if _t.get("vulnerable"):
+                                    _method  = _t.get("method", "unknown")
+                                    _param   = _t.get("parameter", "")
+                                    _subkey  = f"{_method}|{_param}"
+                                    if _subkey in _seen_sqli:
+                                        continue
+                                    _seen_sqli.add(_subkey)
+                                    _ev_list  = _t.get("evidence", [])
+                                    _ev_str   = " | ".join(_ev_list[:2]) if _ev_list else ""
+                                    _param_str = f" [param: {_param}]" if _param else ""
+                                    console.print(
+                                        f"[dim]    ↳ method: [yellow]{_method}[/yellow]"
+                                        f"{_param_str}"
+                                        + (f"  evidence: [italic]{_rich_escape(_ev_str[:120])}[/italic]" if _ev_str else "")
+                                        + "[/dim]"
+                                    )
                     progress.advance(task2)
                     if self.config.get("stealth_mode", False):
                         _interruptible_sleep(random.uniform(3, 6))
@@ -785,24 +817,33 @@ class DorkEyeEnhanced:
                         self.stats["waf_detected"] += 1
 
                     if xss_result.get("vulnerable", False):
-                        self.stats["xss_vulnerable"] += 1
-                        confidence = xss_result.get("overall_confidence", "?")
-                        types_str  = ", ".join(xss_result.get("xss_types_found", []))
-                        console.print(
-                            f"[bold yellow][!] Potential XSS found "
-                            f"({confidence}) [{types_str}]: {_rich_escape(result['url'])}[/bold yellow]"
-                        )
-                        for _xt in xss_result.get("tests", []):
-                            if _xt.get("vulnerable"):
-                                _xtype  = _xt.get("type", "unknown")
-                                _xev    = " | ".join(_xt.get("evidence", [])[:2])
-                                _xpayld = _xt.get("payload", "")
-                                _xpstr  = f" [payload: {_xpayld[:60]}]" if _xpayld else ""
-                                console.print(
-                                    f"[dim]    ↳ type: [yellow]{_xtype}[/yellow]{_xpstr}"
-                                    + (f"  evidence: [italic]{_rich_escape(_xev[:120])}[/italic]" if _xev else "")
-                                    + "[/dim]"
-                                )
+                        _xss_url = result["url"]
+                        # ── Dedup URL-level ──────────────────────────────────
+                        if _xss_url not in self._reported_xss_urls:
+                            self._reported_xss_urls.add(_xss_url)
+                            self.stats["xss_vulnerable"] += 1
+                            confidence = xss_result.get("overall_confidence", "?")
+                            types_str  = ", ".join(xss_result.get("xss_types_found", []))
+                            console.print(
+                                f"[bold yellow][!] Potential XSS found "
+                                f"({confidence}) [{types_str}]: {_rich_escape(_xss_url)}[/bold yellow]"
+                            )
+                            # ── Dedup sub-test: un solo ↳ per XSS type ───────
+                            _seen_xss: set = set()
+                            for _xt in xss_result.get("tests", []):
+                                if _xt.get("vulnerable"):
+                                    _xtype = _xt.get("type", "unknown")
+                                    if _xtype in _seen_xss:
+                                        continue
+                                    _seen_xss.add(_xtype)
+                                    _xev   = " | ".join(_xt.get("evidence", [])[:2])
+                                    _xpayld = _xt.get("payload", "")
+                                    _xpstr  = f" [payload: {_xpayld[:60]}]" if _xpayld else ""
+                                    console.print(
+                                        f"[dim]    ↳ type: [yellow]{_xtype}[/yellow]{_xpstr}"
+                                        + (f"  evidence: [italic]{_rich_escape(_xev[:120])}[/italic]" if _xev else "")
+                                        + "[/dim]"
+                                    )
                     progress.advance(task3)
                     if self.config.get("stealth_mode", False):
                         _interruptible_sleep(random.uniform(2, 5))
@@ -886,7 +927,7 @@ class DorkEyeEnhanced:
             console.print("[bold red][*] SQL Injection Detection:[/bold red][bold green] OK[/bold green]")
         if self.config.get("xss_detection", False):
             xss_t = self.config.get("xss_type", "all").upper()
-            console.print(f"[bold yellow][*] XSS Detection:[/bold yellow][bold green] OK[/bold green] [dim](type: {xss_t})[/dim][/bold yellow]")
+            console.print(f"[bold yellow][*] XSS Detection:[/bold yellow][bold green] OK[/bold green] [dim](type: {xss_t})[/dim]")
         if TERMUX_IS_ANDROID:
             console.print("[bold green][*] Android/Termux mode: battery-saver constants active[/bold green]")
 
@@ -1342,7 +1383,10 @@ class DorkEyeEnhanced:
             line-height: 1; padding: 0 2px; }
         .file-dl:hover { color: #00aaff; }
         .files-empty { padding: 20px 16px; font-size: 11px; color: #004466; text-align: center; letter-spacing: 1px; }
-        .table-wrap { background: rgba(0,8,0,0.82); border: 1px solid #00aa2a; overflow-x: auto; }
+        .table-wrap { background: rgba(0,8,0,0.82); border: 1px solid #00aa2a; overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 290px); min-height: 200px; }
+        thead th { background: rgba(0,10,0,0.97); color: #00ff41; padding: 11px 10px; text-align: left;
+            border-bottom: 1px solid #00aa2a; font-size: 11px; letter-spacing: 2px;
+            text-transform: uppercase; white-space: nowrap; position: sticky; top: 0; z-index: 5; }
         table { width: 100%; border-collapse: collapse; table-layout: auto; }
         col.c-num   { width: 36px; }
         col.c-url   { min-width: 180px; }
@@ -1352,9 +1396,6 @@ class DorkEyeEnhanced:
         col.c-xss   { min-width: 110px; width: 10%; }
         col.c-waf   { min-width: 70px;  width: 7%; }
         col.c-size  { min-width: 54px;  width: 6%; }
-        th { background: rgba(0,255,65,0.06); color: #00ff41; padding: 11px 10px; text-align: left;
-            border-bottom: 1px solid #00aa2a; font-size: 11px; letter-spacing: 2px;
-            text-transform: uppercase; white-space: nowrap; }
         td { padding: 9px 10px; border-bottom: 1px solid rgba(0,170,42,0.15); font-size: 12px;
             vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         tr:hover td { background: rgba(0,255,65,0.04); }
@@ -1775,7 +1816,7 @@ class DorkEyeEnhanced:
         parts.append(f"""        </tbody>
     </table>
     </div>
-    <div class="footer">DorkEye v4.9 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+    <div class="footer">DorkEye v5.0 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
 </div>
 
 <div id="toast"></div>
@@ -2277,7 +2318,7 @@ def run_wizard():
         fmts    = [".json", ".csv", ".html", ".txt", ".md"]
         return output + fmts[fmt_idx]
 
-    def collect_run_options(config: dict, ask_count: bool = True) -> int:
+    def collect_run_options(config: dict, ask_count: bool = True) -> tuple:
         console.print("\n[bold cyan]┌─[ RUN OPTIONS ][/bold cyan]")
         console.print("[bold cyan]│[/bold cyan]")
         count = 50
@@ -2298,8 +2339,11 @@ def run_wizard():
             config["blacklist"] = ask_extensions("│    Blacklist extensions")
         if ask_yes_no("│  Set extension whitelist?"):
             config["whitelist"] = ask_extensions("│    Whitelist extensions")
+        do_dbscan = ask_yes_no("│  Enable DB port scan (DBScan)?") if _DBSCAN_AVAILABLE else False
+        if not _DBSCAN_AVAILABLE:
+            console.print("[bold cyan]│[/bold cyan]  [dim]DBScan non disponibile — db_portscan.py mancante[/dim]")
         console.print("[bold cyan]└─>[/bold cyan]")
-        return count
+        return count, do_dbscan
 
     def _ask_analyze(output: str) -> bool:
         if not output:
@@ -2467,7 +2511,7 @@ def run_wizard():
                 console.print("[red][!] Invalid choice.[/red]")
                 continue
 
-            count       = collect_run_options(config, ask_count=True)
+            count, do_dbscan = collect_run_options(config, ask_count=True)
             output      = pick_output()
             do_analyze  = _ask_analyze(output)
             crawl_opts  = _ask_crawl()
@@ -2487,6 +2531,24 @@ def run_wizard():
                 _run_analyze(dorkeye.results, output)
             if crawl_opts and dorks:
                 _run_crawl_wizard(dorks, crawl_opts, output or "")
+            if do_dbscan and dorkeye.results:
+                console.print(
+                    f"\n[bold cyan]┌─[ DB Port Scanner ][/bold cyan]"
+                    f"\n[bold cyan]└─>[/bold cyan] Starting on {len(dorkeye.results)} results...\n"
+                )
+                try:
+                    _db_wiz = DBPortScanAgent(timeout=2.5, threads=60, ports=None, max_hosts=200)
+                    _db_wiz_report = _db_wiz.run(dorkeye.results)
+                    if _db_wiz_report:
+                        _db_wiz_report.print_summary()
+                        _dump_dir_wiz  = Path(__file__).parent / "Dump"
+                        _db_wiz_base   = str(_dump_dir_wiz / str(output)) if output else str(_dump_dir_wiz / "dorkeye_dbscan.json")
+                        _db_wiz_saved  = save_dbscan_report(_db_wiz_report, _db_wiz_base)
+                        console.print(f"[bold green][✓] DBScan report → {_db_wiz_saved}[/bold green]")
+                except KeyboardInterrupt:
+                    console.print("\n[yellow][DBScan] Interrotto dall'utente.[/yellow]")
+                except Exception as _dbe_wiz:
+                    console.print(f"[yellow][DBScan] Errore: {_rich_escape(str(_dbe_wiz))}[/yellow]")
             continue
 
         if choice == "2":
@@ -2544,7 +2606,7 @@ def run_wizard():
 
             mode_idx = ask_choice("Mode", ["soft", "medium", "aggressive"])
             mode     = VALID_MODES[mode_idx]
-            collect_run_options(config, ask_count=False)
+            _, do_dbscan = collect_run_options(config, ask_count=False)
             output      = pick_output()
             do_analyze  = _ask_analyze(output)
             crawl_opts  = _ask_crawl()
@@ -2567,6 +2629,24 @@ def run_wizard():
                 _run_analyze(dorkeye.results, output)
             if crawl_opts and all_dorks:
                 _run_crawl_wizard(all_dorks, crawl_opts, output or "")
+            if do_dbscan and dorkeye.results:
+                console.print(
+                    f"\n[bold cyan]┌─[ DB Port Scanner ][/bold cyan]"
+                    f"\n[bold cyan]└─>[/bold cyan] Starting on {len(dorkeye.results)} results...\n"
+                )
+                try:
+                    _db_wiz2 = DBPortScanAgent(timeout=2.5, threads=60, ports=None, max_hosts=200)
+                    _db_wiz2_report = _db_wiz2.run(dorkeye.results)
+                    if _db_wiz2_report:
+                        _db_wiz2_report.print_summary()
+                        _dump_dir_wiz2  = Path(__file__).parent / "Dump"
+                        _db_wiz2_base   = str(_dump_dir_wiz2 / str(output)) if output else str(_dump_dir_wiz2 / "dorkeye_dbscan.json")
+                        _db_wiz2_saved  = save_dbscan_report(_db_wiz2_report, _db_wiz2_base)
+                        console.print(f"[bold green][✓] DBScan report → {_db_wiz2_saved}[/bold green]")
+                except KeyboardInterrupt:
+                    console.print("\n[yellow][DBScan] Interrupted by user.[/yellow]")
+                except Exception as _dbe_wiz2:
+                    console.print(f"[red][DBScan] Error: {_rich_escape(str(_dbe_wiz2))}[/red]")
             continue
 
         console.print("[red][!] Invalid option.[/red]")
@@ -2636,22 +2716,55 @@ def main():
         run_wizard()
         return
 
+    # ── Web UI ────────────────────────────────────────────────────────────────
+    # Checked before argparse to not consume --port / --no-browser
+    if "--ui" in sys.argv:
+        # dorkeye_web.py It is located in Tools/ which is already in sys.path
+        try:
+            from dorkeye_web import launch_web
+        except ImportError:
+            console.print(
+                "[red][!] dorkeye_web.py not found in Tools/.[/red]\n"
+                "[dim]    Make sure the file exists in DorkEye/Tools/dorkeye_web.py[/dim]\n"
+                "[dim]    and that Flask is installed:  pip install flask[/dim]"
+            )
+            sys.exit(1)
+
+        # Read --port and --no-browser if present, ignore the rest
+        import argparse as _ap_ui
+        _ui_p = _ap_ui.ArgumentParser(add_help=False)
+        _ui_p.add_argument("--port",       type=int, default=8080)
+        _ui_p.add_argument("--no-browser", action="store_true")
+        _ui_known, _ = _ui_p.parse_known_args()
+        launch_web(start_port=_ui_known.port, no_browser=_ui_known.no_browser)
+        return
+    # ─────────────────────────────────────────────────────────────────────────
+
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v4.9 | OSINT Dorking Tool",
+        description="DorkEye v5.0 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
+  %(prog)s --ui                 # Web Console (8080)
+  %(prog)s --ui --port          # Es: 9090
   %(prog)s --wizard
   %(prog)s -d "site:example.com filetype:pdf" -o results.json
   %(prog)s -d dorks.txt -c 100 -o output.html
-  %(prog)s -u "https://example.com/page.php?id=1" --sqli
-  %(prog)s -f Dump/results.json --sqli -o retest.json
+  %(prog)s -u "https://example.com/page.php?id=1" --sqli --xss
+  %(prog)s -f Dump/results.json --sqli --xss -o retest.json
   %(prog)s --dg=all --sqli --xss -o full_scan.json
+  %(prog)s --dg=all --dbscan -o results.json
+  %(prog)s --dg=all --sqli --dbscan -o full_scan.json
+  %(prog)s --dg=all --dbscan --dbscan-timeout 3 --dbscan-threads 80
 """
     )
 
     parser.add_argument("--wizard",          action="store_true")
+    parser.add_argument("--ui",             action="store_true",
+                        help="Launch the Web Console (http://127.0.0.1:8080)")
+    parser.add_argument("--port",           type=int, default=8080,
+                        help="Web Console Port (default: 8080)")
     parser.add_argument("-d", "--dork",      help="Single dork or file containing dorks")
     parser.add_argument("-u", "--url",       help="Direct URL to test")
     parser.add_argument("-f", "--file",      help="Load results from .json or .txt file")
@@ -2682,6 +2795,18 @@ def main():
     parser.add_argument("--analyze-fmt",     choices=["html","md","json","txt"], default="html")
     parser.add_argument("--analyze-out",     type=str, default=None)
     add_crawler_args(parser)
+    # ── DB Port Scanner ───────────────────────────────────────────────────────
+    parser.add_argument("--dbscan",          action="store_true",
+                        help="Scan open DB ports on hosts found by dorks")
+    parser.add_argument("--dbscan-threads",  type=int, default=60,
+                        help="Worker threads per host for DB scan (default: 60)")
+    parser.add_argument("--dbscan-timeout",  type=float, default=2.5,
+                        help="TCP connect timeout in seconds (default: 2.5)")
+    parser.add_argument("--dbscan-ports",    type=int, nargs="+", default=None,
+                        help="Override DB ports to scan (default: all known DB ports)")
+    parser.add_argument("--dbscan-max-hosts",type=int, default=200,
+                        help="Max unique hosts to scan (default: 200)")
+    # ─────────────────────────────────────────────────────────────────────────
 
     args = parser.parse_args()
 
@@ -2765,6 +2890,10 @@ def main():
         target_url   = args.url
         _do_url_sqli = config.get("sqli_detection", False)
         _do_url_xss  = config.get("xss_detection",  False)
+
+        if getattr(args, "dbscan", False):
+            console.print("[yellow][!] --dbscan viene ignorato in modalità -u (URL diretto). "
+                          "Usa --dbscan con -d / --dg / -f per scansionare più host.[/yellow]")
 
         console.print(f"\n[bold cyan]┌─[ DIRECT URL TEST ][/bold cyan]")
         console.print(f"[bold cyan]│[/bold cyan]  Target → [cyan]{_rich_escape(target_url)}[/cyan]")
@@ -2872,6 +3001,7 @@ def main():
         _do_xss     = config.get("xss_detection", False)
         _do_analyze = args.analyze or str(output_file).lower().endswith(".json")
         _do_crawl   = getattr(args, "crawl", False)
+        _do_dbscan  = getattr(args, "dbscan", False)
 
         console.print("[bold cyan]└─>[/bold cyan] Processing...\n")
 
@@ -2928,6 +3058,38 @@ def main():
                     console.print(f"\n[bold green][Crawl] Completed — +{len(_new_crawl)} new result(s)[/bold green]")
             except Exception as _fce:
                 console.print(f"[yellow][Crawl] Error: {_fce}[/yellow]")
+
+        if _do_dbscan:
+            if not _DBSCAN_AVAILABLE:
+                console.print("[yellow][!] db_portscan.py non trovato in Tools/ — DBScan non disponibile.[/yellow]")
+            elif not dorkeye.results:
+                console.print("[yellow][DBScan] Nessun risultato da scansionare.[/yellow]")
+            else:
+                console.print(
+                    f"\n[bold cyan]┌─[ DB Port Scanner ][/bold cyan]"
+                    f"\n[bold cyan]└─>[/bold cyan] Avvio su {len(dorkeye.results)} risultato/i...\n"
+                )
+                try:
+                    _db_agent = DBPortScanAgent(
+                        timeout   = getattr(args, "dbscan_timeout",   2.5),
+                        threads   = getattr(args, "dbscan_threads",   60),
+                        ports     = getattr(args, "dbscan_ports",     None),
+                        max_hosts = getattr(args, "dbscan_max_hosts", 200),
+                    )
+                    _db_report = _db_agent.run(dorkeye.results)
+                    if _db_report:
+                        _db_report.print_summary()
+                        # BUG FIX: output_file is just a filename; we must
+                        # pass the full Dump/ path so save_dbscan_report
+                        # writes next to the main results file and not in CWD.
+                        _dump_dir    = Path(__file__).parent / "Dump"
+                        _db_out_base = str(_dump_dir / str(output_file)) if output_file else str(_dump_dir / "dorkeye_dbscan.json")
+                        _db_saved    = save_dbscan_report(_db_report, _db_out_base)
+                        console.print(f"[bold green][✓] DBScan report → {_db_saved}[/bold green]")
+                except KeyboardInterrupt:
+                    console.print("\n[yellow][DBScan] Interrotto dall'utente.[/yellow]")
+                except Exception as _dbe:
+                    console.print(f"[yellow][DBScan] Errore: {_rich_escape(str(_dbe))}[/yellow]")
         return
 
     # ── Dork source ───────────────────────────────────────────────────────────
@@ -2997,6 +3159,45 @@ def main():
                     )
             except Exception as _ce:
                 console.print(f"[yellow][Crawl] Error: {_ce}[/yellow]")
+
+    # ── DB Port Scanner ───────────────────────────────────────────────────────
+    if getattr(args, "dbscan", False):
+        if not _DBSCAN_AVAILABLE:
+            console.print(
+                "[yellow][!] db_portscan.py not found in Tools — "
+                "copy the file to DorkEye/Tools/ and try again.[/yellow]"
+            )
+        elif not dorkeye.results:
+            console.print("[yellow][DBScan] No results to scan.[/yellow]")
+        else:
+            console.print(
+                f"\n[bold cyan]┌─[ DB Port Scanner ][/bold cyan]"
+                f"\n[bold cyan]└─>[/bold cyan] Starting on {len(dorkeye.results)} result(s)...\n"
+            )
+            try:
+                _db_agent = DBPortScanAgent(
+                    timeout   = getattr(args, "dbscan_timeout",   2.5),
+                    threads   = getattr(args, "dbscan_threads",   60),
+                    ports     = getattr(args, "dbscan_ports",     None),
+                    max_hosts = getattr(args, "dbscan_max_hosts", 200),
+                )
+                _db_report = _db_agent.run(dorkeye.results)
+                if _db_report:
+                    _db_report.print_summary()
+                    # BUG FIX: output_file is just a filename; we must
+                    # pass the full Dump/ path so save_dbscan_report
+                    # writes next to the main results file and not in CWD.
+                    _dump_dir    = Path(__file__).parent / "Dump"
+                    _db_out_base = str(_dump_dir / str(output_file)) if output_file else str(_dump_dir / "dorkeye_dbscan.json")
+                    _db_saved    = save_dbscan_report(_db_report, _db_out_base)
+                    console.print(
+                        f"[bold green][✓] DBScan report → {_db_saved}[/bold green]"
+                    )
+            except KeyboardInterrupt:
+                console.print("\n[yellow][DBScan] Stopped by user.[/yellow]")
+            except Exception as _dbe:
+                console.print(f"[yellow][DBScan] Error: {_rich_escape(str(_dbe))}[/yellow]")
+    # ─────────────────────────────────────────────────────────────────────────
 
     if dorkeye.output_file:
         console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
