@@ -574,6 +574,7 @@ class XSSDetector:
         xss_type:     str           = "all",
         oob_url:      Optional[str] = None,
         waf_detected: Optional[str] = None,
+        proxy:        Optional[str] = None,
     ):
         """
         Initialise the XSS detector.
@@ -594,6 +595,7 @@ class XSSDetector:
         self.read_timeout     = timeout
         self.xss_type         = xss_type
         self.oob_url          = oob_url
+        self.proxy            = proxy
 
         # [NEW-B] WAF override — set by DorkEye pipeline, skips per-method WAF probes
         self._waf_override: Optional[str] = waf_detected
@@ -639,6 +641,8 @@ class XSSDetector:
         adapter = HTTPAdapter(max_retries=retry)
         session.mount("http://",  adapter)
         session.mount("https://", adapter)
+        if getattr(self, "proxy", None):
+            session.proxies.update({"http": self.proxy, "https": self.proxy})
         return session
 
     def _timeout(self, extra: float = 0) -> Tuple[int, float]:

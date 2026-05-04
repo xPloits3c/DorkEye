@@ -540,10 +540,12 @@ class SQLiDetector:
         re.IGNORECASE,
     )
 
-    def __init__(self, stealth: bool = False, timeout: int = _DEFAULT_READ):
+    def __init__(self, stealth: bool = False, timeout: int = _DEFAULT_READ,
+                 proxy: str = None):
         """Initialise with stealth flag, timeout, fingerprint rotator, circuit breaker."""
         self.stealth             = stealth
         self.read_timeout        = timeout
+        self.proxy               = proxy
         self.circuit_breaker     = CircuitBreaker()
         self.fingerprint_rotator = HTTPFingerprintRotator()
         self._session            = self._build_session()
@@ -569,6 +571,8 @@ class SQLiDetector:
         adapter = HTTPAdapter(max_retries=retry)
         session.mount("http://",  adapter)
         session.mount("https://", adapter)
+        if getattr(self, "proxy", None):
+            session.proxies.update({"http": self.proxy, "https": self.proxy})
         return session
 
     def _timeout(self, extra_read: float = 0) -> Tuple[int, float]:
