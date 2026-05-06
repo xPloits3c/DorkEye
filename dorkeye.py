@@ -17,7 +17,6 @@ import re
 import signal
 import queue
 import threading
-import pickle
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
@@ -342,7 +341,7 @@ class SessionCheckpoint:
             self.CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             console.print(f"[yellow][~] Checkpoint dir non creabile: {e}[/yellow]")
-        self.path       = self.CHECKPOINT_DIR / f"{session_id}.pkl"
+        self.path       = self.CHECKPOINT_DIR / f"{session_id}.json"
         self.session_id = session_id
 
     def save(
@@ -351,10 +350,10 @@ class SessionCheckpoint:
         results:         List[Dict],
         stats:           dict,
     ) -> None:
-        """Pickle the current session state to disk."""
+        """Persist current session state to disk as JSON."""
         try:
-            with open(self.path, "wb") as f:
-                pickle.dump(
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(
                     {
                         "completed_dorks": completed_dorks,
                         "results":         results,
@@ -362,25 +361,26 @@ class SessionCheckpoint:
                         "saved_at":        datetime.now().isoformat(),
                     },
                     f,
-                    protocol=pickle.HIGHEST_PROTOCOL,
+                    ensure_ascii=False,
                 )
         except Exception as e:
-            # Non-fatal: the session continues even without a checkpoint
-            console.print(f"[yellow][~] Checkpoint save fallito: {e}[/yellow]")
+            console.print(f"[yellow][~] Checkpoint save failed: {e}[/yellow]")
 
     def load(self) -> Optional[dict]:
-        """
-        Loads the checkpoint from disk.
-
-        Returns None if the file does not exist or is corrupt.
-        """
+        """Return saved session state, or None if missing or corrupted."""
         if not self.path.exists():
+            legacy = self.path.with_suffix(".pkl")
+            if legacy.exists():
+                console.print(
+                    "[yellow][~] A legacy .pkl checkpoint was found but is no longer "
+                    "supported — the session will restart from the beginning.[/yellow]"
+                )
             return None
         try:
-            with open(self.path, "rb") as f:
-                return pickle.load(f)
+            with open(self.path, "r", encoding="utf-8") as f:
+                return json.load(f)
         except Exception as e:
-            console.print(f"[yellow][~] Checkpoint corrotto, ignorato: {e}[/yellow]")
+            console.print(f"[yellow][~] Checkpoint corrupted, ignoring: {e}[/yellow]")
             return None
 
     def delete(self) -> None:
