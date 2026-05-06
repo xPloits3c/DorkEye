@@ -296,6 +296,7 @@ DEFAULT_CONFIG = {
     "sqli_detection":       False,
     "xss_detection":        False,
     "xss_type":             "all",
+    "proxy":                None,
     "stealth_mode":         False,
     "user_agent_rotation":  True,
     "http_fingerprinting":  True,
@@ -406,7 +407,8 @@ class FileAnalyzer:
         self.extension_map = self._flatten_extensions()
         self.sqli_detector = SQLiDetector(
             stealth = config.get("stealth_mode", False),
-            timeout = config.get("request_timeout", 10)
+            timeout = config.get("request_timeout", 10),
+            proxy   = config.get("proxy"),
         )
         self.xss_detector = None
         if config.get("xss_detection", False):
@@ -416,6 +418,7 @@ class FileAnalyzer:
                     stealth  = config.get("stealth_mode", False),
                     timeout  = config.get("request_timeout", 10),
                     xss_type = config.get("xss_type", "all"),
+                    proxy    = config.get("proxy"),
                 )
             except ImportError:
                 pass
@@ -432,6 +435,9 @@ class FileAnalyzer:
         adapter = HTTPAdapter(max_retries=retry)
         session.mount("http://",  adapter)
         session.mount("https://", adapter)
+        proxy = self.config.get("proxy")
+        if proxy:
+            session.proxies.update({"http": proxy, "https": proxy})
         return session
 
     def _flatten_extensions(self) -> Dict[str, str]:
@@ -617,10 +623,12 @@ class DorkEyeEnhanced:
                     result_queue: queue.Queue = queue.Queue()
                     stop_event = threading.Event()
 
+                    _proxy = self.config.get("proxy")
                     def _producer(dork=dork, batch_size=batch_size,
-                                  q=result_queue, stop=stop_event):
+                                  q=result_queue, stop=stop_event,
+                                  proxy=_proxy):
                         try:
-                            for item in DDGS().text(dork, max_results=batch_size):
+                            for item in DDGS(proxy=proxy).text(dork, max_results=batch_size):
                                 if stop.is_set():
                                     break
                                 q.put(item)
@@ -915,6 +923,8 @@ class DorkEyeEnhanced:
             f"[dim]💡 Ctrl+C during a dork → skip.  "
             f"Double Ctrl+C → quit.[/dim]\n"
         )
+        if self.config.get("proxy"):
+            console.print(f"[bold magenta][*] Proxy:[/bold magenta][bold green] {self.config['proxy']}[/bold green]")
         if self.config.get("stealth_mode", False):
             console.print("[bold magenta][*] Stealth mode:[/bold magenta][bold green] OK[/bold green]")
         if self.config.get("http_fingerprinting", True):
@@ -1030,6 +1040,7 @@ class DorkEyeEnhanced:
             elif ext == ".json": self._save_json(filename)
             elif ext == ".html": self._save_html(filename)
             elif ext == ".txt":  self._save_txt(filename)
+            elif ext == ".md":   self._save_md(filename)
             else:
                 console.print(f"[red][!] Unsupported output format: {ext}[/red]")
         except Exception as _save_err:
@@ -1106,6 +1117,43 @@ class DorkEyeEnhanced:
                         xss_status = "VULNERABLE" if xss.get("vulnerable") else "SAFE"
                         xss_types  = ",".join(xss.get("xss_types_found", [])) or "—"
                         f.write(f"   XSS: {xss_status} ({xss.get('overall_confidence')}) [{xss_types}]\n")
+                f.write("\n")
+
+    def _save_md(self, filename: str):
+        """Write a Markdown report of all results."""
+        total   = len(self.results)
+        sqli_v  = self.stats.get("sqli_vulnerable", 0)
+        xss_v   = self.stats.get("xss_vulnerable",  0)
+        dupes   = self.stats.get("duplicates",       0)
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(f"# DorkEye Report\n\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write("## Summary\n\n")
+            f.write("| Metric | Value |\n|---|---|\n")
+            f.write(f"| Total results | {total} |\n")
+            f.write(f"| SQLi vulnerable | {sqli_v} |\n")
+            f.write(f"| XSS vulnerable | {xss_v} |\n")
+            f.write(f"| Duplicates skipped | {dupes} |\n\n")
+            f.write("## Results\n\n")
+            for idx, r in enumerate(self.results, 1):
+                sqli = r.get("sqli_test", {})
+                xss  = r.get("xss_test",  {})
+                sqli_tag = " 🔴 SQLi" if sqli.get("vulnerable") else ""
+                xss_tag  = " 🔴 XSS"  if xss.get("vulnerable")  else ""
+                f.write(f"### {idx}. {r.get('title') or r.get('url')}{sqli_tag}{xss_tag}\n\n")
+                f.write(f"- **URL**: {r.get('url')}\n")
+                if r.get("dork"):
+                    f.write(f"- **Dork**: `{r['dork']}`\n")
+                if r.get("category"):
+                    f.write(f"- **Category**: {r['category']}\n")
+                if sqli.get("tested"):
+                    status = "VULNERABLE" if sqli.get("vulnerable") else "safe"
+                    f.write(f"- **SQLi**: {status} ({sqli.get('overall_confidence', '—')})\n")
+                if xss.get("tested"):
+                    status = "VULNERABLE" if xss.get("vulnerable") else "safe"
+                    f.write(f"- **XSS**: {status} ({xss.get('overall_confidence', '—')})\n")
+                if r.get("snippet"):
+                    f.write(f"\n> {r['snippet']}\n")
                 f.write("\n")
 
     def _save_html(self, filename: str):
@@ -2582,6 +2630,59 @@ def run_wizard():
 
 
 # ══════════════════════════════════════════════════════════════
+#  DRY-RUN helper
+# ══════════════════════════════════════════════════════════════
+
+def _cmd_dry_run(
+    dorks: List[str],
+    args,
+    selected_categories: Optional[List[str]] = None,
+) -> None:
+    """Print dork preview and exit — no network calls are made."""
+    total = len(dorks)
+
+    if getattr(args, "dg", None):
+        source = f"--dg={args.dg[0]}  --mode={getattr(args, 'mode', 'soft')}"
+    elif getattr(args, "dork", None):
+        source = f"--dork={args.dork}"
+    else:
+        source = "unknown"
+
+    console.print(Panel(
+        f"[bold green]DRY RUN[/bold green] — no search performed, no results saved",
+        title=f"[bold yellow][ {total} dork(s) ready ][/bold yellow]",
+        border_style="green",
+    ))
+
+    tbl = Table(show_header=False, box=None, padding=(0, 2))
+    tbl.add_column("k", style="cyan")
+    tbl.add_column("v", style="green")
+    tbl.add_row("Source", source)
+    if selected_categories:
+        tbl.add_row("Categories", ", ".join(selected_categories))
+    tbl.add_row("Total dorks", str(total))
+    console.print(tbl)
+
+    sample = min(20, total)
+    console.print(f"\n[bold cyan]Sample (first {sample} of {total}):[/bold cyan]")
+    for i, dork in enumerate(dorks[:sample], 1):
+        console.print(f"  [dim]{i:3}.[/dim] {_rich_escape(dork)}")
+    if total > sample:
+        console.print(f"  [dim]  … and {total - sample} more[/dim]")
+
+    output = getattr(args, "output", None)
+    if output:
+        dump_dir = Path(__file__).parent / "Dump"
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        out_path = dump_dir / output
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(dorks))
+        console.print(f"\n[bold green][✓] Dorks saved → Dump/{output}[/bold green]")
+
+    console.print(f"\n[dim]Remove --dry-run to start the actual search.[/dim]")
+
+
+# ══════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════
 
@@ -2651,6 +2752,11 @@ def main():
     parser.add_argument("--sqli",            action="store_true")
     parser.add_argument("--xss",             action="store_true")
     parser.add_argument("--xss-type",        choices=["reflected","stored","dom","all"], default="all")
+    parser.add_argument("--proxy",            type=str, default=None,
+                        metavar="URL",
+                        help="HTTP/SOCKS5 proxy (e.g. socks5://127.0.0.1:9050)")
+    parser.add_argument("--dry-run",         action="store_true",
+                        help="Preview dorks without performing any search")
     parser.add_argument("--stealth",         action="store_true")
     parser.add_argument("--no-fingerprint",  action="store_true")
     parser.add_argument("--templates",       type=str)
@@ -2728,9 +2834,10 @@ def main():
     if args.no_fingerprint: config["http_fingerprinting"] = False
     if args.blacklist:      config["blacklist"]            = args.blacklist
     if args.whitelist:      config["whitelist"]            = args.whitelist
+    if args.proxy:          config["proxy"]               = args.proxy
 
     output_file = args.output
-    if not output_file:
+    if not output_file and not getattr(args, "dry_run", False):
         output_file = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         console.print(f"[dim][~] No -o specified — saving to [bold]{output_file}[/bold][/dim]")
 
@@ -2973,6 +3080,10 @@ def main():
         console.print(f"[cyan][*] Generated {len(dorks)} dorks (mode: {args.mode})[/cyan]")
     else:
         dorks = dorkeye.process_dorks(args.dork)
+
+    if getattr(args, "dry_run", False):
+        _cmd_dry_run(dorks, args, selected_categories)
+        return
 
     console.print(f"[bold cyan]┌─[ LOADED {len(dorks)} DORK(s) ][/bold cyan]")
     console.print(f"[bold cyan]└─>[/bold cyan] Starting...\n")

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-DorkEye Analyzer 
+DorkEye Analyzer v1.0
 ======================
-Fully autonomous post-search analysis for DorkEye Project
+Fully autonomous post-search analysis — zero AI, zero Ollama.
 
 Works with Python + requests + rich only (already in requirements.txt).
 Reads results saved by DorkEye (-o results.json) and produces:
@@ -12,7 +12,7 @@ Reads results saved by DorkEye (-o results.json) and produces:
   3. Secrets   — credentials and sensitive data scan (40+ regex patterns)
   4. Report    — HTML with dark theme / Markdown / JSON / text
 
-Es:
+Uso diretto su file:
     python dorkeye_analyze.py Dump/results.json
     python dorkeye_analyze.py Dump/results.json --fetch --fmt=html --out=report.html
     python dorkeye_analyze.py Dump/results.json --fetch --fetch-max=30 --fmt=md
@@ -21,7 +21,7 @@ Integrated into dorkeye.py with --analyze-local:
     python dorkeye.py --dg=all -o results.html --analyze-local
     python dorkeye.py -d dorks.txt --analyze-local --analyze-local-fetch --analyze-local-fmt=html
 
-Autore: @xPloits3c
+Autore: DorkEye Project
 """
 
 from __future__ import annotations
@@ -236,6 +236,7 @@ def fetch_pages(
     timeout:   int   = 10,
     max_chars: int   = 10000,
     delay_s:   float = 1.2,
+    proxy:     str   = None,
 ) -> List[dict]:
     """
     Downloads the real HTML content of priority pages.
@@ -273,6 +274,7 @@ def fetch_pages(
             continue
 
         try:
+            _proxies = {"http": proxy, "https": proxy} if proxy else None
             resp = requests.get(
                 url,
                 timeout=timeout,
@@ -284,6 +286,7 @@ def fetch_pages(
                 allow_redirects=True,
                 stream=True,
                 verify=False,
+                proxies=_proxies,
             )
             if resp.status_code >= 400:
                 r["page_content"] = ""
