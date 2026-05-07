@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye Project v5.0 | OSINT Dorking Tool
+DorkEye v5.0 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
