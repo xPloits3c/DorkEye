@@ -120,7 +120,9 @@
 
 ## Usage 
 
-<img width="1141" height="948" alt="de-h" src="https://github.com/user-attachments/assets/99fe8d3a-822a-4bfe-97b1-62897db6db1d" />
+<img width="727" height="805" alt="dev5 0usage" src="https://github.com/user-attachments/assets/99927171-0c7f-4659-9608-ae554aec518e" />
+
+---
 
 🔹 # WIZARD Mode
 ```json
@@ -151,7 +153,7 @@ python dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o resu
   python dorkeye.py -f Dump/results.json --sqli --xss --dbscan --analyze -o retest.html
 ```
 
-🔹 # Web UI
+🔹 # Web Console
 ```json
   python dorkeye.py --ui
 ```
