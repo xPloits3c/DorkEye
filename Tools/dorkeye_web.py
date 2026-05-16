@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
 Web Console for DorkEye Project
+
 """
 
 import os, sys, re, json, time, uuid, socket, threading, subprocess, webbrowser
+import logging, traceback
 from pathlib import Path
 from datetime import datetime
 from collections import deque
@@ -14,6 +16,27 @@ try:
     _FLASK = True
 except ImportError:
     _FLASK = False
+
+# ── Logger (server-side only — never forwarded to HTTP clients) ───────────────
+_LOG = logging.getLogger('dorkeye_web')
+if not _LOG.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter('[%(levelname)s] %(name)s: %(message)s'))
+    _LOG.addHandler(_h)
+_LOG.setLevel(logging.DEBUG)
+
+
+def _safe_err(e: Exception, context: str = '') -> str:
+    """
+    Log the full exception server-side (console visible to operator),
+    return ONLY the exception *class name* to the HTTP client.
+
+    This prevents stack traces, file paths and internal details
+    from leaking via API responses (CWE-209 / CWE-497).
+    """
+    _LOG.error('[%s] %s: %s\n%s', context, type(e).__name__, e, traceback.format_exc())
+    return type(e).__name__
+
 
 def _find_project_root() -> Path:
     here = Path(__file__).resolve().parent
@@ -91,7 +114,8 @@ class JobManager:
                 proc.wait()
                 job.status='done' if proc.returncode==0 else 'error'
             except Exception as e:
-                job.add(f'[LAUNCHER ERROR] {e}'); job.status='error'
+                job.add(f'[LAUNCHER ERROR] {type(e).__name__}'); job.status='error'
+                _LOG.error('[JobManager._run] %s: %s', type(e).__name__, e)
             finally:
                 job.ended=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         threading.Thread(target=_run,daemon=True,name=f'job-{jid}').start()
@@ -106,36 +130,16 @@ class JobManager:
 JOBS = JobManager()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  FIX #1 — _ensure_dump_path rimosso e sostituito con _normalize_output
-#
-#  BUG ORIGINALE:
-#   _ensure_dump_path() aggiungeva il prefisso "Dump/" all'argomento -o,
-#   MA dorkeye.py internamente fa già Path('Dump') / output → risultato:
-#       -o "Dump/web_scan.html"  →  dorkeye.py salva in  "Dump/Dump/web_scan.html"
-#   Errore a runtime: FileNotFoundError: '.../Dump/Dump/web_scan_....html'
-#
-#  FIX:
-#   _normalize_output() restituisce DUE valori:
-#     cmd_arg     → nome file NUDO (senza Dump/) da passare a -o
-#                   dorkeye.py ci mette davanti Dump/ da solo
-#     ui_filename → nome file NUDO usato per il route /dump/<filename>
-#                   che serve da DUMP_DIR: send_from_directory(DUMP_DIR, filename)
-#
-#  NOTA: se l'utente specifica già un percorso assoluto viene rispettato;
-#        se contiene già "Dump/" come primo segmento viene strippato
-#        così da non raddoppiarlo.
-# ══════════════════════════════════════════════════════════════════════════════
 
 def _normalize_output(out: str, default_prefix: str) -> tuple:
     """
-    Restituisce (cmd_arg, ui_filename).
+    Returns (cmd_arg, ui_filename).
 
-    cmd_arg     — passato a dorkeye.py come -o.
-                  Solo il nome file (senza prefisso Dump/):
-                  dorkeye.py aggiunge Dump/ internamente.
-    ui_filename — relativo a DUMP_DIR; usato dal route /dump/<ui_filename>
-                  e mostrato nella sezione Results.
+    cmd_arg     — passed to dorkeye.py as -o.
+                  File name only (without Dump/ prefix):
+                  dorkeye.py adds Dump/ internally.
+    ui_filename — relative to DUMP_DIR; used by the route /dump/<ui_filename>
+                  is shown in the Results section.
     """
     if not out:
         ts  = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -143,11 +147,9 @@ def _normalize_output(out: str, default_prefix: str) -> tuple:
 
     p = Path(out)
 
-    # Percorso assoluto → passiamo as-is; per l'UI usiamo solo il nome
     if p.is_absolute():
         return str(p), p.name
 
-    # Stripping del prefisso Dump/ (case-insensitive) per evitare Dump/Dump/…
     parts = p.parts
     if parts and parts[0].lower() == 'dump':
         bare = str(Path(*parts[1:])) if len(parts) > 1 else p.name
@@ -173,7 +175,6 @@ def build_scan_cmd(d: dict) -> tuple:
     if d.get('count'):
         cmd += ['-c', str(int(d['count']))]
 
-    # FIX #1 applicato qui
     cmd_arg, ui_filename = _normalize_output(d.get('output','').strip(), 'web_scan')
     cmd += ['-o', cmd_arg]
 
@@ -234,7 +235,7 @@ def build_scan_cmd(d: dict) -> tuple:
         if dbth: cmd += ['--dbscan-threads',   str(int(dbth))]
         if dbmh: cmd += ['--dbscan-max-hosts', str(int(dbmh))]
 
-    return cmd, ui_filename          # ui_filename per Job.output_file
+    return cmd, ui_filename
 
 
 def build_urltest_cmd(d: dict) -> tuple:
@@ -246,7 +247,6 @@ def build_urltest_cmd(d: dict) -> tuple:
         if xtype != 'all': cmd += ['--xss-type', xtype]
     if d.get('stealth'): cmd.append('--stealth')
 
-    # FIX #1 applicato qui
     cmd_arg, ui_filename = _normalize_output(d.get('output','').strip(), 'url_test')
     cmd += ['-o', cmd_arg]
     return cmd, ui_filename
@@ -264,7 +264,6 @@ def build_file_cmd(d: dict) -> tuple:
         if dbth: cmd += ['--dbscan-threads',   str(int(dbth))]
         if dbmh: cmd += ['--dbscan-max-hosts', str(int(dbmh))]
 
-    # FIX #1 applicato qui
     cmd_arg, ui_filename = _normalize_output(d.get('output','').strip(), 'file_retest')
     cmd += ['-o', cmd_arg]
     return cmd, ui_filename
@@ -303,15 +302,33 @@ def _get_dork_generator():
     from dork_generator import DorkGenerator
     return DorkGenerator
 
+
+
 def _resolve_template(tpl_str: str):
     all_yaml = sorted(TEMPLATES_DIR.glob('*.yaml')) if TEMPLATES_DIR.exists() else []
     preferred = TEMPLATES_DIR / 'dorks_templates.yaml'
+
     if not tpl_str or tpl_str == 'default':
         return [preferred] if preferred.exists() else all_yaml
+
     if tpl_str == 'all':
         return all_yaml
-    p = TEMPLATES_DIR / tpl_str
-    if p.exists(): return [p]
+
+    safe_name = Path(tpl_str).name
+
+    if not safe_name.lower().endswith('.yaml'):
+        _LOG.warning('[_resolve_template] rejected non-yaml name: %r', safe_name)
+        return [preferred] if preferred.exists() else all_yaml
+
+    p = TEMPLATES_DIR / safe_name
+    try:
+        p.resolve().relative_to(TEMPLATES_DIR.resolve())
+    except ValueError:
+        _LOG.warning('[_resolve_template] path traversal attempt rejected: %r', tpl_str)
+        return [preferred] if preferred.exists() else all_yaml
+
+    if p.exists():
+        return [p]
     return [preferred] if preferred.exists() else all_yaml
 
 
@@ -327,10 +344,6 @@ def create_app(port: int) -> 'Flask':
     def index():
         return render_template_string(_HTML_TEMPLATE, port=port)
 
-    # ── FIX #2 — dump_serve: il path può contenere sottocartelle ─────────────
-    # Uso send_from_directory con safe_join implicito di Flask; nessuna
-    # modifica alla firma, ma ora ui_filename è SOLO il nome file → il route
-    # /dump/<filename> funziona correttamente.
     @app.route('/dump/<path:filename>')
     def dump_serve(filename):
         return send_from_directory(str(DUMP_DIR), filename)
@@ -401,7 +414,7 @@ def create_app(port: int) -> 'Flask':
             jid = JOBS.spawn(cmd, lbl, output_file=out)
             return jsonify({'job_id':jid,'label':lbl,'output':out})
         except Exception as e:
-            return jsonify({'error':str(e)}), 500
+            return jsonify({'error': _safe_err(e, 'api_run')}), 500
 
     @app.route('/api/dump')
     def api_dump():
@@ -426,7 +439,7 @@ def create_app(port: int) -> 'Flask':
             return jsonify({'categories':sorted(cats),'templates_dir':str(TEMPLATES_DIR),
                             'files_found':[tf.name for tf in tpl_files if tf.exists()]})
         except Exception as e:
-            return jsonify({'categories':[],'error':str(e)})
+            return jsonify({'categories':[], 'error': _safe_err(e, 'api_tpl_cats')})
 
     @app.route('/api/dorkgen/preview', methods=['POST'])
     def api_dg_preview():
@@ -437,7 +450,7 @@ def create_app(port: int) -> 'Flask':
             tpl_files = _resolve_template(d.get('templates',''))
             cat = d.get('category','all'); mode = d.get('mode','soft')
             if not tpl_files:
-                return jsonify({'error':f'Nessun file .yaml trovato in {TEMPLATES_DIR}.','dorks':[]})
+                return jsonify({'error':f'Nessun file .yaml trovato in Templates/.','dorks':[]})
             dorks=[]; loaded=[]; missing=[]
             for tf in tpl_files:
                 if tf.exists():
@@ -454,7 +467,8 @@ def create_app(port: int) -> 'Flask':
             return jsonify({'dorks':dorks,'count':len(dorks),'loaded':loaded,
                             'warning':warn.strip() if warn else None})
         except Exception as e:
-            return jsonify({'error':str(e),'dorks':[]})
+            # FIX #41: log full exception server-side, expose only class name
+            return jsonify({'error': _safe_err(e, 'api_dg_preview'), 'dorks':[]})
 
     @app.route('/api/dorkgen/export', methods=['POST'])
     def api_dg_export():
@@ -476,13 +490,14 @@ def create_app(port: int) -> 'Flask':
             return Response(text, mimetype='text/plain',
                             headers={'Content-Disposition':f'attachment; filename="{fname}"'})
         except Exception as e:
-            return Response(f'Error: {e}', status=500)
+            err_type = _safe_err(e, 'api_dg_export')
+            return Response(f'Export error: {err_type}', status=500)
 
     return app
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  HTML TEMPLATE (invariato rispetto all'originale — tutti i bug erano in Python)
+#  HTML TEMPLATE
 # ══════════════════════════════════════════════════════════════════════════════
 
 _HTML_TEMPLATE = r"""<!DOCTYPE html>
@@ -1090,7 +1105,7 @@ function previewDorks(){
   qs('#dgpl').innerHTML='<div class="t-d" style="padding:8px">Generating...</div>';qs('#dg-stats').textContent='';
   post('/api/dorkgen/preview',p,d=>{
     if(d.error){qs('#dg-stats').textContent='';
-      qs('#dgpl').innerHTML=`<div class="t-e" style="padding:8px;line-height:1.6"><b style="color:var(--red)">! Errore</b><br><br>${esc(d.error)}<br><br><span style="color:var(--g5);font-size:10px">Verifica che Templates/ esista nella root e contenga file .yaml</span></div>`;return;}
+      qs('#dgpl').innerHTML=`<div class="t-e" style="padding:8px;line-height:1.6"><b style="color:var(--red)">! Error</b><br><br>${esc(d.error)}<br><br><span style="color:var(--g5);font-size:10px">Verifica che Templates/ esista nella root e contenga file .yaml</span></div>`;return;}
     if(!d.dorks||d.dorks.length===0){qs('#dg-stats').textContent='Generated: 0 dorks';
       qs('#dgpl').innerHTML=`<div class="t-w" style="padding:8px;line-height:1.6"><b>Nessun dork generato.</b><br>Template: ${esc((d.loaded||[]).join(', ')||'nessuno')}<br>Prova mode diverso o categoria diversa.</div>`;return;}
     let stats='Generated: '+d.count+' dorks | mode: '+p.mode+(d.count>200?' — showing first 200':'');
