@@ -1,5 +1,5 @@
 # ============================================================
-# DorkEye — Advanced JSON Exposure Dork List
+# DorkEye — Advanced JSON Exposure Dork List 2026
 # Category: json_exposure
 # Author: xPloits3c
 # Version: 1.0
