@@ -1,0 +1,190 @@
+# ============================================================
+# DorkEye — Advanced JSON Exposure Dork List
+# Category: json_exposure
+# Author: xPloits3c
+# Version: 1.0
+# ============================================================
+
+# ————————————————————
+# [1] FIREBASE — High Priority
+# ————————————————————
+
+filetype:json “firebase” “apiKey”
+filetype:json “firebase” “authDomain”
+filetype:json “firebase” “databaseURL”
+filetype:json “firebase” “storageBucket”
+filetype:json “firebase” “messagingSenderId”
+filetype:json “firebase” “appId”
+filetype:json inurl:“firebase-adminsdk”
+filetype:json “type” “service_account” “private_key”
+filetype:json “firebase” “private_key_id”
+filetype:json “firebase” “client_email” “private_key”
+filetype:json “firebaseConfig” “apiKey”
+filetype:json “FIREBASE_TOKEN”
+site:storage.googleapis.com “firebase” “apiKey”
+site:firebaseio.com filetype:json
+inurl:firebaseapp.com filetype:json “apiKey”
+
+# ————————————————————
+# [2] AWS — High Priority
+# ————————————————————
+
+filetype:json “aws_access_key_id”
+filetype:json “aws_secret_access_key”
+filetype:json “aws_session_token”
+filetype:json “AWSAccessKeyId”
+filetype:json “AWSSecretKey”
+filetype:json “s3” “aws_access_key_id”
+filetype:json “region” “aws_access_key_id” “aws_secret_access_key”
+filetype:json “iam” “access_key” “secret_key”
+filetype:json “credentials” “aws”
+filetype:json inurl:“aws-exports”
+
+# ————————————————————
+# [3] GOOGLE CLOUD / GCP
+# ————————————————————
+
+filetype:json “type” “service_account” “project_id”
+filetype:json “client_email” “token_uri” “private_key”
+filetype:json “google_client_id” “google_client_secret”
+filetype:json “client_secret” site:storage.googleapis.com
+filetype:json “oauth2” “client_id” “client_secret”
+filetype:json “gcp” “private_key”
+
+# ————————————————————
+# [4] AZURE
+# ————————————————————
+
+filetype:json “azure_client_id” “azure_client_secret”
+filetype:json “azure_tenant_id” “client_secret”
+filetype:json “subscriptionId” “clientSecret”
+filetype:json “AzureWebJobsStorage” “DefaultEndpointsProtocol”
+
+# ————————————————————
+# [5] API KEYS & TOKENS — Generic
+# ————————————————————
+
+filetype:json “api_key” “secret”
+filetype:json “api_secret”
+filetype:json “access_token” “refresh_token”
+filetype:json “auth_token”
+filetype:json “bearer_token”
+filetype:json “client_id” “client_secret”
+filetype:json “X-API-Key”
+filetype:json “authorization” “Bearer”
+
+# ————————————————————
+# [6] STRIPE / PAYMENT
+# ————————————————————
+
+filetype:json “stripe” “sk_live_”
+filetype:json “stripe” “secret”
+filetype:json “stripe_secret_key”
+filetype:json “stripe_publishable_key” “stripe_secret_key”
+filetype:json “STRIPE_API_KEY”
+filetype:json “paypal” “client_id” “client_secret”
+filetype:json “braintree” “privateKey”
+
+# ————————————————————
+# [7] TWILIO / SENDGRID / COMMS
+# ————————————————————
+
+filetype:json “twilio” “auth_token” “account_sid”
+filetype:json “TWILIO_AUTH_TOKEN”
+filetype:json “sendgrid” “api_key”
+filetype:json “SENDGRID_API_KEY”
+filetype:json “mailgun” “api_key”
+filetype:json “smtp” “password”
+filetype:json “smtp_password” “smtp_user”
+
+# ————————————————————
+# [8] DATABASE CREDENTIALS
+# ————————————————————
+
+filetype:json “database_url” “password”
+filetype:json “db_password”
+filetype:json “db_user” “db_pass”
+filetype:json “connection_string” “password”
+filetype:json “mysql” “password”
+filetype:json “postgres” “password”
+filetype:json “mongodb” “password”
+filetype:json “redis” “password”
+filetype:json “DB_HOST” “DB_PASSWORD”
+filetype:json “DATABASE_URL” “postgres://”
+filetype:json “DATABASE_URL” “mysql://”
+filetype:json “DATABASE_URL” “mongodb://”
+
+# ————————————————————
+# [9] EXPOSED API ENDPOINTS
+# ————————————————————
+
+filetype:json inurl:”/api/users”
+filetype:json inurl:”/api/admin”
+filetype:json inurl:”/api/config”
+filetype:json inurl:”/api/keys”
+filetype:json inurl:”/api/credentials”
+filetype:json inurl:”/api/token”
+filetype:json inurl:”/api/secrets”
+
+# ————————————————————
+# [10] DATA DUMPS — PII / USER DATA
+# ————————————————————
+
+filetype:json “email” “password” inurl:dump
+filetype:json “username” “password” “email”
+filetype:json “ssn” OR “social_security”
+filetype:json “credit_card” OR “card_number”
+filetype:json “phone_number” “email” “address”
+intitle:“index of” “.json” “users”
+intitle:“index of” “.json” “accounts”
+intitle:“index of” “.json” “customers”
+
+# ————————————————————
+# [11] CONFIG & ENVIRONMENT FILES EXPOSED
+# ————————————————————
+
+intitle:“index of” “config.json”
+intitle:“index of” “settings.json”
+intitle:“index of” “secrets.json”
+intitle:“index of” “credentials.json”
+intitle:“index of” “.env.json”
+intitle:“index of” “appconfig.json”
+inurl:”/config/config.json”
+inurl:”/.well-known/” filetype:json
+
+# ————————————————————
+# [12] PACKAGE & DEPENDENCY DISCLOSURE
+# ————————————————————
+
+filetype:json “dependencies” inurl:package.json
+intitle:“index of” “package.json”
+intitle:“index of” “package-lock.json”
+intitle:“index of” “composer.json”
+filetype:json “devDependencies” “scripts”
+
+# ————————————————————
+# [13] WORDPRESS / CMS
+# ————————————————————
+
+filetype:json inurl:“wp-json/wp/v2/users”
+filetype:json inurl:“wp-json” “email”
+filetype:json “wp-config” “db_password”
+filetype:json inurl:“wp-json/wc/v3”
+
+# ————————————————————
+# [14] GITHUB / SOURCE CODE LEAKS
+# ————————————————————
+
+filetype:json “api_key” site:github.com
+filetype:json “private_key” site:github.com
+filetype:json “aws_access_key_id” site:github.com
+filetype:json “firebase” “apiKey” site:github.com
+filetype:json “client_secret” site:github.com
+
+# ============================================================
+
+# END OF LIST — Total: ~110 dorks
+# Use only on authorized targets.
+# DorkEye | xPloits3c | github.com/xPloits3c/DorkEye
+
+# ============================================================
