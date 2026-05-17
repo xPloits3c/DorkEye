@@ -14,7 +14,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
 ![Search](https://img.shields.io/badge/Search-DuckDuckGo-FF6600?style=flat-square&logo=duckduckgo&logoColor=white)
-![Version](https://img.shields.io/badge/Version-4.8-brightgreen?style=flat-square)
+![Version](https://img.shields.io/badge/Version-5.0-brightgreen?style=flat-square)
 
 <!-- ── Row 2: Live stats ── -->
 ![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=blue)
