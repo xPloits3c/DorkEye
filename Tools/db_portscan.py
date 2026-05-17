@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-DorkEye DB Port Scanner
-Scans exposed database ports on hosts extracted from dork results for DorkeEye Project.
+DB Port Scanner for DorkEye Project
+Scans exposed database ports on hosts extracted from dork results.
 
 Lives in: DorkEye/Tools/db_portscan.py
 
@@ -19,7 +19,6 @@ Severity:
   INFO      — port closed / filtered / timeout
 
 Author: xPloits3c | DorkEye Project
-
 """
 
 from __future__ import annotations
@@ -42,7 +41,10 @@ try:
     from rich.markup import escape as _re
     _console = Console()
     def _log(msg: str, style: str = "cyan") -> None:
-        _console.print(f"[{style}]{msg}[/{style}]")
+        if style:
+            _console.print(f"[{style}]{msg}[/{style}]")
+        else:
+            _console.print(msg)
 except ImportError:
     _console = None
     def _log(msg: str, style: str = "") -> None:
