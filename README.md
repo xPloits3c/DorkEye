@@ -18,10 +18,10 @@
 
 <!-- ── Row 2: Live stats ── -->
 ![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=blue)
-![Stars](https://img.shields.io/github/stars/xPloits3c/DorkEye?style=flat-square&logo=github&label=Stars&color=yellow)
-![Forks](https://img.shields.io/github/forks/xPloits3c/DorkEye?style=flat-square&logo=github&label=Forks&color=lightgrey)
-![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye?style=flat-square&logo=github&label=Issues&color=brightgreen)
-![Last Commit](https://img.shields.io/github/last-commit/xPloits3c/DorkEye?style=flat-square&logo=github&label=Last+Commit&color=informational)
+![Stars](https://img.shields.io/badge/Stars-119-yellow?style=flat-square&logo=github)
+![Forks](https://img.shields.io/badge/Forks-18-lightgrey?style=flat-square&logo=github)
+![Issues](https://img.shields.io/badge/Issues-0-brightgreen?style=flat-square&logo=github)
+![Last Commit](https://img.shields.io/badge/Last%20Commit-June%202026-informational?style=flat-square&logo=github)
 
 <!-- ── Row 3: Community ── -->
 [![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](#)
