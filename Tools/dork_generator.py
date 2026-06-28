@@ -24,7 +24,7 @@ class DorkGenerator:
         self._load()
 
     # ─────────────────────────────────────────────
-    # LOAD
+    # LOAD TEMPLATES
     # ─────────────────────────────────────────────
 
     def _load(self):
