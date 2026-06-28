@@ -18,8 +18,8 @@
 
 <!-- ── Row 2: Live stats ── -->
 ![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=blue)
-![Stars](https://img.shields.io/badge/Stars-119-yellow?style=flat-square&logo=github)
-![Forks](https://img.shields.io/badge/Forks-18-lightgrey?style=flat-square&logo=github)
+![Stars](https://img.shields.io/badge/Stars-149-yellow?style=flat-square&logo=github)
+![Forks](https://img.shields.io/badge/Forks-20-lightgrey?style=flat-square&logo=github)
 ![Issues](https://img.shields.io/badge/Issues-0-brightgreen?style=flat-square&logo=github)
 ![Last Commit](https://img.shields.io/badge/Last%20Commit-June%202026-informational?style=flat-square&logo=github)
 
