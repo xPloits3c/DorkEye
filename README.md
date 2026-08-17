@@ -30,7 +30,7 @@
 
 ---
 
-## What is DorkEye
+## What is DorkEye?
 **DorkEye** is an advanced, automated `OSINT DORKING TOOL` that leverages its capabilities to discover exposed web assets through intelligent search queries.
 - It combines a powerful dork generator, a full SQL,XSS injection detection engine, a 13-step autonomous analysis pipeline, an adaptive recursive crawler and Database port scanner.
 
