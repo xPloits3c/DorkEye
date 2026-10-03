@@ -3,14 +3,8 @@
 # Target: Government, Military, and Diplomatic domains
 variables:
   target_domains:
-    - gov.il
-    - gov.ir
-    - gov.tr
-    - gov
-    - mil
-    - europa.eu
-    - eeas.europa.eu
-    - nato.int
+    - example.com
+    - .ru
 
   intel_keywords:
     - "classified"
