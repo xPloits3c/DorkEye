@@ -2,10 +2,8 @@
 # Use permitted only on assets you own or with explicit authorization.
 
 variables:
-
   domain:
-    - ru
-    - example.com
+    - example.com   # replace with your own domain
 
   sqli_errors:
     - "SQL syntax"
