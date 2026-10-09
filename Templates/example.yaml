@@ -3,8 +3,7 @@
 
 variables:
   domain:
-    - ru
-    - example.com
+    - example.com # replace with your own domain
 
   param:
     - cv
@@ -45,4 +44,4 @@ templates:
   sensitive:
     mode: medium
     dorks:
-      - '"BEGIN RSA PRIVATE KEY"'
+      - '"index of"'
