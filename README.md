@@ -236,6 +236,8 @@ DorkEye/
 -   **This tool is for educational, research, and authorized security testing only.**
 -   **Unauthorized access is illegal.**
 -   **The author is not responsible for misuse.**
+-   **The author assumes no liability for misuse or for any damages resulting from the use of this tool.**
+-   **The user is solely responsible for compliance with the laws and regulations of their country regarding cybersecurity and unauthorized system access.**
     
 ---
 
@@ -253,4 +255,4 @@ If you find DorkEye useful, please consider starring the repository 🌟
 
 ## 📜 License
 
-MIT License © 2026 xPloits3c I.C.W.T
+MIT License © 2026 I.C.W.T xPloits3c
