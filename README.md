@@ -241,8 +241,8 @@ DorkEye/
 
 ## 📞 Contact
 
-- **Author:** xPloits3c  
-- **Email:** whitehat.report@onionmail.org  
+- **Author: I.C.W.T** xPloits3c  
+- **Email:** dorkeye@protonmail.com  
 - **Telegram:** https://t.me/DorkEye  
 ---
 
