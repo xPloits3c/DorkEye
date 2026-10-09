@@ -3,7 +3,8 @@
 #  Author: I.C.W.T xPloits3c | https://github.com/xPloits3c/DorkEye
 #
 #  This file is a basic template provided as an example for using
-#   the DorkEye tool. It serves as a starting point for building
+#   the DorkEye tool.
+#  It serves as a starting point for building
 #   custom dorking queries, organized by intensity level
 #   (soft / medium / aggressive).
 # ------------------------------------------------------------
