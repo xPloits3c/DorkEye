@@ -23,8 +23,9 @@
 ![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye?style=flat-square)
 ![Last Commit](https://img.shields.io/badge/Last%20Commit-June%202026-informational?style=flat-square&logo=github)
 
-<!-- ── Row 3: Community ── -->
-[![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](#)
+<!-- — Row 3: Community — -->
+
+[![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/DorkEye)
 
 ![image](https://github.com/user-attachments/assets/c52b3326-6224-4fd5-9d41-d9f22e887b7a)
 
