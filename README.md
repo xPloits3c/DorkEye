@@ -185,10 +185,7 @@ DorkEye/
 │    └── xss.py     ← 4 Method xss injection (111 payloads)
 │ /Templates/
 │    ├── dorks_templates.yaml
-│    ├── sqli.yaml
-│    ├── osint.yaml
-│    ├── intel_dorks.yaml
-│    ├── epstein_files.yaml
+│    ├── sql.yaml
 │    └── example.yaml
 │ /.github/
 │    ├── CODE_OF_CONDUCT.md
@@ -232,12 +229,10 @@ DorkEye/
 
 ---
 
-## ⚠️  ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
--   **This tool is for educational, research, and authorized security testing only.**
--   **Unauthorized access is illegal.**
--   **The author is not responsible for misuse.**
--   **The author assumes no liability for misuse or for any damages resulting from the use of this tool.**
--   **The user is solely responsible for compliance with the laws and regulations of their country regarding cybersecurity and unauthorized system access.**
+## ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
+
+<img width="1408" height="768" alt="image" src="https://github.com/user-attachments/assets/e3eb4dca-51e9-4d4c-a2e4-afa057564b74" />
+
     
 ---
 
@@ -249,10 +244,8 @@ DorkEye/
 ---
 
 ## ⭐ Support
-
 If you find DorkEye useful, please consider starring the repository 🌟
 ---
 
 ## 📜 License
-
 MIT License © 2026 I.C.W.T xPloits3c
