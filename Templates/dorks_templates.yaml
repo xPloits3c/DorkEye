@@ -2,8 +2,9 @@
 #  DorkEye | Default Dork Templates
 #  Author: I.C.W.T xPloits3c | https://github.com/xPloits3c/DorkEye
 #
-#  This file is a basic template provided as an example for using
-#   the DorkEye tool.
+#  This file was created for DorkEye Project.
+#  Is the base template, containing the various categories
+#   required for the DorkEye tool to operate.
 #  It serves as a starting point for building
 #   custom dorking queries, organized by intensity level
 #   (soft / medium / aggressive).
