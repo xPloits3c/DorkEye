@@ -1,0 +1,109 @@
+# ──────────────────────────────────────────────
+#  CCTV & WEBCAMS DORKS LIST
+# ──────────────────────────────────────────────
+# ============================================================
+#  DorkEye | This Dork file was created for DorkEye Project
+#  Author: I.C.W.T xPloits3c | https://github.com/xPloits3c/DorkEye
+#  It serves as a starting point for building
+#   custom dorking queries, organized by intensity level
+#   (soft / medium / aggressive).
+# ------------------------------------------------------------
+# DISCLAIMER:
+#  This tool is intended solely for educational, research, and
+#   authorized security testing purposes.
+#  The author assumes no
+#   liability for misuse or for any damages resulting from the
+#   use of this tool.
+#  The user is solely responsible for compliance with the laws and
+#   regulations of their country regarding cybersecurity and
+#   unauthorized system access.
+# ------------------------------------------------------------
+#  Every category defines all three modes:
+#    soft       → safe, minimal queries, low noise
+#    medium     → balanced, standard assessment
+#    aggressive → maximum coverage, pair with --stealth
+#
+#  Note: cctv and sensitive use flat mode (mode: aggressive)
+#        all other categories use nested soft/medium/aggressive
+# ============================================================
+
+variables:
+  domain:
+    - example.com # Replace with your own domain 
+    - com
+
+templates:
+  cctv:
+    description: "Exposed IP cameras, DVR/NVR management interfaces and live video streams"
+    dorks:
+      soft:
+        - 'site:{domain} intitle:"index of" "cctv"'
+        - 'site:{domain} inurl:cctv ext:{extension}'
+        - 'site:{domain} intitle:"Live View" "camera"'
+        - 'site:{domain} inurl:viewerframe?mode='
+        - 'site:{domain} intitle:"Network Camera" inurl:view/'
+        - 'site:{domain} inurl:axis-cgi/'
+        - 'site:{domain} inurl:view/viewer_index.shtml'
+      medium:
+        - 'site:{domain} intitle:"WebCam Server" inurl:{param}'
+        - 'site:{domain} inurl:en/index.asp intitle:"DVR"'
+        - 'site:{domain} inurl:iview/viewer.htm'
+        - 'site:{domain} intitle:"Dahua" inurl:login.html'
+        - 'site:{domain} intitle:"Hikvision" inurl:doc/page/login.asp'
+        - 'site:{domain} intitle:"Foscam" inurl:mainFrame.cgi'
+        - 'site:{domain} intext:"Powered by Mobotix" filetype:{extension}'
+        - 'site:{domain} intitle:"Panasonic Network Camera" inurl:nph-index'
+        - 'site:{domain} inurl:control/userimage.html'
+      aggressive:
+        - 'site:{domain} inurl:mjpg/video.mjpg'
+        - 'site:{domain} inurl:cgi-bin/viewer/video.jpg'
+        - 'site:{domain} inurl:snapshot.jpg filetype:{extension}'
+        - 'site:{domain} inurl:record/current.jpg'
+        - 'site:{domain} inurl:cam/realmonitor'
+        - 'site:{domain} inurl:live/ch0.html'
+        - 'site:{domain} intext:"Stream" inurl:video.cgi'
+        - 'site:{domain} inurl:axis-cgi/mjpg/video.cgi'
+        - 'site:{domain} inurl:decoder_control.cgi intext:{sense}'
+        - 'site:{domain} inurl:param.mjpg'
+        - 'site:{domain} inurl:img/snapshot.cgi filetype:{extension}'
+        - 'site:{domain} intitle:"Live Camera" intext:{sqli_db}'
+        - 'site:{domain} inurl:view/index.shtml intext:{sense}'
+        - 'site:{domain} inurl:nph-zms intext:"Monitor"'
+        - 'site:{domain} inurl:cgi-bin/guestimage.html'
+        - 'site:{domain} allintitle:"Network Camera NetworkCamera"'
+        - 'site:{domain} intitle:"Axis 2400 video server"'
+        - 'site:{domain} intitle:axis intitle:"video server"'
+        - 'site:{domain} intitle:"EvoCam" inurl:"webcam.html"'
+        - 'site:{domain} intitle:"Live NetSnap Cam-Server feed"'
+        - 'site:{domain} intitle:"Live View / - AXIS"'
+        - 'site:{domain} intitle:"LiveView / - AXIS" | inurl:view/view.shtml'
+        - 'site:{domain} intitle:liveapplet'
+        - 'site:{domain} intitle:snc-cs3 inurl:home/'
+        - 'site:{domain} intitle:"snc-rz30 home"'
+        - 'site:{domain} intitle:snc-z20 inurl:home/'
+        - 'site:{domain} intitle:"WJ-NT104 Main"'
+        - 'site:{domain} inurl:LvAppl intitle:liveapplet'
+        - 'site:{domain} inurl:indexFrame.shtml "Axis Video Server"'
+        - 'site:{domain} inurl:lvappl'
+        - 'site:{domain} inurl:axis-cgi/jpg'
+        - 'site:{domain} inurl:indexFrame.shtml Axis'
+        - 'site:{domain} inurl:"MultiCameraFrame?Mode=Motion"'
+        - 'site:{domain} inurl:/view.shtml'
+        - 'site:{domain} inurl:/view/index.shtml'
+        - 'site:{domain} inurl:viewerframe?mode='
+        - 'site:{domain} inurl:"viewerframe?mode=motion"'
+        - 'site:{domain} inurl:ViewerFrame?Mode=Refresh'
+        - 'site:{domain} control/userimage.html'
+        - 'site:{domain} liveapplet'
+        - 'site:{domain} inurl:indexframe.shtml'
+        - 'site:{domain} inurl:"view/indexFrame.shtml"'
+        - 'site:{domain} inurl:view/view.shtml'
+        - 'site:{domain} inurl:/view/view.shtml?videos='
+        - 'site:{domain} inurl:ViewerFrame?Mode='
+        - 'site:{domain} intitle:"i-Catcher Console - Web Monitor"'
+        - 'site:{domain} intitle:"netcam live image"'
+        - 'site:{domain} inurl:/view:shtml'
+        - 'site:{domain} inurl:view/indexframe.shtml'
+        - 'site:{domain} intitle:"live view" intitle:axis'
+        - 'site:{domain} intitle:liveapplet inurl:LvAppl'
+        - 'site:{domain} intitle:start inurl:cgistart'
