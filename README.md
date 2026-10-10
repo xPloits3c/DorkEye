@@ -21,7 +21,7 @@
 ![Stars](https://img.shields.io/github/stars/xPloits3c/DorkEye?style=flat-square)
 ![Forks](https://img.shields.io/github/forks/xPloits3c/DorkEye?style=flat-square)
 ![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye?style=flat-square)
-![Last Commit](https://img.shields.io/badge/Last%20Commit-June%202026-informational?style=flat-square&logo=github)
+![Last Commit](https://img.shields.io/github/last-commit/xPloits3c/DorkEye?style=flat-square&logo=github)
 
 <!-- — Row 3: Community — -->
 
