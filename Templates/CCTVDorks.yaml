@@ -22,9 +22,6 @@
 #    soft       → safe, minimal queries, low noise
 #    medium     → balanced, standard assessment
 #    aggressive → maximum coverage, pair with --stealth
-#
-#  Note: cctv and sensitive use flat mode (mode: aggressive)
-#        all other categories use nested soft/medium/aggressive
 # ============================================================
 
 variables:
