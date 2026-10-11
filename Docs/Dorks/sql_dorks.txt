@@ -1,5 +1,7 @@
-#SQLi DORKS — ADVANCED LIST @xploits3c https://github.com/xPloits3c/DorkEye
-# ⚠️ USE ONLY ON AUTHORIZED TARGETS ⚠️
+# SQLi DORKS — ADVANCED LIST @xploits3c
+# This file was created for DorkEye Project
+#  https://github.com/xPloits3c/DorkEye
+#
 #╔══════════════════════════╗
 #║Error-based SQL Injection ║
 #╚══════════════════════════╝
