@@ -1,8 +1,7 @@
-# DorkEye v3.0 - Example Dorks for Security Testing
-
 # ⚠️ USE ONLY ON AUTHORIZED TARGETS ⚠️
-# These dorks are for testing YOUR OWN websites or with written permission ⚠️
-
+# This file was created for DorkEyeProject
+#  https://github.com/xPloits3c/DorkEye
+#
 # ============================================
 # ADMIN PANELS & LOGIN PAGES 
 # ============================================
