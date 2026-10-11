@@ -1,8 +1,8 @@
 # ============================================================
-# DorkEye — Advanced JSON Exposure Dork List 2026
+# Use permitted only on assets you own or with explicit authorization.
+# DorkEye — Advanced JSON Exposure Dork List
 # Category: json_exposure
 # Author: xPloits3c
-# Version: 1.0
 # ============================================================
 
 # ————————————————————
