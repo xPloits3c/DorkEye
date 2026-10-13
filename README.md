@@ -249,3 +249,9 @@ If you find DorkEye useful, please consider starring the repository 🌟
 
 ## 📜 License
 MIT License © 2026 I.C.W.T xPloits3c
+
+
+## Contributor
+<a href="https://github.com/xPloits3c/DorkEye/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=xPloits3c/DorkEye" />
+</a>
