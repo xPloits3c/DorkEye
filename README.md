@@ -11,22 +11,22 @@
 </div>
 
 <!-- ── Row 1: Project identity ── -->
-![Python](https://img.shields.io/badge/Python-3.9%2B-2ea043?style=flat-square&logo=python&logoColor=white&labelColor=000000)
-![License](https://img.shields.io/badge/License-MIT-2ea043?style=flat-square&labelColor=000000)
-![Status](https://img.shields.io/badge/Status-Stable-2ea043?style=flat-square&labelColor=000000)
-![Search](https://img.shields.io/badge/Search-DuckDuckGo-2ea043?style=flat-square&logo=duckduckgo&logoColor=white&labelColor=000000)
-![Version](https://img.shields.io/badge/Version-5.0-2ea043?style=flat-square&labelColor=000000)
+![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
+![Search](https://img.shields.io/badge/Search-DuckDuckGo-FF6600?style=flat-square&logo=duckduckgo&logoColor=white)
+![Version](https://img.shields.io/badge/Version-5.0-brightgreen?style=flat-square)
 
 <!-- ── Row 2: Live stats ── -->
-![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=green)
-![Stars](https://img.shields.io/github/stars/xPloits3c/DorkEye?style=flat-square&color=2ea043&labelColor=000000)
-![Forks](https://img.shields.io/github/forks/xPloits3c/DorkEye?style=flat-square&color=2ea043&labelColor=000000)
-![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye?style=flat-square&color=2ea043&labelColor=000000)
-![Last Commit](https://img.shields.io/github/last-commit/xPloits3c/DorkEye?style=flat-square&logo=github&logoColor=white&color=2ea043&labelColor=000000)
+![Repo views](https://komarev.com/ghpvc/?username=xPloits3c&label=DorkEye%20views&color=blue)
+![Stars](https://img.shields.io/github/stars/xPloits3c/DorkEye?style=flat-square)
+![Forks](https://img.shields.io/github/forks/xPloits3c/DorkEye?style=flat-square)
+![Issues](https://img.shields.io/github/issues/xPloits3c/DorkEye?style=flat-square)
+![Last Commit](https://img.shields.io/github/last-commit/xPloits3c/DorkEye?style=flat-square&logo=github)
 
 <!-- ── Row 3: Community ── -->
 
-[![Telegram](https://img.shields.io/badge/Join-Telegram-2ea043?style=flat-square&logo=telegram&logoColor=white&labelColor=000000)](https://t.me/DorkEye)
+[![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/DorkEye)
 
 ![image](https://github.com/user-attachments/assets/c52b3326-6224-4fd5-9d41-d9f22e887b7a)
 
