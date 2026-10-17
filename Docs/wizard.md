@@ -26,6 +26,8 @@ No other flags are needed — the wizard ignores them all.
 └─>
 ```
 
+<img width="1175" height="982" alt="image" src="https://github.com/user-attachments/assets/e0c86043-2f47-4870-9efa-23c4cdc20791" />
+
 ---
 
 ## Choice 1 — Dork Search
