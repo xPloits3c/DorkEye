@@ -134,7 +134,7 @@ templates:
       - 'site:{domain} inurl:{param} inurl:phpmyadmin'
       - 'site:{domain} inurl:{param} intitle:"phpMyAdmin"'
       - 'site:*.{domain} inurl:phpmyadmin "{sqli_errors}"'
-      - 'site:{domain} inurl:{param} intext:"{sqli_errors}" -inurl:{sqli_errors}'
+      - 'site:{domain} inurl:{param} intext:"{sqli_errors}" inurl:{sqli_errors}'
       - 'site:*.{domain} "{sqli_errors}"'
       - 'site:{domain} intitle:"{sqli_errors}"'
 
