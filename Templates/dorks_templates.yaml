@@ -27,6 +27,21 @@
 #  Note: all categories use nested soft/medium/aggressive dorks,
 #        except "sensitive", which uses flat mode (mode: aggressive)
 #
+#  CHANGELOG (dedup pass):
+#    - sqli.aggressive: removed 1 literal duplicate + 2 operator-
+#      reordered duplicates (Google treats reordered operator
+#      sequences as identical queries); added ~30 new aggressive
+#      combinations (scope variants, filetype/ext based, classic
+#      SQL error-message dorks, admin/db panel + param combos,
+#      allintitle + exclusion variants). Avoided reusing {sense}
+#      here since it's already the focus of intext: combos in
+#      other categories (e.g. errors, admin).
+#    - cctv.aggressive: removed 3 duplicate "view/index.shtml"
+#      variants (slash/quotes/order don't change the query),
+#      1 duplicate "view/indexFrame.shtml" variant (case-
+#      insensitive dup), and 1 aggressive entry that duplicated
+#      a soft-tier "viewer_index.shtml" entry.
+#
 #  Usage:
 #    python dorkeye.py --dg=sqli --mode=soft
 #    python dorkeye.py --dg=cctv --mode=aggressive --stealth
@@ -349,14 +364,50 @@ templates:
         - 'site:*.{domain} inurl:{param} intext:"{sense}"'
         - 'site:{domain} filetype:{extension} intext:"{sqli_db}"'
       aggressive:
-        - 'site:*.{domain} inurl:{param} intext:"{sqli_db}" filetype:{extension}'
-        - 'site:{domain} inurl:{param} intext:"{sense}" filetype:{extension}'
-        - 'site:*.{domain} inurl:{param} "{sqli_db}" "{sense}"'
-        - 'site:{domain} inurl:{param} intext:"{sqli_db}" intext:"{sense}"'
-        - 'site:*.{domain} filetype:{extension} "{sqli_db}"'
-        - 'site:*.{domain} inurl:{param} ext:{extension}'
-        - 'site:{domain} inurl:{param} filetype:{extension} "{sense}"'
-        - 'site:{domain} intext:"{sqli_db}" inurl:{param}'
+        - 'site:*.{domain} inurl:{param} allintext:"{sqli_db}"'
+        - 'site:{domain} inurl:{param} allintext:"{sqli_db}"'
+        - 'site:{domain} inurl:{param}'
+        - 'site:{domain} inurl:{param} allintext:{sqli_db}'
+        - 'site:{domain} inurl:{param} inurl:{sqli_db}'
+        - 'site:{domain} inurl:{param} allintext:{sqli_db} inurl:{sqli_db}'
+        - 'site:*.{domain} inurl:{param} allintext:{sqli_db}'
+        - 'site:*.{domain} "{sqli_db}"'
+        - 'site:{domain} inurl:{param} intitle:"{sqli_db}"'
+        - 'site:{domain} intitle:"{sqli_db}"'
+        - 'site:*.{domain} allintext:"{sqli_db}"'
+        # --- scope variants ---
+        - 'site:{domain} inurl:{param} intext:"{sqli_db}"'
+        - 'site:*.{domain} inurl:{param} intext:"{sqli_db}"'
+        - 'site:{domain} inurl:{param} intitle:{sqli_db}'
+        - 'site:*.{domain} inurl:{param} intitle:"{sqli_db}"'
+        - 'site:*.{domain} inurl:{param} inurl:{sqli_db}'
+        - 'site:{domain} "{sqli_db}"'
+        - 'site:{domain} intext:"{sqli_db}"'
+        - 'site:*.{domain} intext:"{sqli_db}"'
+        # --- filetype / extension based ---
+        - 'site:{domain} filetype:sql "{sqli_db}"'
+        - 'site:{domain} filetype:sql inurl:{param}'
+        - 'site:*.{domain} filetype:sql "{sqli_db}"'
+        - 'site:{domain} ext:sql intext:"{sqli_db}"'
+        - 'site:{domain} filetype:env inurl:{param}'
+        - 'site:{domain} filetype:bak inurl:{param} "{sqli_db}"'
+        # --- classic SQL error-message dorks ---
+        - 'site:{domain} inurl:{param} intext:"SQL syntax" intext:"MySQL"'
+        - 'site:{domain} inurl:{param} intext:"Warning: mysql_fetch_array()"'
+        - 'site:{domain} inurl:{param} intext:"Warning: mysql_num_rows()"'
+        - 'site:{domain} inurl:{param} intext:"ORA-01756"'
+        - 'site:{domain} inurl:{param} intext:"Microsoft OLE DB Provider for SQL Server"'
+        - 'site:{domain} inurl:{param} intext:"Unclosed quotation mark"'
+        - 'site:*.{domain} inurl:{param} intext:"SQL syntax" intext:"MySQL"'
+        # --- admin / db panel exposure combined with param ---
+        - 'site:{domain} inurl:{param} inurl:phpmyadmin'
+        - 'site:{domain} inurl:{param} intitle:"phpMyAdmin"'
+        - 'site:*.{domain} inurl:phpmyadmin "{sqli_db}"'
+        # --- combined strict AND loose phrase checks ---
+        - 'site:{domain} inurl:{param} allintitle:"{sqli_db}"'
+        - 'site:*.{domain} inurl:{param} allintitle:"{sqli_db}"'
+        - 'site:{domain} inurl:{param} intext:"{sqli_db}" -inurl:{sqli_db}'
+        - 'site:*.{domain} inurl:{param} intext:"{sqli_db}" -inurl:{sqli_db}'
 
   # ──────────────────────────────────────────────
   #  ADMIN PANELS
@@ -801,7 +852,6 @@ templates:
         - 'site:{domain} inurl:indexFrame.shtml Axis'
         - 'site:{domain} inurl:"MultiCameraFrame?Mode=Motion"'
         - 'site:{domain} inurl:/view.shtml'
-        - 'site:{domain} inurl:/view/index.shtml'
         - 'site:{domain} inurl:"viewerframe?mode=motion"'
         - 'site:{domain} inurl:ViewerFrame?Mode=Refresh'
         - 'site:{domain} control/userimage.html'
@@ -813,12 +863,9 @@ templates:
         - 'site:{domain} intitle:"i-Catcher Console - Web Monitor"'
         - 'site:{domain} intitle:"netcam live image"'
         - 'site:{domain} inurl:/view:shtml'
-        - 'site:{domain} inurl:view/indexframe.shtml'
         - 'site:{domain} intitle:"live view" intitle:axis'
         - 'site:{domain} intitle:start inurl:cgistart'
-        - 'site:{domain} inurl:"/view/index.shtml"'
         - 'inurl:axis-cgi/mjpg site:{domain}'
-        - 'inurl:"view/index.shtml" site:{domain}'
         - 'site:{domain} VB Viewer inurl:/viewer/live/ja/live.html'
         - 'site:{domain} intitle:"IP CAMERA Viewer" intext:"setting | Client setting"'
         - 'site:{domain} intitle:"Device(" AND intext:"Network Camera" AND "language:" AND "Password"'
@@ -827,7 +874,6 @@ templates:
         - 'site:{domain} inurl:control/camerainfo'
         - 'site:{domain} intitle:"webcamXP 5" -download'
         - 'inurl:"/view/view.shtml?id=" site:{domain}'
-        - 'site:{domain} inurl:/view/viewer_index.shtml'
         - 'intext:"powered by webcamXP 5" site:{domain}'
         - 'intitle:"webcam 7" inurl:8080 -intext:8080 site:{domain}'
         - 'site:{domain} intitle:"Live View / - AXIS" | inurl:view/view.shtml OR inurl:view/indexFrame.shtml'
