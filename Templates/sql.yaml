@@ -51,7 +51,6 @@ variables:
     - "SQL error"
     - "database error"
     - "mysqli"
-    - "Warning: mysqli"
     - "ODBC SQL Server Driver"
     - "Microsoft OLE DB Provider for SQL Server"
     - "Unclosed quotation mark"
