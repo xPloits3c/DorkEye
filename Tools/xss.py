@@ -369,7 +369,14 @@ class XSSDetector:
         "<svg xmlns='http://www.w3.org/2000/svg' onload=alert('DEXSS7x')/>",
         "<form action=javascript:alert('DEXSS7x')><button>X</button></form>",
         "<input type=image src=x onerror=alert('DEXSS7x')>",
-        "<!--<script>alert('DEXSS7x')</script>-->",
+        # [FIX-10] Removed "<!--<script>alert('DEXSS7x')</script>-->" — this
+        # payload wraps its own injected <script> in an HTML comment, so it
+        # can NEVER execute in any browser even when reflected verbatim.
+        # _payload_structure_present only checks for the literal "<script"
+        # substring near the marker, so this payload reliably produced a
+        # confirmed HIGH-confidence "vulnerable" result on pages that simply
+        # echo input unescaped but don't actually execute it — a guaranteed
+        # false positive with zero detection value over the other payloads.
         "/%2F..%2F..%2Fevil.js",
         '<script charset="x-mac-farsi">\xd0)</script>',
     ]
@@ -857,15 +864,6 @@ class XSSDetector:
                         start = marker_idx + 1
                         continue
 
-            # Reject when marker is inside a <script> block with Unicode escaping
-            script_open  = body.rfind("<script", 0, marker_idx)
-            script_close = body.find("</script>", marker_idx)
-            if script_open != -1 and script_close != -1:
-                local_ctx = body[max(script_open, marker_idx - 30): marker_idx + 30]
-                if "\\u003C" in local_ctx or "\\u003c" in local_ctx:
-                    start = marker_idx + 1
-                    continue
-
             # [FIX-4] Tag-stripped guard: if payload has '<' but none found near marker
             if payload_has_tag:
                 near_start = max(0, marker_idx - 120)
@@ -1065,6 +1063,13 @@ class XSSDetector:
                 if _get_exit_flag() or _get_skip_flag():
                     break
 
+                # [FIX-10] Moved from after the unconditional `return result`
+                # below, where it was 100% dead code — stealth never actually
+                # paced requests between payload attempts. Placed here so the
+                # delay runs before every attempt regardless of outcome.
+                if self.stealth:
+                    _safe_sleep(random.uniform(0.5, 1.5))
+
                 test_url = self._inject_param(url, param, payload)
                 response = self._get(test_url)
                 if response is None:
@@ -1095,9 +1100,6 @@ class XSSDetector:
                         f"Unescaped reflection in param [{param}]: {payload[:60]}"
                     )
                 return result
-
-                if self.stealth:
-                    _safe_sleep(random.uniform(0.5, 1.5))
 
         return result
 
@@ -1253,7 +1255,7 @@ class XSSDetector:
         return blocks
 
     def _test_dom(self, url: str) -> Dict:
-        """
+        r"""
         Fetch the page, extract inline and external JS, then perform static
         source-to-sink analysis.
 
