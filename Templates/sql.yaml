@@ -1,16 +1,59 @@
-# Author: script by xPloits3c / DorkEye
-# Use permitted only on assets you own or with explicit authorization.
+# ============================================================
+#  [*] DorkEye | SQLi Dork Template
+#  [*] Author: I.C.W.T xPloits3c | https://github.com/xPloits3c/DorkEye
+#
+# - This file was created for DorkEye Project.
+# - This template contains the various SQLi categories required
+#     for the dork_generator.py tool to work,
+#     used to generate dork strings for the DorkEye tool.
+# - It serves as a starting point for building
+#     custom dorking queries, organized by intensity level
+#     (soft / medium / aggressive).
+# ------------------------------------------------------------
+# DISCLAIMER:
+# - This tool is intended solely for educational, research, and
+#     authorized security testing purposes.
+# - The author assumes no
+#     liability for misuse or for any damages resulting from the
+#     use of this tool.
+# - The user is solely responsible for compliance with the laws and
+#     regulations of their country regarding cybersecurity and
+#     unauthorized system access.
+# ------------------------------------------------------------
+#  Every category defines all three modes:
+#    soft       → safe, minimal queries, low noise
+#    medium     → balanced, standard assessment
+#    aggressive → maximum coverage, pair with --stealth
+# -----
+#  Note: all categories use nested soft/medium/aggressive dorks,
+#        except "sensitive", which uses flat mode (mode: aggressive)
+# ------------------------------------------------------------
+#  Usage:
+#    python dorkeye.py --dg=sqli --mode=soft
+#    python dorkeye.py --dg=cctv --mode=aggressive --stealth
+#    python dorkeye.py --dg=all  --mode=aggressive --stealth
+#  WIZARD:
+#    1) python dorkeye.py --wizard
+#    2) Dork Generator
+#    3) Specific template file (sql.yaml)
+#    4) Chose Category
+#    5) Let's see what they forgot to hide us
+# ============================================================
 
 variables:
   domain:
-    - example.com   # replace with your own domain
+    - example.com   # replace with your own domain — shared by every
+    - com           # template below, since it's always the target scope
 
+  # ── used only by sqli_surface / sqli_discovery / sqli_exposed ──
   sqli_errors:
     - "SQL syntax"
     - "SQL error"
     - "database error"
     - "mysqli"
+    - "Warning: mysqli"
     - "ODBC SQL Server Driver"
+    - "Microsoft OLE DB Provider for SQL Server"
     - "Unclosed quotation mark"
     - "PostgreSQL ERROR"
     - "SQLite3::SQLException"
@@ -23,10 +66,40 @@ variables:
     - php?id=
     - index.php?id=
 
+  # ── used only by sql_databases ──
+  db_extension:
+    - sql
+    - sqlite
+    - sqlite3
+    - db
+    - mdb
+    - accdb
+    - dbf
+
+  db_markers:
+    - "CREATE TABLE"
+    - "INSERT INTO"
+    - "DROP TABLE"
+    - "-- MySQL dump"
+    - "-- phpMyAdmin SQL Dump"
+    - "PRAGMA foreign_keys"
+
+  # ── used only by sql_backups ──
+  backup_extension:
+    - bak
+    - old
+    - backup
+    - tmp
+    - swp
+    - save
+    - orig
+
 
 templates:
 
-  # SOFT MODE: basic SQL error discovery
+  # ──────────────────────────────────────────────
+  #  SOFT MODE: basic SQL error discovery
+  # ──────────────────────────────────────────────
   sqli_surface:
     mode: soft
     dorks:
@@ -34,27 +107,79 @@ templates:
       - 'site:{domain} "{sqli_errors}"'
       - 'site:{domain} intext:{sqli_errors}'
 
-
-  # MEDIUM MODE: typical SQL injection indicators
+  # ──────────────────────────────────────────────
+  #  MEDIUM MODE: typical SQL injection indicators
+  # ──────────────────────────────────────────────
   sqli_discovery:
     mode: medium
     dorks:
       - 'site:{domain} inurl:{param} "{sqli_errors}"'
       - 'site:{domain} inurl:{param} intext:{sqli_errors}'
-      - 'site:{domain} intext:{sqli_errors}'
-      - 'site:{domain} inurl:{param}'
+      - 'site:*.{domain} inurl:{param} intext:{sqli_errors}'
+      - 'site:{domain} inurl:{param} filetype:php intext:{sqli_errors}'
+      - 'site:{domain} inurl:{param} intitle:{sqli_errors}'
 
-
-  # AGGRESSIVE MODE: exposed SQL errors and stack traces
+  # ──────────────────────────────────────────────
+  #  AGGRESSIVE MODE: exposed SQL errors, stack traces
+  #  and higher-signal escalation operators
+  # ──────────────────────────────────────────────
   sqli_exposed:
     mode: aggressive
     dorks:
-      - 'site:{domain} inurl:{param} "SQL syntax"'
-      - 'site:{domain} inurl:{param} "SQL error"'
-      - 'site:{domain} inurl:{param} "database error"'
-      - 'site:{domain} inurl:{param} "Unclosed quotation mark"'
-      - 'site:{domain} inurl:{param} "ODBC SQL Server Driver"'
-      - 'site:{domain} inurl:{param} "Microsoft OLE DB Provider for SQL Server"'
-      - 'site:{domain} inurl:{param} "Warning: mysqli"'
-      - 'site:{domain} inurl:{param} "You have an error in your SQL syntax"'
-      - 'site:{domain} "SQLite3::SQLException"'
+      - 'site:{domain} inurl:{param} allintext:"{sqli_errors}"'
+      - 'site:*.{domain} inurl:{param} allintext:"{sqli_errors}"'
+      - 'site:{domain} inurl:{param} intitle:"{sqli_errors}"'
+      - 'site:{domain} inurl:{param} filetype:sql intext:"{sqli_errors}"'
+      - 'site:{domain} filetype:sql "{sqli_errors}"'
+      - 'site:{domain} ext:sql inurl:{param}'
+      - 'site:{domain} inurl:{param} inurl:phpmyadmin'
+      - 'site:{domain} inurl:{param} intitle:"phpMyAdmin"'
+      - 'site:*.{domain} inurl:phpmyadmin "{sqli_errors}"'
+      - 'site:{domain} inurl:{param} intext:"{sqli_errors}" -inurl:{sqli_errors}'
+      - 'site:*.{domain} "{sqli_errors}"'
+      - 'site:{domain} intitle:"{sqli_errors}"'
+
+  # ──────────────────────────────────────────────
+  #  DATABASES: publicly indexed database/dump files
+  #  (isolated — uses db_extension / db_markers only)
+  # ──────────────────────────────────────────────
+  sql_databases:
+    dorks:
+      soft:
+        - 'site:{domain} filetype:{db_extension}'
+        - 'site:{domain} ext:{db_extension}'
+        - 'site:*.{domain} filetype:{db_extension}'
+      medium:
+        - 'site:{domain} filetype:{db_extension} intext:"{db_markers}"'
+        - 'site:*.{domain} filetype:{db_extension} intext:"{db_markers}"'
+        - 'site:{domain} filetype:{db_extension} intitle:"index of"'
+      aggressive:
+        - 'site:{domain} filetype:{db_extension} intext:"CREATE TABLE" intext:"INSERT INTO"'
+        - 'site:*.{domain} filetype:{db_extension} "{db_markers}"'
+        - 'site:{domain} ext:{db_extension} inurl:dump'
+        - 'site:{domain} filetype:{db_extension} intext:"username" intext:"password"'
+        - 'site:{domain} filetype:{db_extension} "{db_markers}"'
+
+  # ──────────────────────────────────────────────
+  #  BACKUPS: exposed backup/archive copies of DBs or code
+  #  (isolated — uses backup_extension only, plus db_markers
+  #   since a .bak file is often still a raw SQL dump)
+  # ──────────────────────────────────────────────
+  sql_backups:
+    dorks:
+      soft:
+        - 'site:{domain} ext:{backup_extension}'
+        - 'site:{domain} filetype:{backup_extension}'
+        - 'site:*.{domain} ext:{backup_extension}'
+        - 'site:{domain} inurl:backup'
+      medium:
+        - 'site:{domain} filetype:{backup_extension} intext:"{db_markers}"'
+        - 'site:*.{domain} filetype:{backup_extension} inurl:backup'
+        - 'site:{domain} ext:{backup_extension} intitle:"index of"'
+        - 'site:{domain} filetype:{backup_extension} inurl:db'
+      aggressive:
+        - 'site:{domain} filetype:{backup_extension} "{db_markers}" intext:"password"'
+        - 'site:*.{domain} ext:{backup_extension} intext:"{db_markers}"'
+        - 'site:{domain} filetype:{backup_extension} intext:"DB_PASSWORD"'
+        - 'site:{domain} intitle:"index of" ext:{backup_extension}'
+        - 'site:{domain} inurl:backup filetype:{backup_extension}'
