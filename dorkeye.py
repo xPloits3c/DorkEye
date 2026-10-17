@@ -247,7 +247,7 @@ WELCOME_MESSAGES = [
     "Targets waiting, {name}.",
     "Query the noise, {name}.",
     "Burn what you touch.",
-    "You are visible.",
+    "You are visible, {name}.",
     "No small talk. Just results, {name}.",
     "We don't break things. We observe, {name}.",
     "Information wants to be found, {name}.",
