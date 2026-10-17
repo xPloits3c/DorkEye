@@ -24,12 +24,16 @@ python dorkeye.py -u "https://example.com/page.php?id=1"
 # With stealth and output
 python dorkeye.py -u "https://example.com/page.php?id=1" --sqli --stealth -o result.json
 ```
+<img width="1682" height="772" alt="directsqltest" src="https://github.com/user-attachments/assets/9075fc27-3271-4d13-9794-e1a853408ab2" />
+<img width="1710" height="797" alt="directsqltesthtml" src="https://github.com/user-attachments/assets/fd6a24e1-1656-4575-b8a4-bffcf89d2ec7" />
 
 ### Re-test a saved results file
 
 ```bash
 python dorkeye.py -f Dump/results.json --sqli -o retest.json
 ```
+<img width="1196" height="1022" alt="sqlmultipletestfromfile" src="https://github.com/user-attachments/assets/9221939c-817f-4a45-a2de-8e0124bee5e3" />
+<img width="1697" height="792" alt="sqlmultipletestfromfilehtml" src="https://github.com/user-attachments/assets/9a2d9c2a-dcd6-44a6-892e-477e1bf1d6e0" />
 
 -----
 
