@@ -1,21 +1,21 @@
 # ============================================================
-#  DorkEye | Default Dork Templates
-#  Author: I.C.W.T xPloits3c | https://github.com/xPloits3c/DorkEye
+#  [*] DorkEye | Default Dork Templates
+#  [*] Author: I.C.W.T xPloits3c | https://github.com/xPloits3c/DorkEye
 #
-#  This file was created for DorkEye Project.
-#  Is the base template, containing the various categories
+#  - This file was created for DorkEye Project.
+#  - Is the base template, containing the various categories
 #   required for the DorkEye tool to operate.
-#  It serves as a starting point for building
+#  - It serves as a starting point for building
 #   custom dorking queries, organized by intensity level
 #   (soft / medium / aggressive).
 # ------------------------------------------------------------
 # DISCLAIMER:
-#  This tool is intended solely for educational, research, and
+#  - This tool is intended solely for educational, research, and
 #   authorized security testing purposes.
-#  The author assumes no
+#  - The author assumes no
 #   liability for misuse or for any damages resulting from the
 #   use of this tool.
-#  The user is solely responsible for compliance with the laws and
+#  - The user is solely responsible for compliance with the laws and
 #   regulations of their country regarding cybersecurity and
 #   unauthorized system access.
 # ------------------------------------------------------------
@@ -23,29 +23,20 @@
 #    soft       → safe, minimal queries, low noise
 #    medium     → balanced, standard assessment
 #    aggressive → maximum coverage, pair with --stealth
-#
+# -----
 #  Note: all categories use nested soft/medium/aggressive dorks,
 #        except "sensitive", which uses flat mode (mode: aggressive)
-#
-#  CHANGELOG (dedup pass):
-#    - sqli.aggressive: removed 1 literal duplicate + 2 operator-
-#      reordered duplicates (Google treats reordered operator
-#      sequences as identical queries); added ~30 new aggressive
-#      combinations (scope variants, filetype/ext based, classic
-#      SQL error-message dorks, admin/db panel + param combos,
-#      allintitle + exclusion variants). Avoided reusing {sense}
-#      here since it's already the focus of intext: combos in
-#      other categories (e.g. errors, admin).
-#    - cctv.aggressive: removed 3 duplicate "view/index.shtml"
-#      variants (slash/quotes/order don't change the query),
-#      1 duplicate "view/indexFrame.shtml" variant (case-
-#      insensitive dup), and 1 aggressive entry that duplicated
-#      a soft-tier "viewer_index.shtml" entry.
-#
+# ------------------------------------------------------------
 #  Usage:
 #    python dorkeye.py --dg=sqli --mode=soft
 #    python dorkeye.py --dg=cctv --mode=aggressive --stealth
 #    python dorkeye.py --dg=all  --mode=aggressive --stealth
+#  WIZARD:
+#    1) python dorkeye.py --wizard
+#    2) Dork Generator
+#    3) Default Template
+#    4) Chose Category
+#    5) Let's see what they forgot to hide us
 # ============================================================
 
 variables:
