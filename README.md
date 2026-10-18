@@ -247,6 +247,7 @@ DorkEye/
 ---
 
 ## ⭐ Support
+Feel free to contribute. please do.
 If you find DorkEye useful, please consider starring the repository 🌟
 ---
 
