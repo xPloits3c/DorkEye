@@ -233,9 +233,11 @@ DorkEye/
 
 ## ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
 
+     DorkEye is provided for educational and authorized security-testing purposes only.
 <img width="1408" height="768" alt="image" src="https://github.com/user-attachments/assets/e3eb4dca-51e9-4d4c-a2e4-afa057564b74" />
 
-**DorkEye is provided for educational and authorized security-testing purposes only.** You are solely responsible for complying with all applicable laws and for obtaining explicit, written authorization before scanning, testing, or probing any system, domain, or network you do not own. The authors and contributors accept no liability for misuse or for any damage resulting from the use of this tool.
+- You are solely responsible for complying with all applicable laws and for obtaining explicit, written authorization before scanning, testing, or probing any system, domain, or network you do not own.
+- The authors and contributors accept no liability for misuse or for any damage resulting from the use of this tool.
 
 ---
 
@@ -247,8 +249,8 @@ DorkEye/
 ---
 
 ## ⭐ Support
-Feel free to contribute. please do.
-If you find DorkEye useful, please consider starring the repository 🌟
+ - **Feel free to contribute. please do.**
+ - **If you find DorkEye useful, please consider starring the repository 🌟**
 ---
 
 ## 📜 License
