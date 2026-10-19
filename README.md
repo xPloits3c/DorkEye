@@ -27,7 +27,7 @@
 
 <!-- ── Row 3: Community ── -->
 
-[![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/DorkEye)
+[![Telegram](https://img.shields.io/badge/Join-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/DorkEye) 
 
 <img width="980" height="640" alt="image" src="https://github.com/user-attachments/assets/13dea163-578c-41ad-9e2b-497bb373ab77" />
 
@@ -251,6 +251,14 @@ DorkEye/
 ## ⭐ Support
  - **Feel free to contribute. please do.**
  - **If you find DorkEye useful, please consider starring the repository 🌟**
+ - **Buy me a coffee and keep the development caffeinated ☕**
+
+<div align="center">
+
+[![Sponsor DorkEye](https://img.shields.io/badge/Sponsor-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/DorkEyeProject)
+
+</div>
+
 ---
 
 ## 📜 License
