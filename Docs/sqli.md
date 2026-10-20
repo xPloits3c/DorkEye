@@ -27,7 +27,7 @@ python dorkeye.py -u "https://example.com/page.php?id=1" --sqli --stealth -o res
 <img width="1682" height="772" alt="directsqltest" src="https://github.com/user-attachments/assets/9075fc27-3271-4d13-9794-e1a853408ab2" />
 <img width="1710" height="797" alt="directsqltesthtml" src="https://github.com/user-attachments/assets/fd6a24e1-1656-4575-b8a4-bffcf89d2ec7" />
 
-### Re-test a saved results file
+### Re-test URL’s from file
 
 ```bash
 python dorkeye.py -f Dump/results.json --sqli -o retest.json
