@@ -62,7 +62,7 @@
 |---------|---------|
 | 🧙 Wizard | [Interactive guided session — all options](Docs/wizard.md) |
 | ⚙️ Dork Generator | [YAML template modes: `soft` / `medium` / `aggressive`](Docs/dork_generator.md) |
-| 🎯 Direct SQLi-XSS Test | [Test URL’s directly with `-u` and `-f`](Docs/sqli.md) |
+| 🎯 SQLi-XSS | [Test URL’s directly with `-u` and `-f`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi/XSS/analysis/crawl on saved result files with `-f`](Docs/cli.md) |
 | 💉 SQL Injection | [5 methods: 105 payloads](Docs/sqli.md) |
 | 💉 XSS Injection | [4 methods: 111 payloads](Docs/xss.md) |
