@@ -4,6 +4,9 @@
 variables:
   domain:
     - example.com # replace with your own domain
+    - com
+    - eu
+    - cn
 
   param:
     - cv
