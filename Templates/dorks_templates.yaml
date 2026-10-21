@@ -42,7 +42,6 @@
 variables:
 
   domain:
-    - example.com # Replace with your own domain 
     - com
 
   param:
