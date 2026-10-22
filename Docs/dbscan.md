@@ -34,6 +34,7 @@ python dorkeye.py -d dorks.txt --dbscan --dbscan-timeout 3 --dbscan-threads 80 -
 
 # Re-process an existing results file
 python dorkeye.py -f Dump/results.json --dbscan -o retest.json
+python dorkeye.py -f Dump/test.txt --dbscan -o sites.json --dbscan-max-hosts 5000
 
 # Full pipeline with DB scan
 python dorkeye.py \
