@@ -85,6 +85,38 @@ import getpass
 
 console = Console()
 
+# ── sqlmap-style output tags ──────────────────────────────────────────────────
+# All semantic tags share BLUE brackets; only the inner glyph/label is coloured.
+# Rich auto-disables colour on non-TTY output and when NO_COLOR is set, so logs
+# stay clean ("[WARNING] …", "[ 1/37] …").
+WARNING_TAG = r"[blue]\[[/blue][orange1]WARNING[/orange1][blue]][/blue]"
+INFO_TAG    = r"[blue]\[[/blue][cyan]*[/cyan][blue]][/blue]"    # informational
+OK_TAG      = r"[blue]\[[/blue][green]+[/green][blue]][/blue]"  # success / positive
+ERROR_TAG   = r"[blue]\[[/blue][red]![/red][blue]][/blue]"      # error / failure
+SKIP_TAG    = r"[blue]\[[/blue][yellow]~[/yellow][blue]][/blue]"  # skipped / notice
+
+# Confidence → colour, sqlmap-style escalation. Used by _confidence_tag().
+_CONF_STYLE = {
+    "critical": "bold magenta",
+    "high":     "orange1",
+    "medium":   "yellow",
+    "low":      "grey62",
+    "none":     "dim",
+}
+
+
+def _counter_tag(index: int, total: int) -> str:
+    """White, zero-aligned progress counter, e.g. '[ 1/37]' … '[12/37]'."""
+    width = len(str(total))
+    return rf"[white]\[{index:>{width}}/{total}][/white]"
+
+
+def _confidence_tag(conf: str) -> str:
+    """Blue-bracketed confidence label coloured by severity, e.g. '[HIGH]'."""
+    style = _CONF_STYLE.get(str(conf).lower(), "dim")
+    label = str(conf).upper()
+    return rf"[blue]\[[/blue][{style}]{label}[/{style}][blue]][/blue]"
+
 # ── DB Port Scanner ───────────────────────────────────────────────────────────
 # Importato DOPO console per poter stampare avvisi dall'interno dello stub.
 # except Exception (non solo ImportError) cattura anche SyntaxError /
@@ -735,21 +767,26 @@ class DorkEyeEnhanced:
                     _skip_current = False
 
             if self.config.get("sqli_detection", False) and urls_to_test_sqli:
-                task2 = progress.add_task("[cyan]Testing for [red]SQLi[cyan]...", total=len(urls_to_test_sqli))
-                for result in urls_to_test_sqli:
+                _total_sqli = len(urls_to_test_sqli)
+                task2 = progress.add_task("[cyan]Testing for [red]SQLi[cyan]...", total=_total_sqli)
+                for _idx, result in enumerate(urls_to_test_sqli, 1):
                     if _exit_requested:
                         break
                     if _skip_current:
-                        console.print("[yellow][~] Ctrl+C — skipping remaining SQLi tests for this dork.[/yellow]")
+                        console.print(f"{SKIP_TAG} [yellow]Ctrl+C — skipping remaining SQLi tests for this dork.[/yellow]")
                         _skip_current = False
                         break
+
+                    console.print(
+                        f"{_counter_tag(_idx, _total_sqli)} {_rich_escape(result['url'])}"
+                    )
 
                     sqli_result         = self.analyzer.check_sqli(result["url"])
                     result["sqli_test"] = sqli_result
 
                     if sqli_result.get("waf_detected"):
                         console.print(
-                            f"[yellow][~] WAF detected "
+                            f"{SKIP_TAG} [yellow]WAF detected "
                             f"({sqli_result['waf_detected']}): {_rich_escape(result['url'])}[/yellow]"
                         )
                         self.stats["waf_detected"] += 1
@@ -761,33 +798,26 @@ class DorkEyeEnhanced:
                             self._reported_sqli_urls.add(_sqli_url)
                             self.stats["sqli_vulnerable"] += 1
                             confidence = sqli_result.get("overall_confidence", "?")
-                            style = (
-                                "[bold magenta]" if confidence == SQLiConfidence.CRITICAL.value
-                                else "[bold red]"
+                            # Primary signal for the headline (first vulnerable test).
+                            _primary = next(
+                                (t for t in sqli_result.get("tests", []) if t.get("vulnerable")),
+                                None,
                             )
+                            _hl = ""
+                            if _primary:
+                                _pm = _primary.get("method", "")
+                                _pp = _primary.get("parameter", "")
+                                _bits = []
+                                if _pp:
+                                    _bits.append(f"param={_rich_escape(str(_pp))}")
+                                if _pm:
+                                    _bits.append(f"method={_pm}")
+                                if _bits:
+                                    _hl = f" [dim]{' '.join(_bits)}[/dim]"
                             console.print(
-                                f"{style}[!] Potential SQLi found "
-                                f"({confidence}): {_rich_escape(_sqli_url)}[/{style[1:]}"
+                                f"{WARNING_TAG} Potential SQLi found "
+                                f"{_confidence_tag(confidence)}{_hl}"
                             )
-                            # ── Dedup sub-test: un solo ↳ per (method, param) ─
-                            _seen_sqli: set = set()
-                            for _t in sqli_result.get("tests", []):
-                                if _t.get("vulnerable"):
-                                    _method  = _t.get("method", "unknown")
-                                    _param   = _t.get("parameter", "")
-                                    _subkey  = f"{_method}|{_param}"
-                                    if _subkey in _seen_sqli:
-                                        continue
-                                    _seen_sqli.add(_subkey)
-                                    _ev_list  = _t.get("evidence", [])
-                                    _ev_str   = " | ".join(_ev_list[:2]) if _ev_list else ""
-                                    _param_str = f" [param: {_param}]" if _param else ""
-                                    console.print(
-                                        f"[dim]    ↳ method: [yellow]{_method}[/yellow]"
-                                        f"{_param_str}"
-                                        + (f"  evidence: [italic]{_rich_escape(_ev_str[:120])}[/italic]" if _ev_str else "")
-                                        + "[/dim]"
-                                    )
                     progress.advance(task2)
                     if self.config.get("stealth_mode", False):
                         _interruptible_sleep(random.uniform(3, 6))
@@ -795,21 +825,26 @@ class DorkEyeEnhanced:
             # ── XSS Testing ──────────────────────────────────────────────────
             urls_to_test_xss = [r for r in results if self.config.get("xss_detection", False)]
             if self.config.get("xss_detection", False) and urls_to_test_xss:
-                task3 = progress.add_task("[cyan]Testing for [bold yellow]XSS[cyan]...", total=len(urls_to_test_xss))
-                for result in urls_to_test_xss:
+                _total_xss = len(urls_to_test_xss)
+                task3 = progress.add_task("[cyan]Testing for [bold yellow]XSS[cyan]...", total=_total_xss)
+                for _idx, result in enumerate(urls_to_test_xss, 1):
                     if _exit_requested:
                         break
                     if _skip_current:
-                        console.print("[yellow][~] Ctrl+C — skipping remaining XSS tests for this dork.[/yellow]")
+                        console.print(f"{SKIP_TAG} [yellow]Ctrl+C — skipping remaining XSS tests for this dork.[/yellow]")
                         _skip_current = False
                         break
+
+                    console.print(
+                        f"{_counter_tag(_idx, _total_xss)} {_rich_escape(result['url'])}"
+                    )
 
                     xss_result         = self.analyzer.check_xss(result["url"])
                     result["xss_test"] = xss_result
 
                     if xss_result.get("waf_detected") and not result.get("sqli_test", {}).get("waf_detected"):
                         console.print(
-                            f"[yellow][~] WAF detected "
+                            f"{SKIP_TAG} [yellow]WAF detected "
                             f"({xss_result['waf_detected']}): {_rich_escape(result['url'])}[/yellow]"
                         )
                         self.stats["waf_detected"] += 1
@@ -822,26 +857,11 @@ class DorkEyeEnhanced:
                             self.stats["xss_vulnerable"] += 1
                             confidence = xss_result.get("overall_confidence", "?")
                             types_str  = ", ".join(xss_result.get("xss_types_found", []))
+                            _types_hl  = f" [dim]types={_rich_escape(types_str)}[/dim]" if types_str else ""
                             console.print(
-                                f"[bold yellow][!] Potential XSS found "
-                                f"({confidence}) [{types_str}]: {_rich_escape(_xss_url)}[/bold yellow]"
+                                f"{WARNING_TAG} Potential XSS found "
+                                f"{_confidence_tag(confidence)}{_types_hl}"
                             )
-                            # ── Dedup sub-test: un solo ↳ per XSS type ───────
-                            _seen_xss: set = set()
-                            for _xt in xss_result.get("tests", []):
-                                if _xt.get("vulnerable"):
-                                    _xtype = _xt.get("type", "unknown")
-                                    if _xtype in _seen_xss:
-                                        continue
-                                    _seen_xss.add(_xtype)
-                                    _xev   = " | ".join(_xt.get("evidence", [])[:2])
-                                    _xpayld = _xt.get("payload", "")
-                                    _xpstr  = f" [payload: {_xpayld[:60]}]" if _xpayld else ""
-                                    console.print(
-                                        f"[dim]    ↳ type: [yellow]{_xtype}[/yellow]{_xpstr}"
-                                        + (f"  evidence: [italic]{_rich_escape(_xev[:120])}[/italic]" if _xev else "")
-                                        + "[/dim]"
-                                    )
                     progress.advance(task3)
                     if self.config.get("stealth_mode", False):
                         _interruptible_sleep(random.uniform(2, 5))
