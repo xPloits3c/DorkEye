@@ -2189,16 +2189,20 @@ class SQLiDetector:
                 break
             if _exit_requested or _skip_current:
                 break
+            # Probe is advisory only: a "no reaction" result is logged as a
+            # hint but NEVER skips the parameter. Some vulnerabilities (notably
+            # time-based blind on non-reflecting IDs) produce no visible body
+            # change to a single quote yet are still injectable, so every
+            # parameter goes through the full test suite regardless.
             if not self._probe_parameter(url, param_name, baseline_content):
-                self._cb(f"[{param_name}] parameter skipped (no reaction to probe)")
-                continue
+                self._cb(f"[{param_name}] probe: no obvious reaction — testing anyway")
 
             param_score = 0
 
             self._cb(f"testing parameter '{param_name}'")
 
             # ── Error-based ───────────────────────────────────────────────────
-            self._cb(f"[{param_name}] ERROR-BASED test")
+            self._cb(f"[{param_name}] error-based test")
             error_result = self._test_error_based(url, param_name)
             error_result["parameter"] = param_name
             result["tests"].append(error_result)
@@ -2221,7 +2225,7 @@ class SQLiDetector:
                     param_score += 2
 
             # ── Union-based ───────────────────────────────────────────────────
-            self._cb(f"[{param_name}] UNION-BASED test")
+            self._cb(f"[{param_name}] union-based test")
             union_result = self._test_union_based(
                 url, param_name, baseline_len, baseline_status
             )
@@ -2246,7 +2250,7 @@ class SQLiDetector:
             # ── Boolean blind ─────────────────────────────────────────────────
             # [FP-1] Skip boolean blind on dynamically unstable pages to avoid
             # false positives from natural page variation.
-            self._cb(f"[{param_name}] BOOLEAN-BLIND test")
+            self._cb(f"[{param_name}] boolean-blind test")
             if _boolean_allowed:
                 # [NEW-4] Pass baseline_content for similarity-ratio metric
                 bool_result = self._test_boolean_blind(
@@ -2277,7 +2281,7 @@ class SQLiDetector:
                     param_score += 1  # LOW
 
             # ── Time-based ────────────────────────────────────────────────────
-            self._cb(f"[{param_name}] TIME-BASED BLIND test (may take a few seconds)")
+            self._cb(f"[{param_name}] time-based blind test (may take a few seconds)")
             time_result = self._test_time_based_blind(url, param_name)
             time_result["parameter"] = param_name
             result["tests"].append(time_result)
@@ -2291,7 +2295,7 @@ class SQLiDetector:
                 )
 
             # ── [NEW-6] Stacked-query probe ───────────────────────────────────
-            self._cb(f"[{param_name}] STACKED-QUERY PROBE")
+            self._cb(f"[{param_name}] stacked-query probe")
             stacked_result = self._test_stacked_query(
                 url, param_name, baseline_content, baseline_status
             )
