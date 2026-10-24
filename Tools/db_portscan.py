@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-DB Port Scanner for DorkEye Project
-Scans exposed database ports on hosts extracted from dork results.
+DorkEye DB Port Scanner
+Scans exposed database ports on hosts extracted from dork results for DorkeEye Project.
 
 Lives in: DorkEye/Tools/db_portscan.py
 
@@ -19,6 +19,7 @@ Severity:
   INFO      — port closed / filtered / timeout
 
 Author: xPloits3c | DorkEye Project
+
 """
 
 from __future__ import annotations
@@ -41,14 +42,40 @@ try:
     from rich.markup import escape as _re
     _console = Console()
     def _log(msg: str, style: str = "cyan") -> None:
+        # style="" means msg already carries its own Rich markup tags
+        # (pre-formatted header/summary lines). Wrapping it in "[][/]"
+        # is invalid Rich markup (empty style name) and always raises
+        # MarkupError: "closing tag '[/]' has nothing to close" — even
+        # on perfectly clean text. Only wrap when a real style is given.
         if style:
             _console.print(f"[{style}]{msg}[/{style}]")
         else:
             _console.print(msg)
 except ImportError:
     _console = None
+    def _re(s: str) -> str:
+        return s
     def _log(msg: str, style: str = "") -> None:
         print(msg)
+
+
+def _safe(value) -> str:
+    """
+    Escape any value that originates from a remote host (service banner,
+    hostname, grabbed text, ...) before it is interpolated into a Rich
+    markup f-string.
+
+    rich.markup.escape() is NOT a full guarantee: it only escapes bracket
+    sequences that *look* like a well-formed tag, and still misses some
+    malformed/nested patterns found in real-world raw TCP banners — those
+    can still crash Rich's markup parser downstream. To be bullet-proof we
+    escape every literal backslash and every literal '[' unconditionally,
+    which removes any possibility of Rich re-interpreting the text as markup.
+    """
+    s = str(value)
+    s = s.replace("\\", "\\\\")  # escape backslashes first, so our own
+    s = s.replace("[", "\\[")    # '\[' escapes aren't themselves re-escaped
+    return s
 
 # ── Optional requests (for HTTP probes) ──────────────────────────────────────
 try:
@@ -475,7 +502,7 @@ class DBPortScanAgent:
         threads:     int        = 60,
         ports:       List[int]  = None,
         stealth:     bool       = False,
-        max_hosts:   int        = 200,
+        max_hosts:   int        = 3000,
     ):
         self.timeout   = timeout
         self.threads   = min(threads, 200)
@@ -647,8 +674,8 @@ class DBPortScanAgent:
                 break
 
             _log(
-                f"[DBScan] [{idx}/{len(hosts)}] {host}"
-                + (f"  [dim](hints: {hint_ports})[/dim]" if hint_ports and _console else ""),
+                f"[DBScan] [{idx}/{len(hosts)}] {_safe(host)}"
+                + (f"  [dim](hints: {_safe(hint_ports)})[/dim]" if hint_ports and _console else ""),
                 style="cyan"
             )
 
@@ -660,22 +687,25 @@ class DBPortScanAgent:
             _closed_badge = "[bold red][ Closed ][/bold red]"
 
             for f in hsr.findings:
+                _f_host    = _safe(f.host)
+                _f_service = _safe(f.service)
+                _f_detail  = _safe(f.detail[:120])
                 if f.severity == "CRITICAL":
                     _log(
                         f"  {_open_badge} [bold magenta]⚠ CRITICAL[/bold magenta] "
-                        f"{f.host}:{f.port} [{f.service}] — {f.detail[:120]}",
+                        f"{_f_host}:{f.port} \\[{_f_service}\\] — {_f_detail}",
                         style=""
                     )
                 elif f.severity == "HIGH":
                     _log(
                         f"  {_open_badge} [bold red]! HIGH[/bold red] "
-                        f"{f.host}:{f.port} [{f.service}] — {f.detail[:120]}",
+                        f"{_f_host}:{f.port} \\[{_f_service}\\] — {_f_detail}",
                         style=""
                     )
                 else:
                     _log(
                         f"  {_open_badge} [yellow]~ MEDIUM[/yellow] "
-                        f"{f.host}:{f.port} [{f.service}]",
+                        f"{_f_host}:{f.port} \\[{_f_service}\\]",
                         style=""
                     )
 
@@ -768,7 +798,7 @@ class DBScanReport:
         if self.critical_findings:
             _log("\n[bold magenta]⚠ CRITICAL — Unauthenticated DB exposure:[/bold magenta]", style="")
             for f in self.critical_findings:
-                _log(f"  {f.host}:{f.port}  [{f.service}]  {f.detail[:120]}", style="bold magenta")
+                _log(f"  {_safe(f.host)}:{f.port}  \\[{_safe(f.service)}\\]  {_safe(f.detail[:120])}", style="bold magenta")
 
     # ── Sqlmap-friendly TXT ───────────────────────────────────────────────────
 
@@ -848,28 +878,38 @@ if __name__ == "__main__":
         epilog=(
             "Examples:\n"
             "  python db_portscan.py results.json\n"
+            "  python db_portscan.py -f results.json -o out.json\n"
             "  python db_portscan.py results.json --timeout 3 --threads 80\n"
             "  python db_portscan.py results.json --ports 3306 5432 27017 6379\n"
             "  python db_portscan.py results.json --stealth --max-hosts 50\n"
         ),
     )
-    p.add_argument("results_file",
-                   help="DorkEye JSON results file")
+    p.add_argument("results_file", nargs="?", default=None,
+                   help="DorkEye JSON results file (positional)")
+    p.add_argument("-f", "--file",   type=str,   default=None, dest="file_opt",
+                   help="DorkEye JSON results file (alias for the positional arg)")
     p.add_argument("--timeout",   type=float, default=2.5,
                    help="TCP connect timeout in seconds (default: 2.5)")
     p.add_argument("--threads",   type=int,   default=60,
                    help="Worker threads per host (default: 60)")
     p.add_argument("--ports",     type=int,   nargs="+", default=None,
                    help="Port list to scan (default: all DB ports)")
-    p.add_argument("--max-hosts", type=int,   default=200,
-                   help="Max hosts to scan (default: 200)")
+    p.add_argument("--max-hosts", type=int,   default=3000,
+                   help="Max hosts to scan (default: 3000)")
     p.add_argument("--stealth",   action="store_true",
                    help="Add inter-host delay (1.5–3.5s)")
-    p.add_argument("--out",       type=str,   default=None,
+    p.add_argument("-o", "--out",    type=str,   default=None,
                    help="Output base path (default: same dir as results file)")
     args = p.parse_args()
 
-    src = args.results_file
+    # Accept either the positional results_file or -f/--file; the two are
+    # mutually interchangeable, not cumulative.
+    if args.file_opt and args.results_file:
+        p.error("pass the results file either as a positional argument or with -f/--file, not both")
+    src = args.file_opt or args.results_file
+    if not src:
+        p.error("the following arguments are required: results_file (or -f/--file)")
+
     try:
         raw = json.loads(open(src, encoding="utf-8").read())
         results_data = raw if isinstance(raw, list) else raw.get("results", [])
