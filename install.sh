@@ -1,11 +1,17 @@
 #!/bin/sh
-# DorkEye installer - detects the platform and installs the right requirements
-#   sh install.sh          auto-detect
-#   sh install.sh --ish    force iSH / lite mode
+# DorkEye installer - detects the device and runs the matching script
+# in Devices/<platform>/.
+#
+#   sh install.sh               auto-detect
+#   sh install.sh --ish         force iSH (iOS) lite mode
+#   sh install.sh --termux      force Termux (Android)
+#   sh install.sh --linux       force Linux / macOS
+#
+# Windows: double-click install.bat instead.
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR"
+DEV="$DIR/Devices"
 
 is_ish() {
     # iSH: 32-bit x86 Alpine emulated on iOS
@@ -14,16 +20,41 @@ is_ish() {
     return 1
 }
 
-if [ "$1" = "--ish" ] || is_ish; then
-    echo "[*] iSH / Alpine detected -> lite installation (no lxml)"
-    exec sh "$DIR/iOS/install_ish.sh"
-fi
+is_termux() {
+    [ -n "$TERMUX_VERSION" ] && return 0
+    case "${PREFIX:-}" in *com.termux*) return 0 ;; esac
+    return 1
+}
 
-PY="$(command -v python3 || command -v python || true)"
-[ -z "$PY" ] && { echo "[!] Python 3 not found"; exit 1; }
+is_windows_shell() {
+    case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) return 0 ;; esac
+    return 1
+}
 
-echo "[*] Installing standard requirements..."
-"$PY" -m pip install -r requirements.txt \
-    || "$PY" -m pip install --break-system-packages -r requirements.txt
+case "${1:-}" in
+    --ish)    PLATFORM=ios ;;
+    --termux) PLATFORM=android ;;
+    --linux)  PLATFORM=linux ;;
+    "")
+        if   is_ish;           then PLATFORM=ios
+        elif is_termux;        then PLATFORM=android
+        elif is_windows_shell; then PLATFORM=windows
+        else                        PLATFORM=linux
+        fi ;;
+    *) echo "[!] Unknown option: $1"; sed -n '5,9p' "$0"; exit 1 ;;
+esac
 
-echo "[+] Done. Run: $PY dorkeye.py --wizard"
+case "$PLATFORM" in
+    ios)
+        echo "[*] iSH (iOS) detected -> lite installation (no lxml)"
+        exec sh "$DEV/iOS/install_ish.sh" ;;
+    android)
+        echo "[*] Termux (Android) detected"
+        exec sh "$DEV/Android/install_termux.sh" ;;
+    windows)
+        echo "[!] Windows shell detected: run install.bat (double-click it or run it from cmd)."
+        exit 1 ;;
+    linux)
+        echo "[*] $(uname -s) detected"
+        exec sh "$DEV/Linux/install_linux.sh" ;;
+esac

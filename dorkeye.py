@@ -83,7 +83,7 @@ try:
     from ddgs import DDGS
 except ImportError:
     # iSH / Alpine: ddgs needs lxml, which cannot be built there.
-    # iOS/install_ish.sh installs this lxml-free fallback in the root.
+    # Devices/iOS/install_ish.sh installs this lxml-free fallback in the root.
     try:
         from ddg_lite import DDGS
     except ImportError:

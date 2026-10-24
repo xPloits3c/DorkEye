@@ -28,11 +28,11 @@ source de_env/bin/activate
 sh install.sh
 ```
 
-`install.sh` detects iSH automatically and hands over to `iOS/install_ish.sh`, which:
+`install.sh` detects iSH automatically and hands over to `Devices/iOS/install_ish.sh`, which:
 
 1. installs `python3` and `py3-pip` with `apk`
 2. installs every entry of `requirements.txt` **except** `lxml` and `ddgs`
-3. copies `iOS/ddg_lite.py` into the DorkEye root
+3. copies `Devices/iOS/ddg_lite.py` into the DorkEye root
 
 To force lite mode manually:
 
@@ -67,9 +67,10 @@ python3 dorkeye.py --wizard
 
 ```
 DorkEye/
-├── install.sh          # platform detection
-├── ddg_lite.py         # created by the installer (git-ignored)
-└── iOS/
-    ├── install_ish.sh  # iSH installer
-    └── ddg_lite.py     # lite backend source
+├── install.sh                 # device detection + dispatch
+├── ddg_lite.py                # created by the installer (git-ignored)
+└── Devices/
+    └── iOS/
+        ├── install_ish.sh     # iSH installer
+        └── ddg_lite.py        # lite backend source
 ```

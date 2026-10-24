@@ -5,7 +5,7 @@ Drop-in replacement for `ddgs.DDGS().text()`: same call signature and the
 same result keys ("title", "href", "body"). Uses only requests + bs4 with
 the stdlib "html.parser", so nothing needs to be compiled.
 
-iOS/install_ish.sh copies this file into the DorkEye root, where
+Devices/iOS/install_ish.sh copies this file into the DorkEye root, where
 dorkeye.py picks it up automatically when `ddgs` is not installed.
 
 Python 3.8+

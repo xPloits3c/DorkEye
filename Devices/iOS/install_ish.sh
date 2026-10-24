@@ -7,7 +7,7 @@
 set -e
 
 IOS_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(dirname "$IOS_DIR")"
+ROOT="$(cd "$IOS_DIR/../.." && pwd)"
 # Unique temp file (no fixed, predictable path in a world-writable dir)
 REQ_TMP="$(mktemp "${TMPDIR:-/tmp}/dorkeye-req-ish.XXXXXX")"
 trap 'rm -f "$REQ_TMP"' EXIT
