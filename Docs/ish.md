@@ -23,6 +23,8 @@ DorkEye works unchanged.
 apk add git
 git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
+python3 -m venv de_env
+source de_env/bin/activate
 sh install.sh
 ```
 
