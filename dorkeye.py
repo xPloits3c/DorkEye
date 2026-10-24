@@ -814,8 +814,9 @@ class DorkEyeEnhanced:
                                     _bits.append(f"method={_pm}")
                                 if _bits:
                                     _hl = f" [dim]{' '.join(_bits)}[/dim]"
+                            _wts = datetime.now().strftime("%H:%M:%S")
                             console.print(
-                                f"{WARNING_TAG} Potential SQLi found "
+                                f"[bold blue]\\[{_wts}][/bold blue] {WARNING_TAG} Potential SQLi found "
                                 f"{_confidence_tag(confidence)}{_hl}"
                             )
                     progress.advance(task2)
@@ -858,8 +859,9 @@ class DorkEyeEnhanced:
                             confidence = xss_result.get("overall_confidence", "?")
                             types_str  = ", ".join(xss_result.get("xss_types_found", []))
                             _types_hl  = f" [dim]types={_rich_escape(types_str)}[/dim]" if types_str else ""
+                            _wts = datetime.now().strftime("%H:%M:%S")
                             console.print(
-                                f"{WARNING_TAG} Potential XSS found "
+                                f"[bold blue]\\[{_wts}][/bold blue] {WARNING_TAG} Potential XSS found "
                                 f"{_confidence_tag(confidence)}{_types_hl}"
                             )
                     progress.advance(task3)
