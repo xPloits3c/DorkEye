@@ -172,13 +172,13 @@
 ```
 DorkEye/
 │ ├── dorkeye.py                      ← DorkEye Engine
-│ ├── requirements.txt
-│ ├── http_fingerprints.json
-│ ├── README.md
-│ ├── LICENSE
-│ ├── .gitignore
+│ ├── requirements.txt                ← Python dependencies
+│ ├── http_fingerprints.json          ← 22 browser/OS HTTP profiles
+│ ├── README.md                       ← This file (you are here)
+│ ├── LICENSE                         ← MIT license
+│ ├── .gitignore                      ← Git ignore rules
 │ /Tools/
-│    ├── __init__.py
+│    ├── __init__.py                  ← Package initializer
 │    ├── dork_generator.py            ← Dork Generator Queries
 │    ├── dorkeye_agents.py            ← Agents pipeline
 │    ├── dorkeye_patterns.py          ← Shared pattern library
@@ -188,43 +188,43 @@ DorkEye/
 │    ├── sqli.py                      ← 5 Method sqli injection (105 payloads)
 │    └── xss.py                       ← 4 Method xss injection (111 payloads)
 │ /Templates/
-│    ├── dorks_templates.yaml
-│    ├── example.yaml
-│    └── sql.yaml
+│    ├── dorks_templates.yaml         ← Dork generation templates
+│    ├── example.yaml                 ← Example template
+│    └── sql.yaml                     ← SQLi dork template
 │ /.github/
-│    ├── CODE_OF_CONDUCT.md
-│    ├── CONTRIBUTING.md
-│    ├── SECURITY.md
-│    ├── FUNDING.yml
-│    ├── pull_request_template.md
+│    ├── CODE_OF_CONDUCT.md           ← Community guidelines
+│    ├── CONTRIBUTING.md              ← Contribution guide
+│    ├── SECURITY.md                  ← Security policy
+│    ├── FUNDING.yml                  ← Sponsor configuration
+│    ├── pull_request_template.md     ← PR template
 │     /ISSUE_TEMPLATE/
-│        ├── bug_report.md
-│        └── feature_request.md
+│        ├── bug_report.md            ← Bug report template
+│        └── feature_request.md       ← Feature request template
 │     /workflows/
-│        └── claude-dorkeye.yml
+│        └── claude-dorkeye.yml       ← GitHub Actions AI agent
 │ /Docs/
-│    ├── cli.md
-│    ├── wizard.md
-│    ├── sqli.md
-│    ├── xss.md
-│    ├── agents.md
-│    ├── crawler.md
-│    ├── dbscan.md
-│    ├── fingerprinting.md
-│    ├── http_fingerprints.md
-│    ├── webconsole.md
-│    ├── termux.md
-│    ├── output_formats.md
-│    ├── file_categories.md
-│    ├── dork_generator.md
-│    ├── INSTALL.md
-│    ├── REPORT_HTML.md
-│    ├── USAGE.md
-│    ├── DDGSEE.md
+│    ├── cli.md                       ← Full CLI reference (38 flags)
+│    ├── wizard.md                    ← Interactive wizard guide
+│    ├── sqli.md                      ← SQL injection reference
+│    ├── xss.md                       ← XSS injection reference
+│    ├── agents.md                    ← Agents pipeline guide
+│    ├── crawler.md                   ← Adaptive crawler guide
+│    ├── dbscan.md                    ← DB port scan guide
+│    ├── fingerprinting.md            ← HTTP fingerprinting guide
+│    ├── http_fingerprints.md         ← Fingerprint profiles reference
+│    ├── webconsole.md                ← Web Console guide
+│    ├── termux.md                    ← Termux / Android setup
+│    ├── output_formats.md            ← Output formats guide
+│    ├── file_categories.md           ← File categories guide
+│    ├── dork_generator.md            ← Dork generator guide
+│    ├── INSTALL.md                   ← Installation guide
+│    ├── REPORT_HTML.md               ← HTML report guide
+│    ├── USAGE.md                     ← Usage examples
+│    ├── DDGSEE.md                    ← DuckDuckGo engine notes
 │     /Dorks/
-│        ├── Dorks_Collection_List.txt
-│        ├── JSON_exposure_dork.txt
-│        └── sql_dorks.txt
+│        ├── Dorks_Collection_List.txt ← Curated dork collection
+│        ├── JSON_exposure_dork.txt   ← JSON exposure dorks
+│        └── sql_dorks.txt            ← SQLi-oriented dorks
 │ /Screenshots/
 │    ├── dev_logo_0.png
 │    ├── dev_logo_1.png
