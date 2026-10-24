@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye v5.0 | OSINT Dorking Tool
+DorkEye Project v5.0 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
@@ -234,9 +234,6 @@ WELCOME_MESSAGES = [
     "Connected. Welcome back, {name}.",
     "Terminal ready, {name}.",
     "OSINT mode active, {name}.",
-    "Shall we play a game, {name}?",
-    "You wanna play a game?",
-    "Greetings, {name}. Shall we begin?",
     "Curiosity leaves footprints.",
     "VPN is not invisibility.",
     "They log more than you think.",
@@ -247,7 +244,7 @@ WELCOME_MESSAGES = [
     "Targets waiting, {name}.",
     "Query the noise, {name}.",
     "Burn what you touch.",
-    "You are visible, {name}.",
+    "You are visible.",
     "No small talk. Just results, {name}.",
     "We don't break things. We observe, {name}.",
     "Information wants to be found, {name}.",
@@ -2469,7 +2466,7 @@ def run_wizard():
                     f"\n[bold cyan]└─>[/bold cyan] Starting on {len(dorkeye.results)} results...\n"
                 )
                 try:
-                    _db_wiz = DBPortScanAgent(timeout=2.5, threads=60, ports=None, max_hosts=200)
+                    _db_wiz = DBPortScanAgent(timeout=2.5, threads=60, ports=None, max_hosts=5000)
                     _db_wiz_report = _db_wiz.run(dorkeye.results)
                     if _db_wiz_report:
                         _db_wiz_report.print_summary()
@@ -2567,7 +2564,7 @@ def run_wizard():
                     f"\n[bold cyan]└─>[/bold cyan] Starting on {len(dorkeye.results)} results...\n"
                 )
                 try:
-                    _db_wiz2 = DBPortScanAgent(timeout=2.5, threads=60, ports=None, max_hosts=200)
+                    _db_wiz2 = DBPortScanAgent(timeout=2.5, threads=60, ports=None, max_hosts=5000)
                     _db_wiz2_report = _db_wiz2.run(dorkeye.results)
                     if _db_wiz2_report:
                         _db_wiz2_report.print_summary()
@@ -2582,6 +2579,58 @@ def run_wizard():
             continue
 
         console.print("[red][!] Invalid option.[/red]")
+
+
+# ══════════════════════════════════════════════════════════════
+#  [LIVE] sqlmap-style live scan printer for -u/--url direct tests
+# ══════════════════════════════════════════════════════════════
+#
+# SQLiDetector and XSSDetector both expose a `_status_cb` hook (set to None
+# by default) that they call internally at safe checkpoints — see `_cb()` in
+# sql.py / xss.py. Nothing in the codebase ever set it before this change,
+# so it was dead infrastructure. This function builds a printer compatible
+# with that hook and is wired up ONLY in the direct -u/--url flow below.
+#
+# This is purely additive: bulk dork scans (FileAnalyzer) and -f/--file mode
+# instantiate their own SQLiDetector/XSSDetector without touching
+# `_status_cb`, so their behavior is completely unchanged.
+
+def _make_live_scan_printer(label: str):
+    """
+    Return a callback (str) -> None, compatible with SQLiDetector/XSSDetector's
+    `_status_cb`, that prints a live, sqlmap-style progress line for each
+    checkpoint reached during a direct -u/--url or -f/--file scan.
+
+    Format mirrors sqlmap: "[HH:MM:SS] [INFO] <message>" — timestamp in blue,
+    level tag in green. `label` ("sqli"/"xss") is kept for API stability
+    (call sites still pass it) but no longer printed, since the message text
+    itself already distinguishes engine/technique (e.g. "error-based",
+    "reflected:", "time-based", ...), same as sqlmap's own output doesn't
+    tag by tool name either.
+    """
+    def _printer(msg: str) -> None:
+        low = msg.lower()
+        if "confirmed" in low:
+            msg_style = "bold red"
+        elif "skip" in low:
+            msg_style = "dim yellow"
+        else:
+            msg_style = "white"
+
+        ts = datetime.now().strftime("%H:%M:%S")
+
+        # [INFO-1] sqlmap prints "... is vulnerable"/"injectable" right after
+        # a confirmed time-based finding. Mirrored here only for the
+        # time-based CONFIRMED checkpoint, as requested.
+        suffix = ""
+        if "time-based" in low and "confirmed" in low:
+            suffix = "  [bold green]injectable[/bold green]"
+
+        console.print(
+            f"[bold blue]\\[{ts}][/bold blue] [bold green]\\[INFO][/bold green] "
+            f"[{msg_style}]{_rich_escape(msg)}[/{msg_style}]{suffix}"
+        )
+    return _printer
 
 
 # ══════════════════════════════════════════════════════════════
@@ -2678,8 +2727,8 @@ def main():
                         help="TCP connect timeout in seconds (default: 2.5)")
     parser.add_argument("--dbscan-ports",    type=int, nargs="+", default=None,
                         help="Override DB ports to scan (default: all known DB ports)")
-    parser.add_argument("--dbscan-max-hosts",type=int, default=200,
-                        help="Max unique hosts to scan (default: 200)")
+    parser.add_argument("--dbscan-max-hosts",type=int, default=5000,
+                        help="Max unique hosts to scan (default: 5000)")
     # ─────────────────────────────────────────────────────────────────────────
 
     args = parser.parse_args()
@@ -2796,6 +2845,10 @@ def main():
                 stealth=config.get("stealth_mode", False),
                 timeout=config.get("request_timeout", 10),
             )
+            # [LIVE] sqlmap-style live progress — purely additive, see
+            # _make_live_scan_printer() above. test_sqli() logic is untouched.
+            _detector._status_cb = _make_live_scan_printer("sqli")
+            console.print("[dim]┌─[ live scan ][/dim]")
             _sqli_result = _detector.test_sqli(target_url)
             _entry["sqli_test"] = _sqli_result
             console.print("\n[bold yellow]┌─[ SQLi Test Result ][/bold yellow]")
@@ -2832,6 +2885,10 @@ def main():
                     timeout  = config.get("request_timeout", 10),
                     xss_type = config.get("xss_type", "all"),
                 )
+                # [LIVE] sqlmap-style live progress — purely additive, see
+                # _make_live_scan_printer() above. test_xss() logic untouched.
+                _xss_det._status_cb = _make_live_scan_printer("xss")
+                console.print("[dim]┌─[ live scan ][/dim]")
                 _xss_result = _xss_det.test_xss(target_url)
                 _entry["xss_test"] = _xss_result
                 console.print("\n[bold yellow]┌─[ XSS Test Result ][/bold yellow]")
@@ -2875,6 +2932,19 @@ def main():
         _do_analyze = args.analyze or str(output_file).lower().endswith(".json")
         _do_crawl   = getattr(args, "crawl", False)
         _do_dbscan  = getattr(args, "dbscan", False)
+
+        # [LIVE] Same sqlmap-style live progress as -u/--url, scoped ONLY to
+        # -f/--file mode (NOT the normal -d/--dg dork-search flow, which can
+        # process hundreds of URLs and would be flooded by per-payload output).
+        # Purely additive: just wires the already-built detectors' existing
+        # _status_cb hook — analyze_results()/check_sqli()/check_xss() and
+        # everything inside sql.py/xss.py are untouched.
+        if _do_sqli or _do_xss:
+            console.print("[dim]┌─[ live scan ][/dim]")
+            if _do_sqli:
+                dorkeye.analyzer.sqli_detector._status_cb = _make_live_scan_printer("sqli")
+            if _do_xss and dorkeye.analyzer.xss_detector is not None:
+                dorkeye.analyzer.xss_detector._status_cb = _make_live_scan_printer("xss")
 
         console.print("[bold cyan]└─>[/bold cyan] Processing...\n")
 
@@ -2947,7 +3017,7 @@ def main():
                         timeout   = getattr(args, "dbscan_timeout",   2.5),
                         threads   = getattr(args, "dbscan_threads",   60),
                         ports     = getattr(args, "dbscan_ports",     None),
-                        max_hosts = getattr(args, "dbscan_max_hosts", 200),
+                        max_hosts = getattr(args, "dbscan_max_hosts", 5000),
                     )
                     _db_report = _db_agent.run(dorkeye.results)
                     if _db_report:
@@ -3048,7 +3118,7 @@ def main():
                     timeout   = getattr(args, "dbscan_timeout",   2.5),
                     threads   = getattr(args, "dbscan_threads",   60),
                     ports     = getattr(args, "dbscan_ports",     None),
-                    max_hosts = getattr(args, "dbscan_max_hosts", 200),
+                    max_hosts = getattr(args, "dbscan_max_hosts", 5000),
                 )
                 _db_report = _db_agent.run(dorkeye.results)
                 if _db_report:
