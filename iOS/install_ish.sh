@@ -8,7 +8,10 @@ set -e
 
 IOS_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$IOS_DIR")"
-REQ_TMP="${TMPDIR:-/tmp}/dorkeye-req-ish.txt"
+# Unique temp file (no fixed, predictable path in a world-writable dir)
+REQ_TMP="$(mktemp "${TMPDIR:-/tmp}/dorkeye-req-ish.XXXXXX")"
+trap 'rm -f "$REQ_TMP"' EXIT
+trap 'exit 1' HUP INT TERM
 
 echo "[*] System packages..."
 apk update
@@ -19,7 +22,6 @@ echo "[*] Python requirements (without lxml / ddgs)..."
 grep -v -i -E '^[[:space:]]*(lxml|ddgs)([<>=!~ ]|$)' "$ROOT/requirements.txt" > "$REQ_TMP"
 python3 -m pip install -r "$REQ_TMP" \
     || python3 -m pip install --break-system-packages -r "$REQ_TMP"
-rm -f "$REQ_TMP"
 
 echo "[*] Installing lite search backend in $ROOT"
 cp "$IOS_DIR/ddg_lite.py" "$ROOT/ddg_lite.py"
