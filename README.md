@@ -172,55 +172,74 @@
 ## 📁 Project Structure
 ```
 DorkEye/
-│ ├── dorkeye.py               ← DorkEye Engine
+│ ├── dorkeye.py                      ← DorkEye Engine
 │ ├── requirements.txt
 │ ├── http_fingerprints.json
 │ ├── README.md
+│ ├── LICENSE
+│ ├── .gitignore
 │ /Tools/
-│    ├── dork_generator.py     ← Dork Generator Queries
-│    ├── dorkeye_agents.py     ← Agents v3.1 pipeline
-│    ├── dorkeye_patterns.py   ← Shared pattern library
-│    ├── dorkeye_analyze.py    ← Standalone analysis CLI
-│    ├── db_portscan.py   ← Scans exposed database ports
-│    ├── dorkeye_web.py   ← Local web interface
-│    ├── sqli.py     ← 5 Method sqli injection (105 payloads)
-│    └── xss.py     ← 4 Method xss injection (111 payloads)
+│    ├── __init__.py
+│    ├── dork_generator.py            ← Dork Generator Queries
+│    ├── dorkeye_agents.py            ← Agents pipeline
+│    ├── dorkeye_patterns.py          ← Shared pattern library
+│    ├── dorkeye_analyze.py           ← Standalone analysis CLI
+│    ├── db_portscan.py               ← Scans exposed database ports
+│    ├── dorkeye_web.py               ← Local web interface
+│    ├── sqli.py                      ← 5 Method sqli injection (105 payloads)
+│    └── xss.py                       ← 4 Method xss injection (111 payloads)
 │ /Templates/
 │    ├── dorks_templates.yaml
-│    ├── sql.yaml
-│    └── example.yaml
+│    ├── example.yaml
+│    └── sql.yaml
 │ /.github/
 │    ├── CODE_OF_CONDUCT.md
 │    ├── CONTRIBUTING.md
 │    ├── SECURITY.md
+│    ├── FUNDING.yml
 │    ├── pull_request_template.md
 │     /ISSUE_TEMPLATE/
 │        ├── bug_report.md
 │        └── feature_request.md
-│     /workflows
+│     /workflows/
 │        └── claude-dorkeye.yml
-│ /Dump/
-│    ├── *.csv
-│    ├── *.json
-│    ├── *.txt
-│    └── *.html
 │ /Docs/
 │    ├── cli.md
 │    ├── wizard.md
 │    ├── sqli.md
+│    ├── xss.md
 │    ├── agents.md
 │    ├── crawler.md
+│    ├── dbscan.md
 │    ├── fingerprinting.md
+│    ├── http_fingerprints.md
+│    ├── webconsole.md
+│    ├── termux.md
 │    ├── output_formats.md
 │    ├── file_categories.md
 │    ├── dork_generator.md
 │    ├── INSTALL.md
 │    ├── REPORT_HTML.md
 │    ├── USAGE.md
-│    └── DDGSEE.md
+│    ├── DDGSEE.md
+│     /Dorks/
+│        ├── Dorks_Collection_List.txt
+│        ├── JSON_exposure_dork.txt
+│        └── sql_dorks.txt
 │ /Screenshots/
-│    ├── img0
-│    └── img1
+│    ├── dev_logo_0.png
+│    ├── dev_logo_1.png
+│    ├── dev5_menu_h0.png
+│    ├── dev5_menu_h1.png
+│    ├── directsqltest.png
+│    ├── directsqltesthtml.png
+│    ├── sqlmultipletestfromfile.png
+│    └── sqlmultipletestfromfilehtml.png
+│ /Dump/                              ← runtime output, not versioned (see .gitignore)
+│    ├── *.csv
+│    ├── *.json
+│    ├── *.txt
+│    └── *.html
 ```
 ---
 
