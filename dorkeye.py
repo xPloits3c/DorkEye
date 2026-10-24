@@ -95,6 +95,18 @@ import getpass
 
 console = Console()
 
+
+def _md5(data: bytes):
+    """MD5 for non-security hashing (dedup, IDs).
+
+    `usedforsecurity` exists only on Python 3.9+; it keeps MD5 usable on
+    FIPS-enabled systems. Fall back to plain md5 on Python 3.8.
+    """
+    try:
+        return hashlib.md5(data, usedforsecurity=False)
+    except TypeError:
+        return hashlib.md5(data)
+
 # ── sqlmap-style output tags ──────────────────────────────────────────────────
 # All semantic tags share BLUE brackets; only the inner glyph/label is coloured.
 # Rich auto-disables colour on non-TTY output and when NO_COLOR is set, so logs
@@ -584,7 +596,7 @@ class DorkEyeEnhanced:
         self._reported_xss_urls:  Set[str] = set()
 
     def _hash_url(self, url: str) -> str:
-        return hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()
+        return _md5(url.encode()).hexdigest()
 
     def is_duplicate(self, url: str) -> bool:
         h = self._hash_url(url)
@@ -893,9 +905,7 @@ class DorkEyeEnhanced:
 
         # ── Checkpoint setup ──────────────────────────────────────────────────
         _session_seed   = "|".join(dorks[:5]) + str(len(dorks))
-        session_id      = hashlib.md5(
-            _session_seed.encode(), usedforsecurity=False
-        ).hexdigest()[:12]
+        session_id      = _md5(_session_seed.encode()).hexdigest()[:12]
         checkpoint      = SessionCheckpoint(session_id)
         saved_state     = checkpoint.load()
         completed_dorks: Set[str] = set()
@@ -2350,7 +2360,7 @@ def run_wizard():
         except Exception as _ae:
             console.print(f"[yellow][Agents] Error: {_ae}[/yellow]")
 
-    def _ask_crawl() -> dict | None:
+    def _ask_crawl() -> Optional[dict]:
         if not _ANALYZE_AVAILABLE:
             return None
         console.print("\n[bold cyan]┌─[ RECURSIVE CRAWL ][/bold cyan]")
