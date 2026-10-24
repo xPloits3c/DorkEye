@@ -127,36 +127,35 @@
 
 ---
 
-🔹 # WIZARD Mode
+🔹 # WIZARD Mode &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/wizard.md)
 ```bash
   python3 dorkeye.py --wizard
 ```
-🔹 # Basic search
+🔹 # Basic search &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/cli.md)
 ```bash
   python3 dorkeye.py -d "inurl:admin" -o results.txt
 ```
-🔹 # Dork Generator + Detection
+🔹 # Dork Generator + Detection &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/dork_generator.md)
 ```bash
   python3 dorkeye.py --dg=sqli --mode=aggressive --sqli --stealth -o report.json
 ```
-🔹 # SQLi + stealth
+🔹 # SQLi + stealth &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/sqli.md)
 ```bash
   python3 dorkeye.py -d "site:example.com .php?id=" --sqli --stealth -o scan.html
 ```
-🔹 # Fast scan
+🔹 # Fast scan &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/cli.md)
 ```bash
   python3 dorkeye.py -d dorks.txt --no-analyze -c 200 -o fast_results.csv
 ```
-🔹 # Direct SQLi test on a URL
+🔹 # Direct SQLi test on a URL &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/sqli.md)
 ```bash
   python3 dorkeye.py -u "https://target.com/page.php?id=1" --sqli --stealth -o result.json
 ```
-🔹 # Re-process a saved result file
+🔹 # Re-process a saved result file &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/cli.md)
 ```bash
   python3 dorkeye.py -f Dump/results.json --sqli --xss --dbscan --analyze -o retest.html
 ```
-
-🔹 # Web Console
+🔹 # Web Console &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/webconsole.md)
 ```bash
   python3 dorkeye.py --ui
 ```
