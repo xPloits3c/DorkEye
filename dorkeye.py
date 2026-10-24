@@ -79,7 +79,17 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from rich.table import Table
 from rich.panel import Panel
 from rich.markup import escape as _rich_escape
-from ddgs import DDGS
+try:
+    from ddgs import DDGS
+except ImportError:
+    # iSH / Alpine: ddgs needs lxml, which cannot be built there.
+    # iOS/install_ish.sh installs this lxml-free fallback in the root.
+    try:
+        from ddg_lite import DDGS
+    except ImportError:
+        print("[!] ddgs is not installed. Run: pip install ddgs\n"
+              "    On iSH (iOS) run: sh install.sh")
+        sys.exit(1)
 import socket
 import getpass
 

@@ -105,6 +105,8 @@
   python3 dorkeye.py --wizard
 ```
 
+> 📱 **iSH (iOS):** run `sh install.sh` — it detects iSH and installs a lite mode without `lxml`. See [Docs/ish.md](Docs/ish.md).
+
 <img width="1175" height="982" alt="dev5 0wiz" src="https://github.com/user-attachments/assets/79253966-b2ed-431e-9d46-aaa8d8297c82" />
 
 ---
@@ -214,6 +216,7 @@ DorkEye/
 │    ├── http_fingerprints.md         ← Fingerprint profiles reference
 │    ├── webconsole.md                ← Web Console guide
 │    ├── termux.md                    ← Termux / Android setup
+│    ├── ish.md                       ← iSH / iOS setup (lite mode)
 │    ├── output_formats.md            ← Output formats guide
 │    ├── file_categories.md           ← File categories guide
 │    ├── dork_generator.md            ← Dork generator guide
