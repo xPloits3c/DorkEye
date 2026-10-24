@@ -131,6 +131,22 @@ python dorkeye.py --wizard
 
 -----
 
+## 🍏 iSH / iOS Installation
+
+iSH runs Alpine Linux (emulated x86) on iPhone/iPad. `lxml` cannot be built there, and `ddgs` depends on it, so DorkEye uses a lightweight, lxml-free search backend (`ddg_lite`) instead.
+
+```
+apk add git
+git clone https://github.com/xPloits3c/DorkEye.git
+cd DorkEye
+sh install.sh
+python3 dorkeye.py --wizard
+```
+
+`install.sh` detects iSH automatically (or force it with `sh install.sh --ish`). Full details: [ish.md](ish.md)
+
+-----
+
 ## ✅ Verification
 
 ### From source:

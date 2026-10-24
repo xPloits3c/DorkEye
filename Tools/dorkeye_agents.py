@@ -2632,8 +2632,11 @@ class DorkCrawlerAgent(BaseAgent):
         try:
             from ddgs import DDGS
         except ImportError:
-            _log(f"[{self.name}] ddgs not installed. Install with: pip install ddgs", style="red")
-            return self._build_output("ddgs_missing")
+            try:
+                from ddg_lite import DDGS  # iSH / Alpine fallback (no lxml)
+            except ImportError:
+                _log(f"[{self.name}] ddgs not installed. Install with: pip install ddgs", style="red")
+                return self._build_output("ddgs_missing")
 
         triage_agent = TriageAgent(plugin=self.plugin)
 
