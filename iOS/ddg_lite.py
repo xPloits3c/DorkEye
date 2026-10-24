@@ -88,7 +88,14 @@ class DDGS:
 
         out, seen = [], set()
         while True:
-            soup = self._post(data)
+            try:
+                soup = self._post(data)
+            except (RatelimitException, requests.RequestException):
+                # First page failing is a real error; on later pages keep
+                # the results already collected instead of losing them.
+                if not out:
+                    raise
+                return out
             for item in self._parse(soup):
                 if not item["href"] or item["href"] in seen:
                     continue
