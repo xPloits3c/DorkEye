@@ -188,7 +188,7 @@ DorkEye/
 │    ├── sqli.py                      ← 5 Method sqli injection (105 payloads)
 │    └── xss.py                       ← 4 Method xss injection (111 payloads)
 │ /Templates/
-│    ├── dorks_templates.yaml         ← Dork generation templates
+│    ├── dorks_templates.yaml         ← Default template 
 │    ├── example.yaml                 ← Example template
 │    └── sql.yaml                     ← SQLi dork template
 │ /.github/
