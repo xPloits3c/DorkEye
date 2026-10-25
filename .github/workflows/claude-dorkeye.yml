@@ -159,8 +159,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # TEMP DEBUG: logs are public on this repo. Remove after reading the error.
-          show_full_output: true
           claude_args: |
             --max-turns 25
             --allowedTools "Read,Glob,Grep,Bash(gh issue create:*),Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue comment:*)"
