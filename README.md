@@ -81,7 +81,7 @@
 ## One-command install — Alpine / iOS (iSH)
 Recommended for **iOS users via [iSH](https://ish.app)** (Alpine Linux) and any Alpine-based system.<br>
 `install.sh` auto-detects the environment and runs the matching setup.
-[![Docs](https://img.shields.io/badge/📖_Docs-blue)](Docs/ish.md)
+[![Docs](https://img.shields.io/badge/📖_Docs-blue)](Docs/devices/ish.md)
 
 ```sh
 apk add git
