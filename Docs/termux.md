@@ -15,7 +15,29 @@
 
 -----
 
-## Installation
+## Quick install (recommended)
+
+```bash
+pkg install -y git
+git clone https://github.com/xPloits3c/DorkEye
+cd DorkEye
+sh install.sh
+```
+
+`install.sh` detects Termux automatically and runs `Devices/Android/install_termux.sh`, which installs `libxml2`/`libxslt` (needed to build `lxml`), creates the `dorkeye_env` virtualenv and installs every requirement. Then:
+
+```bash
+source dorkeye_env/bin/activate
+python dorkeye.py --wizard
+```
+
+To force Termux mode: `sh install.sh --termux`.
+
+The manual steps below do the same thing by hand, if you prefer.
+
+-----
+
+## Manual installation
 
 ### Step 1 — Update Termux packages
 

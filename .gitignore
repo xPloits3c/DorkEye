@@ -14,7 +14,7 @@ run_dorkeye.bat
 test_installation.sh
 test_installation.bat
 
-# iSH lite backend (copied to the root by iOS/install_ish.sh; source lives in iOS/)
+# iSH lite backend (copied to the root by Devices/iOS/install_ish.sh; source lives in Devices/iOS/)
 /ddg_lite.py
 
 # Output files

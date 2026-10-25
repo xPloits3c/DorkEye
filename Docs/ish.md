@@ -23,16 +23,17 @@ DorkEye works unchanged.
 apk add git
 git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
-python3 -m venv de_env
-source de_env/bin/activate
 sh install.sh
 ```
 
-`install.sh` detects iSH automatically and hands over to `iOS/install_ish.sh`, which:
+`install.sh` detects iSH automatically and hands over to `Devices/iOS/install_ish.sh`, which:
 
 1. installs `python3` and `py3-pip` with `apk`
-2. installs every entry of `requirements.txt` **except** `lxml` and `ddgs`
-3. copies `iOS/ddg_lite.py` into the DorkEye root
+2. creates the `dorkeye_env` virtualenv automatically (falls back to a system-wide install if venv isn't available on that Alpine)
+3. installs every entry of `requirements.txt` **except** `lxml` and `ddgs`
+4. copies `Devices/iOS/ddg_lite.py` into the DorkEye root
+
+No need to create the virtualenv by hand. If you already have one active, the installer uses it instead.
 
 To force lite mode manually:
 
@@ -45,11 +46,14 @@ sh install.sh --ish
 ## Run
 
 ```bash
+source dorkeye_env/bin/activate   # only if the installer created a venv
 python3 dorkeye.py --wizard
 ```
 
-`dorkeye.py` tries `ddgs` first and falls back to `ddg_lite` automatically when
-`ddgs` is not installed.
+The installer prints an `Activate:` line when it creates `dorkeye_env`; if it
+installed system-wide instead, skip the `activate` step. `dorkeye.py` tries
+`ddgs` first and falls back to `ddg_lite` automatically when `ddgs` is not
+installed.
 
 -----
 
@@ -67,9 +71,10 @@ python3 dorkeye.py --wizard
 
 ```
 DorkEye/
-├── install.sh          # platform detection
-├── ddg_lite.py         # created by the installer (git-ignored)
-└── iOS/
-    ├── install_ish.sh  # iSH installer
-    └── ddg_lite.py     # lite backend source
+├── install.sh                 # device detection + dispatch
+├── ddg_lite.py                # created by the installer (git-ignored)
+└── Devices/
+    └── iOS/
+        ├── install_ish.sh     # iSH installer
+        └── ddg_lite.py        # lite backend source
 ```

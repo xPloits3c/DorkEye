@@ -105,7 +105,26 @@
   python3 dorkeye.py --wizard
 ```
 
-> 📱 **iSH (iOS):** run `sh install.sh` — it detects iSH and installs a lite mode without `lxml`. See [Docs/ish.md](Docs/ish.md).
+### One-command install (auto-detect)
+
+`install.sh` detects the device and runs the matching script in `Devices/`:
+
+```bash
+git clone https://github.com/xPloits3c/DorkEye.git
+cd DorkEye
+sh install.sh          # Linux · macOS · Termux (Android) · iSH (iOS)
+```
+
+On **Windows**, double-click `install.bat` (or run it from `cmd`).
+
+| Device | Detected as | Notes |
+|--------|-------------|-------|
+| Linux / macOS | default | creates `dorkeye_env` |
+| Termux (Android) | `$PREFIX`, `$TERMUX_VERSION` | installs `libxml2`/`libxslt` for `lxml` — see [Docs/termux.md](Docs/termux.md) |
+| iSH (iOS) | i686 Alpine | lite mode, no `lxml` — see [Docs/ish.md](Docs/ish.md) |
+| Windows | `install.bat` | creates `dorkeye_env` — see [Docs/windows.md](Docs/windows.md) |
+
+Force a device with `--linux`, `--termux` or `--ish`. The manual steps below still work on any platform.
 
 <img width="1175" height="982" alt="dev5 0wiz" src="https://github.com/user-attachments/assets/79253966-b2ed-431e-9d46-aaa8d8297c82" />
 
@@ -217,6 +236,7 @@ DorkEye/
 │    ├── webconsole.md                ← Web Console guide
 │    ├── termux.md                    ← Termux / Android setup
 │    ├── ish.md                       ← iSH / iOS setup (lite mode)
+│    ├── windows.md                   ← Windows setup (install.bat)
 │    ├── output_formats.md            ← Output formats guide
 │    ├── file_categories.md           ← File categories guide
 │    ├── dork_generator.md            ← Dork generator guide
