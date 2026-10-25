@@ -92,30 +92,32 @@ apk add git
 git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
 sh install.sh
+source dorkeye_env/bin/activate
+python dorkeye.py —wizard
 ```
 > Using Debian, Ubuntu or Kali? Follow the **Quick Install** below.
 
-## Quick Install
+## Update
 ```bash
-"Update:"
   sudo apt update
   sudo apt install -y python3 python3-pip python3-venv git
-
-"Git Clone:"
+```
+## AUTOMATIC Quick Install
+```bash
   git clone https://github.com/xPloits3c/DorkEye.git
   cd DorkEye
-
-"Create environment:"
-  python3 -m venv dorkeye_env
-
-"Activate environment:"
+  sh install.sh
   source dorkeye_env/bin/activate
-
-"Install requirements:"
+  python dorkeye.py —wizard
+```
+## MANUAL Quick Install
+```bash
+  git clone https://github.com/xPloits3c/DorkEye.git
+  cd DorkEye
+  python3 -m venv dorkeye_env
+  source dorkeye_env/bin/activate
   pip install -r requirements.txt
-
-"WIZARD MODE:"
-  python3 dorkeye.py --wizard
+  python dorkeye.py --wizard
 ```
 
 <img width="1175" height="982" alt="dev5 0wiz" src="https://github.com/user-attachments/assets/79253966-b2ed-431e-9d46-aaa8d8297c82" />
