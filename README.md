@@ -42,6 +42,7 @@
 
 ## Why DorkEye
 
+- Runs everywhere — Linux · macOS · Windows · Android (Termux) · iOS (iSH)
 - Bypass CAPTCHA and rate-limiting
 - Advanced, interactive HTML report
 - Maintain anonymity and avoid IP blocking
@@ -58,6 +59,7 @@
 |---------|---------|
 | 🧙 Wizard | [Interactive guided session — all options](Docs/wizard.md) |
 | ⚙️ Dork Generator | [YAML template modes: `soft` / `medium` / `aggressive`](Docs/dork_generator.md) |
+| 📱 All Systems | [Android/Termux](Docs/devices/termux.md) · [iOS/iSH](Docs/devices/ish.md) · [macOS](Docs/devices/) · [Linux](Docs/devices/) · [Windows](Docs/devices/windows.md) |
 | 🎯 SQLi-XSS | [Test URL’s directly with `-u` and `-f`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi/XSS/analysis/crawl on saved result files with `-f`](Docs/cli.md) |
 | 💉 SQL Injection | [5 methods: 105 payloads](Docs/sqli.md) |
