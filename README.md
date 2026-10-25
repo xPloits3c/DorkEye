@@ -82,13 +82,19 @@
 
 ---
 
-### One-command install (auto-detect)
-`install.sh` detects the device and runs the matching script in `Devices/`
-```
+## One-command install — Alpine / iOS (iSH)
+Recommended for **iOS users via [iSH](https://ish.app)** (Alpine Linux) and any Alpine-based system.
+`install.sh` auto-detects the environment and runs the matching setup.
+[![Docs](https://img.shields.io/badge/📖_Docs-blue)](Docs/ish.md)
+
+```sh
+apk add git
 git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
 sh install.sh
 ```
+> Using Debian, Ubuntu or Kali? Follow the **Quick Install** below.
+
 ## Quick Install
 ```bash
 "Update:"
