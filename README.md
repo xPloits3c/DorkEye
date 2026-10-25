@@ -195,9 +195,19 @@ DorkEye/
 │ ├── dorkeye.py                      ← DorkEye Engine
 │ ├── requirements.txt                ← Python dependencies
 │ ├── http_fingerprints.json          ← 22 browser/OS HTTP profiles
+│ ├── install.sh                      ← Device detect + dispatch (Linux/macOS/Termux/iSH)
+│ ├── install.bat                     ← Windows installer (double-click)
 │ ├── README.md                       ← This file (you are here)
 │ ├── LICENSE                         ← MIT license
 │ ├── .gitignore                      ← Git ignore rules
+│ /Devices/                           ← Per-device installers
+│    /iOS/
+│        ├── install_ish.sh           ← iSH (iOS) lite installer — no lxml
+│        └── ddg_lite.py              ← lxml-free DuckDuckGo backend
+│    /Android/
+│        └── install_termux.sh        ← Termux installer (libxml2/libxslt + venv)
+│    /Linux/
+│        └── install_linux.sh         ← Linux / macOS installer (venv)
 │ /Tools/
 │    ├── __init__.py                  ← Package initializer
 │    ├── dork_generator.py            ← Dork Generator Queries
