@@ -5,11 +5,7 @@
 
 ---
 
-<div align="center">
-
-![Typing SVG](https://readme-typing-svg.demolab.com/?font=Fira+Code&weight=600&size=22&pause=1200&color=39FF14&background=000000&center=true&vCenter=true&width=600&lines=DorkEye+%7C+OSINT+Dorking+Tool;I+don%27t+hack+systems%2C+I+expose+their+secrets)
-
-</div>
+# DorkEye – OSINT Google Dorking Tool
 
 <!-- ── Row 1: Project identity ── -->
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
@@ -314,3 +310,8 @@ DorkEye/
 <a href="https://github.com/xPloits3c/DorkEye/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=xPloits3c/DorkEye" />
 </a>
+<div align="center">
+
+![Typing SVG](https://readme-typing-svg.demolab.com/?font=Fira+Code&weight=600&size=22&pause=1200&color=39FF14&background=000000&center=true&vCenter=true&width=600&lines=DorkEye+%7C+OSINT+Dorking+Tool;I+don%27t+hack+systems%2C+I+expose+their+secrets)
+
+</div>
