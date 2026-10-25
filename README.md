@@ -84,7 +84,11 @@
 
 ### One-command install (auto-detect)
 `install.sh` detects the device and runs the matching script in `Devices/`
-
+```
+git clone https://github.com/xPloits3c/DorkEye.git
+cd DorkEye
+sh install.sh
+```
 ## Quick Install
 ```bash
 "Update:"
