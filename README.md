@@ -276,10 +276,11 @@ DorkEye/
 
 ## ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
 
+> [!WARNING] 
 **DorkEye is provided for educational and authorized security-testing purposes only.**
 
-- You are solely responsible for complying with all applicable laws and for obtaining explicit, written authorization before scanning, testing, or probing any system, domain, or network you do not own.
-- The authors and contributors accept no liability for misuse or for any damage resulting from the use of this tool.
+> - You are solely responsible for complying with all applicable laws and for obtaining explicit, written authorization before scanning, testing, or probing any system, domain, or network you do not own.
+> - The authors and contributors accept no liability for misuse or for any damage resulting from the use of this tool.
 
 ---
 
