@@ -120,9 +120,9 @@ On **Windows**, double-click `install.bat` (or run it from `cmd`).
 | Device | Detected as | Notes |
 |--------|-------------|-------|
 | Linux / macOS | default | creates `dorkeye_env` |
-| Termux (Android) | `$PREFIX`, `$TERMUX_VERSION` | installs `libxml2`/`libxslt` for `lxml` |
+| Termux (Android) | `$PREFIX`, `$TERMUX_VERSION` | installs `libxml2`/`libxslt` for `lxml` — see [Docs/termux.md](Docs/termux.md) |
 | iSH (iOS) | i686 Alpine | lite mode, no `lxml` — see [Docs/ish.md](Docs/ish.md) |
-| Windows | `install.bat` | creates `dorkeye_env` |
+| Windows | `install.bat` | creates `dorkeye_env` — see [Docs/windows.md](Docs/windows.md) |
 
 Force a device with `--linux`, `--termux` or `--ish`. The manual steps below still work on any platform.
 
@@ -236,6 +236,7 @@ DorkEye/
 │    ├── webconsole.md                ← Web Console guide
 │    ├── termux.md                    ← Termux / Android setup
 │    ├── ish.md                       ← iSH / iOS setup (lite mode)
+│    ├── windows.md                   ← Windows setup (install.bat)
 │    ├── output_formats.md            ← Output formats guide
 │    ├── file_categories.md           ← File categories guide
 │    ├── dork_generator.md            ← Dork generator guide
