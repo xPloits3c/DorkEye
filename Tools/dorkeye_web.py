@@ -307,29 +307,36 @@ def _get_dork_generator():
 def _resolve_template(tpl_str: str):
     all_yaml = sorted(TEMPLATES_DIR.glob('*.yaml')) if TEMPLATES_DIR.exists() else []
     preferred = TEMPLATES_DIR / 'dorks_templates.yaml'
+    fallback = [preferred] if preferred.exists() else all_yaml
 
     if not tpl_str or tpl_str == 'default':
-        return [preferred] if preferred.exists() else all_yaml
+        return fallback
 
     if tpl_str == 'all':
         return all_yaml
 
+    # 1) Strip every path component — kills ../, absolute paths, slashes.
     safe_name = Path(tpl_str).name
 
-    if not safe_name.lower().endswith('.yaml'):
-        _LOG.warning('[_resolve_template] rejected non-yaml name: %r', safe_name)
-        return [preferred] if preferred.exists() else all_yaml
+    # 2) Whitelist allowed characters and require a .yaml extension.
+    #    An anchored fullmatch leaves no room for separators or traversal.
+    if not re.fullmatch(r'[A-Za-z0-9._-]+\.yaml', safe_name):
+        _LOG.warning('[_resolve_template] rejected name: %r', tpl_str)
+        return fallback
 
     p = TEMPLATES_DIR / safe_name
+
+    # 3) Defense in depth: confirm the resolved path stays inside Templates/.
     try:
         p.resolve().relative_to(TEMPLATES_DIR.resolve())
     except ValueError:
         _LOG.warning('[_resolve_template] path traversal attempt rejected: %r', tpl_str)
-        return [preferred] if preferred.exists() else all_yaml
+        return fallback
 
-    if p.exists():
-        return [p]
-    return [preferred] if preferred.exists() else all_yaml
+    if not p.exists():
+        return fallback
+
+    return [p]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
