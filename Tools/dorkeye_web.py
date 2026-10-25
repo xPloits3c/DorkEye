@@ -303,7 +303,6 @@ def _get_dork_generator():
     return DorkGenerator
 
 
-
 def _resolve_template(tpl_str: str):
     all_yaml = sorted(TEMPLATES_DIR.glob('*.yaml')) if TEMPLATES_DIR.exists() else []
     preferred = TEMPLATES_DIR / 'dorks_templates.yaml'
@@ -319,8 +318,11 @@ def _resolve_template(tpl_str: str):
     safe_name = Path(tpl_str).name
 
     # 2) Whitelist allowed characters and require a .yaml extension.
-    #    An anchored fullmatch leaves no room for separators or traversal.
-    if not re.fullmatch(r'[A-Za-z0-9._-]+\.yaml', safe_name):
+    #    Plain string checks (no regex) cannot suffer ReDoS.
+    _ALLOWED = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+    if (not safe_name.endswith('.yaml')
+            or safe_name == '.yaml'
+            or not set(safe_name) <= _ALLOWED):
         _LOG.warning('[_resolve_template] rejected name: %r', tpl_str)
         return fallback
 
