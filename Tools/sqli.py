@@ -2281,7 +2281,7 @@ class SQLiDetector:
                     param_score += 1  # LOW
 
             # ── Time-based ────────────────────────────────────────────────────
-            self._cb(f"[{param_name}] time-based blind test (may take a few seconds)")
+            self._cb(f"[{param_name}] time-based blind test")
             time_result = self._test_time_based_blind(url, param_name)
             time_result["parameter"] = param_name
             result["tests"].append(time_result)

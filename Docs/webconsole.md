@@ -231,7 +231,7 @@ active job via SSE.
 |Colour|Pattern matched                                        |
 |------|-------------------------------------------------------|
 |Green |`[✓]`, `SAFE`, `saved`, `done`, `completed`, `[ Open ]`|
-|Yellow|`[~]`, `WARNING`, `WAF`, `skipping`                    |
+|Yellow|`[~]`, `WARN`, `WAF`, `skipping`                       |
 |Red   |`[!]`, `VULNERABLE`, `CRITICAL`, `error`, `[ Closed ]` |
 |Blue  |`[*]`, `Searching`, `Analyzing`, `Loading`, `DBScan`   |
 |Dim   |Empty lines, separators                                |

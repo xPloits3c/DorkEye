@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye Project v5.0 | OSINT Dorking Tool
+DorkEye Project v5.1 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
@@ -17,7 +17,6 @@ import re
 import signal
 import queue
 import threading
-import pickle
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
@@ -110,12 +109,23 @@ def _md5(data: bytes):
 # ── sqlmap-style output tags ──────────────────────────────────────────────────
 # All semantic tags share BLUE brackets; only the inner glyph/label is coloured.
 # Rich auto-disables colour on non-TTY output and when NO_COLOR is set, so logs
-# stay clean ("[WARNING] …", "[ 1/37] …").
-WARNING_TAG = r"[blue]\[[/blue][orange1]WARNING[/orange1][blue]][/blue]"
+# stay clean ("[WARN] …", "[ 1/37] …").
+WARNING_TAG = r"[blue]\[[/blue][orange1]WARN[/orange1][blue]][/blue]"
 INFO_TAG    = r"[blue]\[[/blue][cyan]*[/cyan][blue]][/blue]"    # informational
 OK_TAG      = r"[blue]\[[/blue][green]+[/green][blue]][/blue]"  # success / positive
 ERROR_TAG   = r"[blue]\[[/blue][red]![/red][blue]][/blue]"      # error / failure
 SKIP_TAG    = r"[blue]\[[/blue][yellow]~[/yellow][blue]][/blue]"  # skipped / notice
+
+# Phase tags for the inline scan loops, so SQLi and XSS lines stay
+# distinguishable at a glance even when interleaved.
+SQLI_TAG = r"[blue]\[[/blue][red]SQLi[/red][blue]][/blue]"
+XSS_TAG  = r"[blue]\[[/blue][bold yellow]XSS[/bold yellow][blue]][/blue]"
+
+
+def _ts() -> str:
+    """Blue-bracketed HH:MM:SS prefix, prepended to every inline scan line."""
+    return rf"[blue]\[{datetime.now().strftime('%H:%M:%S')}][/blue]"
+
 
 # Confidence → colour, sqlmap-style escalation. Used by _confidence_tag().
 _CONF_STYLE = {
@@ -249,7 +259,7 @@ def print_banner():
 
     INFO = (
         "[bold red]OSINT[/bold red][bold white] DORKING TOOL[/bold white]\n"
-        "[bold green]v5.0[/bold green]  [dim]stable[/dim]\n"
+        "[bold green]v5.1[/bold green]  [dim]stable[/dim]\n"
         "\n"
         "[dim]▸ Author  │[/dim]  [yellow]xPloits3c I.C.W.T[/yellow]\n"
         "[dim]▸ GitHub  │[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
@@ -364,14 +374,18 @@ class UserAgentRotator:
     def __init__(self):
         self.agents        = [a for lst in USER_AGENTS.values() for a in lst]
         self.current_index = 0
+        self._lock         = threading.Lock()
 
     def get_random(self) -> str:
         return random.choice(self.agents)
 
     def get_next(self) -> str:
-        agent              = self.agents[self.current_index]
-        self.current_index = (self.current_index + 1) % len(self.agents)
-        return agent
+        # Called from the producer thread in search_dork(); guard the shared
+        # index so concurrent calls don't skip or repeat a User-Agent.
+        with self._lock:
+            agent              = self.agents[self.current_index]
+            self.current_index = (self.current_index + 1) % len(self.agents)
+            return agent
 
 
 # ══════════════════════════════════════════════════════════════
@@ -396,7 +410,7 @@ class SessionCheckpoint:
             self.CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             console.print(f"[yellow][~] Checkpoint dir non creabile: {e}[/yellow]")
-        self.path       = self.CHECKPOINT_DIR / f"{session_id}.pkl"
+        self.path       = self.CHECKPOINT_DIR / f"{session_id}.json"
         self.session_id = session_id
 
     def save(
@@ -405,10 +419,17 @@ class SessionCheckpoint:
         results:         List[Dict],
         stats:           dict,
     ) -> None:
-        """Pickle the current session state to disk."""
+        """Write the current session state to disk as JSON.
+
+        JSON (instead of pickle) keeps the checkpoint human-readable and
+        avoids the arbitrary-code-execution risk of unpickling a file that
+        could have been tampered with. All stored data (dorks, result dicts,
+        stats) is plain JSON-serializable; default=str is a safety net for
+        any stray non-serializable value.
+        """
         try:
-            with open(self.path, "wb") as f:
-                pickle.dump(
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(
                     {
                         "completed_dorks": completed_dorks,
                         "results":         results,
@@ -416,7 +437,8 @@ class SessionCheckpoint:
                         "saved_at":        datetime.now().isoformat(),
                     },
                     f,
-                    protocol=pickle.HIGHEST_PROTOCOL,
+                    ensure_ascii=False,
+                    default=str,
                 )
         except Exception as e:
             # Non-fatal: the session continues even without a checkpoint
@@ -431,8 +453,8 @@ class SessionCheckpoint:
         if not self.path.exists():
             return None
         try:
-            with open(self.path, "rb") as f:
-                return pickle.load(f)
+            with open(self.path, "r", encoding="utf-8") as f:
+                return json.load(f)
         except Exception as e:
             console.print(f"[yellow][~] Checkpoint corrotto, ignorato: {e}[/yellow]")
             return None
@@ -664,9 +686,14 @@ class DorkEyeEnhanced:
                 if _exit_requested or _skip_current:
                     break
                 try:
-                    batch_size = min(50, count - total_fetched)
-                    if batch_size <= 0:
+                    if count - total_fetched <= 0:
                         break
+                    # DDGS().text() always restarts from the first result and
+                    # paginates internally up to max_results, so request the full
+                    # target each attempt and let is_duplicate() drop repeats.
+                    # The old min(50, …) cap silently limited every search to a
+                    # single page, so -c values above 50 never returned more.
+                    batch_size = count
 
                     result_queue: queue.Queue = queue.Queue()
                     stop_event = threading.Event()
@@ -762,15 +789,28 @@ class DorkEyeEnhanced:
         """Run file analysis and/or SQLi/XSS testing on a batch of result dicts."""
         global _skip_current, _exit_requested
 
-        if not self.config.get("analyze_files", True) and not self.config.get("sqli_detection", False):
+        if (
+            not self.config.get("analyze_files", True)
+            and not self.config.get("sqli_detection", False)
+            and not self.config.get("xss_detection", False)
+        ):
             return results
-        console.print("\n[bold yellow][*] Analyzing results...[/bold yellow]")
+        console.print("\n[bold yellow][*] Scanning results (files/SQLi/XSS)...[/bold yellow]")
         files_to_analyze  = [r for r in results if r["category"] != "webpage"]
-        urls_to_test_sqli = [r for r in results if self.config.get("sqli_detection", False)]
+        # SQLi only applies to URLs with GET query parameters: the detector
+        # short-circuits parameter-less URLs anyway (no request), so filter them
+        # out here to keep the target count and the on-screen list meaningful.
+        if self.config.get("sqli_detection", False):
+            urls_to_test_sqli = [
+                r for r in results
+                if self.analyzer.sqli_detector.has_query_params(r.get("url", ""))
+            ]
+        else:
+            urls_to_test_sqli = []
 
         with Progress(console=console) as progress:
             if self.config.get("analyze_files", True) and files_to_analyze:
-                task1 = progress.add_task("[cyan]Analyzing [yellow]files[cyan]...", total=len(files_to_analyze))
+                task1 = progress.add_task("[cyan]Checking [yellow]files[cyan]...", total=len(files_to_analyze))
                 for result in files_to_analyze:
                     if _exit_requested or _skip_current:
                         break
@@ -789,27 +829,31 @@ class DorkEyeEnhanced:
                     _skip_current = False
 
             if self.config.get("sqli_detection", False) and urls_to_test_sqli:
-                _total_sqli = len(urls_to_test_sqli)
+                _total_sqli   = len(urls_to_test_sqli)
+                _sqli_skipped = len(results) - _total_sqli
+                _skip_note    = f" [dim](+{_sqli_skipped} without parameters skipped)[/dim]" if _sqli_skipped > 0 else ""
                 task2 = progress.add_task("[cyan]Testing for [red]SQLi[cyan]...", total=_total_sqli)
+                console.print(f"\n{_ts()} [bold red]──[ SQLi tests ]──[/bold red] [dim]{_total_sqli} URL(s)[/dim]{_skip_note}")
                 for _idx, result in enumerate(urls_to_test_sqli, 1):
                     if _exit_requested:
                         break
                     if _skip_current:
-                        console.print(f"{SKIP_TAG} [yellow]Ctrl+C — skipping remaining SQLi tests for this dork.[/yellow]")
+                        console.print(f"{_ts()} {SKIP_TAG} [yellow]Ctrl+C — skipping remaining SQLi tests for this dork.[/yellow]")
                         _skip_current = False
                         break
 
                     console.print(
-                        f"{_counter_tag(_idx, _total_sqli)} {_rich_escape(result['url'])}"
+                        f"{_ts()} {SQLI_TAG} {_counter_tag(_idx, _total_sqli)} {_rich_escape(result['url'])}"
                     )
 
                     sqli_result         = self.analyzer.check_sqli(result["url"])
                     result["sqli_test"] = sqli_result
 
                     if sqli_result.get("waf_detected"):
+                        # URL already shown on the counter line just above.
                         console.print(
-                            f"{SKIP_TAG} [yellow]WAF detected "
-                            f"({sqli_result['waf_detected']}): {_rich_escape(result['url'])}[/yellow]"
+                            f"{_ts()} {WARNING_TAG} [orange1]WAF detected "
+                            f"({sqli_result['waf_detected']})[/orange1]"
                         )
                         self.stats["waf_detected"] += 1
 
@@ -836,9 +880,8 @@ class DorkEyeEnhanced:
                                     _bits.append(f"method={_pm}")
                                 if _bits:
                                     _hl = f" [dim]{' '.join(_bits)}[/dim]"
-                            _wts = datetime.now().strftime("%H:%M:%S")
                             console.print(
-                                f"[bold blue]\\[{_wts}][/bold blue] {WARNING_TAG} Potential SQLi found "
+                                f"{_ts()} {WARNING_TAG} Potential SQLi found "
                                 f"{_confidence_tag(confidence)}{_hl}"
                             )
                     progress.advance(task2)
@@ -846,29 +889,31 @@ class DorkEyeEnhanced:
                         _interruptible_sleep(random.uniform(3, 6))
 
             # ── XSS Testing ──────────────────────────────────────────────────
-            urls_to_test_xss = [r for r in results if self.config.get("xss_detection", False)]
+            urls_to_test_xss = results if self.config.get("xss_detection", False) else []
             if self.config.get("xss_detection", False) and urls_to_test_xss:
                 _total_xss = len(urls_to_test_xss)
                 task3 = progress.add_task("[cyan]Testing for [bold yellow]XSS[cyan]...", total=_total_xss)
+                console.print(f"\n{_ts()} [bold yellow]──[ XSS tests ]──[/bold yellow] [dim]{_total_xss} URL(s)[/dim]")
                 for _idx, result in enumerate(urls_to_test_xss, 1):
                     if _exit_requested:
                         break
                     if _skip_current:
-                        console.print(f"{SKIP_TAG} [yellow]Ctrl+C — skipping remaining XSS tests for this dork.[/yellow]")
+                        console.print(f"{_ts()} {SKIP_TAG} [yellow]Ctrl+C — skipping remaining XSS tests for this dork.[/yellow]")
                         _skip_current = False
                         break
 
                     console.print(
-                        f"{_counter_tag(_idx, _total_xss)} {_rich_escape(result['url'])}"
+                        f"{_ts()} {XSS_TAG} {_counter_tag(_idx, _total_xss)} {_rich_escape(result['url'])}"
                     )
 
                     xss_result         = self.analyzer.check_xss(result["url"])
                     result["xss_test"] = xss_result
 
                     if xss_result.get("waf_detected") and not result.get("sqli_test", {}).get("waf_detected"):
+                        # URL already shown on the counter line just above.
                         console.print(
-                            f"{SKIP_TAG} [yellow]WAF detected "
-                            f"({xss_result['waf_detected']}): {_rich_escape(result['url'])}[/yellow]"
+                            f"{_ts()} {WARNING_TAG} [orange1]WAF detected "
+                            f"({xss_result['waf_detected']})[/orange1]"
                         )
                         self.stats["waf_detected"] += 1
 
@@ -881,9 +926,8 @@ class DorkEyeEnhanced:
                             confidence = xss_result.get("overall_confidence", "?")
                             types_str  = ", ".join(xss_result.get("xss_types_found", []))
                             _types_hl  = f" [dim]types={_rich_escape(types_str)}[/dim]" if types_str else ""
-                            _wts = datetime.now().strftime("%H:%M:%S")
                             console.print(
-                                f"[bold blue]\\[{_wts}][/bold blue] {WARNING_TAG} Potential XSS found "
+                                f"{_ts()} {WARNING_TAG} Potential XSS found "
                                 f"{_confidence_tag(confidence)}{_types_hl}"
                             )
                     progress.advance(task3)
@@ -1787,7 +1831,7 @@ class DorkEyeEnhanced:
         parts.append(f"""        </tbody>
     </table>
     </div>
-    <div class="footer">DorkEye v5.0 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+    <div class="footer">DorkEye v5.1 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
 </div>
 
 <div id="toast"></div>
@@ -2643,35 +2687,42 @@ def _make_live_scan_printer(label: str):
     `_status_cb`, that prints a live, sqlmap-style progress line for each
     checkpoint reached during a direct -u/--url or -f/--file scan.
 
-    Format mirrors sqlmap: "[HH:MM:SS] [INFO] <message>" — timestamp in blue,
-    level tag in green. `label` ("sqli"/"xss") is kept for API stability
-    (call sites still pass it) but no longer printed, since the message text
-    itself already distinguishes engine/technique (e.g. "error-based",
-    "reflected:", "time-based", ...), same as sqlmap's own output doesn't
-    tag by tool name either.
+    Format: "[HH:MM:SS] [INFO] <message>" — level tag in green, exactly like the
+    multi-target scan. A line that reports a CONFIRMED finding switches to
+    "[HH:MM:SS] [WARN] <message>" (orange), mirroring the bulk scan's
+    "Potential … found" line. The engine (SQLi vs XSS) is shown by the section
+    header printed right before the scan, so it is not repeated on every line.
+    `label` ("sqli"/"xss") is kept for call-site compatibility.
     """
+    _INFO = r"[blue]\[[/blue][green]INFO[/green][blue]][/blue]"
+
     def _printer(msg: str) -> None:
-        low = msg.lower()
-        if "confirmed" in low:
-            msg_style = "bold red"
-        elif "skip" in low:
-            msg_style = "dim yellow"
-        else:
-            msg_style = "white"
+        low        = msg.lower()
+        is_finding = "confirmed" in low   # a confirmed vulnerability → WARN
 
         ts = datetime.now().strftime("%H:%M:%S")
 
-        # [INFO-1] sqlmap prints "... is vulnerable"/"injectable" right after
-        # a confirmed time-based finding. Mirrored here only for the
-        # time-based CONFIRMED checkpoint, as requested.
-        suffix = ""
-        if "time-based" in low and "confirmed" in low:
-            suffix = "  [bold green]injectable[/bold green]"
+        if is_finding:
+            tag = WARNING_TAG
+            # On a finding line, highlight the leading [param] token and the
+            # (confidence) in red; the rest of the line stays orange.
+            _s = _rich_escape(msg)
+            _s = re.sub(r"^(\\\[[^\]]*\])", r"[bold red]\1[/bold red]", _s)
+            _s = re.sub(r"(\((?:critical|high|medium|low)\))",
+                        r"[bold red]\1[/bold red]", _s, flags=re.I)
+            body = f"[orange1]{_s}[/orange1]"
+        elif "skip" in low:
+            tag  = _INFO
+            body = f"[dim yellow]{_rich_escape(msg)}[/dim yellow]"
+        else:
+            tag  = _INFO
+            body = f"[white]{_rich_escape(msg)}[/white]"
 
-        console.print(
-            f"[bold blue]\\[{ts}][/bold blue] [bold green]\\[INFO][/bold green] "
-            f"[{msg_style}]{_rich_escape(msg)}[/{msg_style}]{suffix}"
-        )
+        # sqlmap-style: any confirmed finding (error-based, union-based,
+        # boolean-blind, time-based) is marked "injectable".
+        suffix = "  [bold green]injectable[/bold green]" if is_finding else ""
+
+        console.print(f"[bold blue]\\[{ts}][/bold blue] {tag} {body}{suffix}")
     return _printer
 
 
@@ -2713,7 +2764,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v5.0 | OSINT Dorking Tool",
+        description="DorkEye v5.1 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   %(prog)s --ui                 # Web Console (8080)
@@ -2882,7 +2933,12 @@ def main():
             "category":  dorkeye.analyzer.categorize_url(target_url),
         }
 
+        _sqli_result = None
+        _xss_result  = None
+
+        # ── Phase 1: run the scans (live progress), each under its own header ──
         if _do_url_sqli:
+            console.print(f"\n{_ts()} [bold red]──[ SQLi ]──[/bold red]")
             _detector    = SQLiDetector(
                 stealth=config.get("stealth_mode", False),
                 timeout=config.get("request_timeout", 10),
@@ -2890,38 +2946,13 @@ def main():
             # [LIVE] sqlmap-style live progress — purely additive, see
             # _make_live_scan_printer() above. test_sqli() logic is untouched.
             _detector._status_cb = _make_live_scan_printer("sqli")
-            console.print("[dim]┌─[ live scan ][/dim]")
             _sqli_result = _detector.test_sqli(target_url)
             _entry["sqli_test"] = _sqli_result
-            console.print("\n[bold yellow]┌─[ SQLi Test Result ][/bold yellow]")
-            _tested = _sqli_result.get("tested", False)
-            _vuln   = _sqli_result.get("vulnerable", False)
-            _conf   = _sqli_result.get("overall_confidence", "none")
-            _waf    = _sqli_result.get("waf_detected")
-            _msg    = _sqli_result.get("message", "")
-            if not _tested:
-                console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] Not tested — {_msg}[/yellow]")
-            elif _vuln:
-                _style = "bold magenta" if _conf == SQLiConfidence.CRITICAL.value else "bold red"
-                console.print(f"[bold yellow]│[/bold yellow]  [{_style}][!] VULNERABLE ({_conf})[/{_style}]  {_rich_escape(target_url)}")
-                for _t in _sqli_result.get("tests", []):
-                    if _t.get("vulnerable"):
-                        _method = _t.get("method", "?")
-                        _ev     = " | ".join(_t.get("evidence", [])[:2])
-                        _param  = _t.get("parameter", "")
-                        _p_str  = f" [param: {_param}]" if _param else ""
-                        console.print(f"[bold yellow]│[/bold yellow]    [dim]↳ method: [yellow]{_method}[/yellow]{_p_str}  evidence: [italic]{_rich_escape(_ev[:120])}[/italic][/dim]")
-                dorkeye.stats["sqli_vulnerable"] += 1
-            else:
-                console.print(f"[bold yellow]│[/bold yellow]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
-            if _waf:
-                console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] WAF detected: {_waf}[/yellow]")
-                dorkeye.stats["waf_detected"] += 1
-            console.print(f"[bold yellow]└─>[/bold yellow]  {_msg}")
 
         if _do_url_xss:
             try:
                 from xss import XSSDetector
+                console.print(f"\n{_ts()} [bold yellow]──[ XSS ]──[/bold yellow]")
                 _xss_det    = XSSDetector(
                     stealth  = config.get("stealth_mode", False),
                     timeout  = config.get("request_timeout", 10),
@@ -2930,27 +2961,66 @@ def main():
                 # [LIVE] sqlmap-style live progress — purely additive, see
                 # _make_live_scan_printer() above. test_xss() logic untouched.
                 _xss_det._status_cb = _make_live_scan_printer("xss")
-                console.print("[dim]┌─[ live scan ][/dim]")
                 _xss_result = _xss_det.test_xss(target_url)
                 _entry["xss_test"] = _xss_result
-                console.print("\n[bold yellow]┌─[ XSS Test Result ][/bold yellow]")
-                _xvuln  = _xss_result.get("vulnerable", False)
-                _xconf  = _xss_result.get("overall_confidence", "none")
-                _xtypes = ", ".join(_xss_result.get("xss_types_found", []))
-                _xwaf   = _xss_result.get("waf_detected")
-                _xmsg   = _xss_result.get("message", "")
-                if not _xss_result.get("tested"):
-                    console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] Not tested — {_xmsg}[/yellow]")
-                elif _xvuln:
-                    console.print(f"[bold yellow]│[/bold yellow]  [bold yellow][!] VULNERABLE ({_xconf}) [{_xtypes}][/bold yellow]  {_rich_escape(target_url)}")
-                    dorkeye.stats["xss_vulnerable"] += 1
-                else:
-                    console.print(f"[bold yellow]│[/bold yellow]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
-                if _xwaf:
-                    console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] WAF detected: {_xwaf}[/yellow]")
-                console.print(f"[bold yellow]└─>[/bold yellow]  {_xmsg}")
             except ImportError:
                 console.print("[yellow][!] xss.py not found — XSS test skipped.[/yellow]")
+
+        # ── Phase 2: results, printed together AFTER both scans complete ──────
+        if _do_url_sqli and _sqli_result is not None:
+            console.print("\n[bold red]┌─[ SQLi [/bold red][bold blue]Test Result[/bold blue][bold red] ][/bold red]")
+            _tested = _sqli_result.get("tested", False)
+            _vuln   = _sqli_result.get("vulnerable", False)
+            _conf   = _sqli_result.get("overall_confidence", "none")
+            _waf    = _sqli_result.get("waf_detected")
+            _msg    = _sqli_result.get("message", "")
+            if not _tested:
+                console.print(f"[bold red]│[/bold red]  [yellow][~] Not tested — {_msg}[/yellow]")
+            elif _vuln:
+                _style = "bold magenta" if _conf == SQLiConfidence.CRITICAL.value else "bold red"
+                console.print(f"[bold red]│[/bold red]  [{_style}][!] VULNERABLE ({_conf})[/{_style}]  {_rich_escape(target_url)}")
+                for _t in _sqli_result.get("tests", []):
+                    if _t.get("vulnerable"):
+                        _method = _t.get("method", "?")
+                        _param  = _t.get("parameter", "")
+                        _p_str  = f" [param: {_param}]" if _param else ""
+                        console.print(f"[bold red]│[/bold red]    [dim]↳ method: [yellow]{_method}[/yellow]{_p_str}[/dim]")
+                        # Each evidence item on its own line; a "payload=[…] <desc>"
+                        # item is split so the long description starts on its own
+                        # line instead of making one huge wrapped line.
+                        for _e in _t.get("evidence", [])[:3]:
+                            _e  = str(_e)
+                            _pm = re.match(r"^(payload=.+?\])\s+(.*)$", _e, re.S)
+                            if _pm:
+                                console.print(f"[bold red]│[/bold red]      [dim]evidence: [italic]{_rich_escape(_pm.group(1)[:140])}[/italic][/dim]")
+                                console.print(f"[bold red]│[/bold red]      [dim][italic]{_rich_escape(_pm.group(2)[:180])}[/italic][/dim]")
+                            else:
+                                console.print(f"[bold red]│[/bold red]      [dim]evidence: [italic]{_rich_escape(_e[:180])}[/italic][/dim]")
+                dorkeye.stats["sqli_vulnerable"] += 1
+            else:
+                console.print(f"[bold red]│[/bold red]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
+            if _waf:
+                console.print(f"[bold red]│[/bold red]  {WARNING_TAG} [orange1]WAF detected: {_waf}[/orange1]")
+                dorkeye.stats["waf_detected"] += 1
+            console.print(f"[bold red]└─>[/bold red]  {_msg}")
+
+        if _do_url_xss and _xss_result is not None:
+            console.print("\n[bold yellow]┌─[ XSS [/bold yellow][bold blue]Test Result[/bold blue][bold yellow] ][/bold yellow]")
+            _xvuln  = _xss_result.get("vulnerable", False)
+            _xconf  = _xss_result.get("overall_confidence", "none")
+            _xtypes = ", ".join(_xss_result.get("xss_types_found", []))
+            _xwaf   = _xss_result.get("waf_detected")
+            _xmsg   = _xss_result.get("message", "")
+            if not _xss_result.get("tested"):
+                console.print(f"[bold yellow]│[/bold yellow]  [yellow][~] Not tested — {_xmsg}[/yellow]")
+            elif _xvuln:
+                console.print(f"[bold yellow]│[/bold yellow]  [bold yellow][!] VULNERABLE ({_xconf}) [{_xtypes}][/bold yellow]  {_rich_escape(target_url)}")
+                dorkeye.stats["xss_vulnerable"] += 1
+            else:
+                console.print(f"[bold yellow]│[/bold yellow]  [green][✓] SAFE[/green]  {_rich_escape(target_url)}")
+            if _xwaf:
+                console.print(f"[bold yellow]│[/bold yellow]  {WARNING_TAG} [orange1]WAF detected: {_xwaf}[/orange1]")
+            console.print(f"[bold yellow]└─>[/bold yellow]  {_xmsg}")
 
         if output_file:
             dorkeye.results.append(_entry)
@@ -2982,7 +3052,6 @@ def main():
         # _status_cb hook — analyze_results()/check_sqli()/check_xss() and
         # everything inside sql.py/xss.py are untouched.
         if _do_sqli or _do_xss:
-            console.print("[dim]┌─[ live scan ][/dim]")
             if _do_sqli:
                 dorkeye.analyzer.sqli_detector._status_cb = _make_live_scan_printer("sqli")
             if _do_xss and dorkeye.analyzer.xss_detector is not None:
@@ -3000,7 +3069,19 @@ def main():
         else:
             dorkeye.results = _loaded
 
-        dorkeye.print_statistics()
+        _post_search = (
+            (_do_analyze and dorkeye.results and _ANALYZE_AVAILABLE)
+            or _do_crawl
+            or _do_dbscan
+        )
+        if _post_search:
+            console.print(
+                "\n[bold cyan]┌─[ SEARCH COMPLETE ][/bold cyan]"
+                "\n[bold cyan]└─>[/bold cyan] [dim]Post-search phase running "
+                "(analysis / crawl / dbscan)… final statistics print at the end.[/dim]"
+            )
+        else:
+            dorkeye.print_statistics()
 
         if output_file:
             dorkeye.save_results()
@@ -3022,9 +3103,8 @@ def main():
                 "analyze_out":           report_out,
             })()
             try:
-                _result_f = _run_agents_pipeline(results=dorkeye.results, llm_plugin=None, args=_analyze_args_f)
-                if _result_f.get("report_path"):
-                    console.print(f"[bold green][✓] Analysis report → {_result_f['report_path']}[/bold green]")
+                # ReportAgent already prints the saved report path; avoid a duplicate line.
+                _run_agents_pipeline(results=dorkeye.results, llm_plugin=None, args=_analyze_args_f)
             except Exception as _fae:
                 console.print(f"[yellow][Analyzer] Error: {_fae}[/yellow]")
 
@@ -3075,6 +3155,9 @@ def main():
                     console.print("\n[yellow][DBScan] Interrotto dall'utente.[/yellow]")
                 except Exception as _dbe:
                     console.print(f"[yellow][DBScan] Errore: {_rich_escape(str(_dbe))}[/yellow]")
+
+        if _post_search:
+            dorkeye.print_statistics()
         return
 
     # ── Dork source ───────────────────────────────────────────────────────────
@@ -3097,7 +3180,23 @@ def main():
     except KeyboardInterrupt:
         console.print("\n[red][!] Search interrupted by user![/red]")
 
-    dorkeye.print_statistics()
+    # Post-search phases (agents / crawl / dbscan) run after the search.
+    # When any of them will run, defer the Search Statistics block to the very
+    # end so it isn't mistaken for the end of the whole run, and print a clear
+    # "still working" banner here instead.
+    _post_search = (
+        (_do_analyze and dorkeye.results and _ANALYZE_AVAILABLE)
+        or getattr(args, "crawl", False)
+        or getattr(args, "dbscan", False)
+    )
+    if _post_search:
+        console.print(
+            "\n[bold cyan]┌─[ SEARCH COMPLETE ][/bold cyan]"
+            "\n[bold cyan]└─>[/bold cyan] [dim]Post-search phase running "
+            "(analysis / crawl / dbscan)… final statistics print at the end.[/dim]"
+        )
+    else:
+        dorkeye.print_statistics()
 
     if _do_analyze and dorkeye.results and _ANALYZE_AVAILABLE:
         ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -3115,9 +3214,9 @@ def main():
             "analyze_out":           report_out,
         })()
         try:
-            result = _run_agents_pipeline(results=dorkeye.results, llm_plugin=None, args=_analyze_args)
-            if result.get("report_path"):
-                console.print(f"[bold green][✓] Analysis report → {result['report_path']}[/bold green]")
+            # ReportAgent already prints the saved report path ("[✓] Report saved: …"),
+            # so we don't print a second, near-identical line here.
+            _run_agents_pipeline(results=dorkeye.results, llm_plugin=None, args=_analyze_args)
         except Exception as _ae:
             console.print(f"[yellow][Agents] Error: {_ae}[/yellow]")
 
@@ -3179,6 +3278,11 @@ def main():
             except Exception as _dbe:
                 console.print(f"[yellow][DBScan] Error: {_rich_escape(str(_dbe))}[/yellow]")
     # ─────────────────────────────────────────────────────────────────────────
+
+    # Deferred Search Statistics: printed now, after every post-search phase,
+    # so the full recap sits at the very end of the run.
+    if _post_search:
+        dorkeye.print_statistics()
 
     if dorkeye.output_file:
         console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
