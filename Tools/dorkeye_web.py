@@ -939,7 +939,7 @@ function colorLine(l){
   if(!l)return'<span class="tl t-d"> </span>';
   let cls='t-ok';
   if(/\[!\]|VULNERABLE|CRITICAL|error/i.test(l))cls='t-e';
-  else if(/\[~\]|WARNING|WAF|skipping/i.test(l))cls='t-w';
+  else if(/\[~\]|WARN|WAF|skipping/i.test(l))cls='t-w';
   else if(/\[✓\]|SAFE| saved |done|completed/i.test(l))cls='t-ok';
   else if(/\[\*\]|Searching|Analyz|Loading|Starting/i.test(l))cls='t-i';
   else if(/potential|found|vuln|payload/i.test(l))cls='t-e';

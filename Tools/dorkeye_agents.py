@@ -47,8 +47,10 @@ import hashlib
 import json
 import math
 import os
+import random
 import re
 import time
+from contextlib import contextmanager
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -89,6 +91,23 @@ except ImportError:
 
     def _panel(body: str, title: str = "", border: str = "") -> None:  # type: ignore
         print(f"\n[{title}]\n{body}")
+
+
+@contextmanager
+def _working(msg: str):
+    """Show a single, transient status line while an agent works, then clear it.
+
+    Keeps the harvesting/detection agents from flooding the console with one
+    line per result: the spinner updates in place and leaves nothing behind, so
+    each agent emits only its final summary line. Degrades to a one-off print
+    when rich isn't available.
+    """
+    if _console is not None:
+        with _console.status(f"[cyan]{msg}[/cyan]", spinner="dots"):
+            yield
+    else:
+        print(msg)
+        yield
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PATTERN LIBRARY — imported from dorkeye_patterns.py
@@ -324,7 +343,6 @@ class TriageAgent(BaseAgent):
         url = result.get("url", "")
         if "?" in url:
             try:
-                from urllib.parse import parse_qs, urlparse
                 n_params = len(parse_qs(urlparse(url).query))
                 if n_params >= 5:
                     bonus += 10
@@ -512,10 +530,9 @@ class PageFetchAgent(BaseAgent):
         """Downloads and returns the page text (truncated to max_chars).
         v4.8: retry max 2, UA rotation, saves response_headers in result.
         """
-        import random as _random
         last_exc = None
         for attempt in range(3):  # 1 attempt + 2 retries
-            ua = _random.choice(_FETCH_UA_POOL)
+            ua = random.choice(_FETCH_UA_POOL)
             try:
                 resp = requests.get(
                     url,
@@ -1621,7 +1638,7 @@ class ReportAgent(BaseAgent):
             output_path = self._fix_ext(output_path, fmt)
             try:
                 Path(output_path).write_text(content, encoding="utf-8")
-                _log(f"[{self.name}] Report saved: {output_path}", style="bold green")
+                _log(f"[{self.name}] [✓] Report saved: {output_path}", style="bold green")
             except IOError as e:
                 _log(f"[{self.name}] Save error: {e}", style="red")
 
@@ -2212,17 +2229,12 @@ class EmailHarvesterAgent(BaseAgent):
             _log(f"[{self.name}] No content available.", style="dim")
             return results
 
-        _log(f"[{self.name}] Email harvesting on {len(candidates)} results...", style="bold cyan")
-
-        for r in candidates:
-            text = (r.get("page_content", "") or "") + " " + (r.get("snippet", "") or "")
-            found = self._harvest(text, r.get("url", ""))
-            if found:
-                r["emails_found"] = found
-                _log(
-                    f"[{self.name}] {len(found)} email → {r.get('url','')[:65]}",
-                    style="yellow"
-                )
+        with _working(f"[{self.name}] Email harvesting on {len(candidates)} results..."):
+            for r in candidates:
+                text = (r.get("page_content", "") or "") + " " + (r.get("snippet", "") or "")
+                found = self._harvest(text, r.get("url", ""))
+                if found:
+                    r["emails_found"] = found
 
         total = len(self._global_emails)
         _log(f"[{self.name}] Completed: {total} unique emails found.", style="bold green")
@@ -2285,21 +2297,15 @@ class PiiDetectorAgent(BaseAgent):
             _log(f"[{self.name}] No content available.", style="dim")
             return results
 
-        _log(f"[{self.name}] PII scan on {len(candidates)} results...", style="bold cyan")
-
         total_found = 0
-        for r in candidates:
-            content = ((r.get("page_content", "") or "") + " " + (r.get("snippet", "") or ""))
-            content = content[:self.max_content]
-            findings = self._scan(content, r.get("url", ""))
-            if findings:
-                r["pii_found"] = findings
-                total_found += len(findings)
-                _log(
-                    f"[{self.name}] {len(findings)} PII → "
-                    f"[{r.get('triage_label','?')}] {r.get('url','')[:60]}",
-                    style="bold red"
-                )
+        with _working(f"[{self.name}] PII scan on {len(candidates)} results..."):
+            for r in candidates:
+                content = ((r.get("page_content", "") or "") + " " + (r.get("snippet", "") or ""))
+                content = content[:self.max_content]
+                findings = self._scan(content, r.get("url", ""))
+                if findings:
+                    r["pii_found"] = findings
+                    total_found += len(findings)
 
         _log(
             f"[{self.name}] Completed: {total_found} total PII found.",
@@ -2367,8 +2373,6 @@ class SubdomainHarvesterAgent(BaseAgent):
         if not results:
             return results
 
-        _log(f"[{self.name}] Subdomain harvesting on {len(results)} results...", style="bold cyan")
-
         base_domains: set = set()
         for r in results:
             bd = self._base_domain(r.get("url", ""))
@@ -2378,30 +2382,27 @@ class SubdomainHarvesterAgent(BaseAgent):
             _log(f"[{self.name}] No base domain found.", style="dim")
             return results
 
-        _log(f"[{self.name}] Base domains: {', '.join(list(base_domains)[:5])}", style="dim")
-
-        for r in results:
-            text = " ".join(filter(None, [
-                r.get("url", ""),
-                r.get("snippet", ""),
-                r.get("page_content", ""),
-                r.get("title", ""),
-            ]))
-            found_subs = []
-            for bd in base_domains:
-                subs = self._extract_subdomains(text, bd)
-                for s in subs:
-                    if bd not in self._global_subdomains:
-                        self._global_subdomains[bd] = set()
-                    self._global_subdomains[bd].add(s)
-                    found_subs.append(s)
-            if found_subs:
-                r["subdomains"] = sorted(set(found_subs))
+        with _working(f"[{self.name}] Subdomain harvesting on {len(results)} results..."):
+            for r in results:
+                text = " ".join(filter(None, [
+                    r.get("url", ""),
+                    r.get("snippet", ""),
+                    r.get("page_content", ""),
+                    r.get("title", ""),
+                ]))
+                found_subs = []
+                for bd in base_domains:
+                    subs = self._extract_subdomains(text, bd)
+                    for s in subs:
+                        if bd not in self._global_subdomains:
+                            self._global_subdomains[bd] = set()
+                        self._global_subdomains[bd].add(s)
+                        found_subs.append(s)
+                if found_subs:
+                    r["subdomains"] = sorted(set(found_subs))
 
         total = sum(len(v) for v in self._global_subdomains.values())
         _log(f"[{self.name}] Completed: {total} unique subdomains found.", style="bold green")
-        for bd, subs in self._global_subdomains.items():
-            _log(f"[{self.name}]   {bd}: {', '.join(sorted(subs)[:8])}", style="dim")
         return results
 
     @staticmethod
@@ -3141,16 +3142,14 @@ def run_analysis_pipeline(
     triaged   = pii_agent.run(triaged)
     all_pii   = [p for r in triaged for p in r.get("pii_found", [])]
     output["pii_total"] = len(all_pii)
-    if all_pii:
-        _log(f"[Agents] PII: {len(all_pii)} personal data item(s) detected.", style="bold red")
+    # Summary already printed by PiiDetectorAgent ("Completed: N total PII found.").
 
     # ── 8. Email Harvesting ───────────────────────────────────────────────────
     email_agent   = EmailHarvesterAgent()
     triaged       = email_agent.run(triaged)
     all_emails    = email_agent.get_all_emails()
     output["emails_total"] = len(all_emails)
-    if all_emails:
-        _log(f"[Agents] Email: {len(all_emails)} unique emails collected.", style="cyan")
+    # Summary already printed by EmailHarvesterAgent ("Completed: N unique emails found.").
 
     # ── 9. Subdomain Harvesting ───────────────────────────────────────────────
     subdomain_agent = SubdomainHarvesterAgent()
@@ -3159,9 +3158,7 @@ def run_analysis_pipeline(
     followup_dorks  = subdomain_agent.get_followup_dorks()
     output["subdomains"] = all_subdomains
     output["cve_dorks"]  = list(dict.fromkeys(cve_dorks + followup_dorks))
-    if all_subdomains:
-        total_subs = sum(len(v) for v in all_subdomains.values())
-        _log(f"[Agents] Subdomain: {total_subs} subdomains found.", style="cyan")
+    # Summary already printed by SubdomainHarvesterAgent ("Completed: N unique subdomains found.").
 
     # ── 11. DB Port Scanner (optional — activate with --dbscan) ────────────────
     if getattr(args, "dbscan", False):
