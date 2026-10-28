@@ -80,7 +80,30 @@
 
 ---
 
-## One-command install — Alpine / iOS (iSH)
+## Quick Install
+```bash
+  sudo apt update
+  sudo apt install -y python3 python3-pip python3-venv git
+```
+# For Debian, Ubuntu or Kali.
+## Automatic
+```bash
+  git clone https://github.com/xPloits3c/DorkEye.git
+  cd DorkEye
+  sh install.sh
+  source dorkeye_env/bin/activate
+  python dorkeye.py --wizard
+```
+## Manual
+```bash
+  git clone https://github.com/xPloits3c/DorkEye.git
+  cd DorkEye
+  python3 -m venv dorkeye_env
+  source dorkeye_env/bin/activate
+  pip install -r requirements.txt
+  python dorkeye.py --wizard
+```
+# One-command install — Alpine / iOS (iSH)
 Recommended for **iOS users via [iSH](https://ish.app)** (Alpine Linux) and any Alpine-based system.<br>
 `install.sh` auto-detects the environment and runs the matching setup.
 [![Docs](https://img.shields.io/badge/📖_Docs-blue)](Docs/devices/ish.md)
@@ -91,47 +114,11 @@ git clone https://github.com/xPloits3c/DorkEye.git
 cd DorkEye
 sh install.sh
 source dorkeye_env/bin/activate
-python dorkeye.py —wizard
-```
-> Using Debian, Ubuntu or Kali? Follow the **Quick Install** below.
-
-## Update
-```bash
-  sudo apt update
-  sudo apt install -y python3 python3-pip python3-venv git
-```
-## AUTOMATIC Quick Install
-```bash
-  git clone https://github.com/xPloits3c/DorkEye.git
-  cd DorkEye
-  sh install.sh
-  source dorkeye_env/bin/activate
-  python dorkeye.py —wizard
-```
-## MANUAL Quick Install
-```bash
-  git clone https://github.com/xPloits3c/DorkEye.git
-  cd DorkEye
-  python3 -m venv dorkeye_env
-  source dorkeye_env/bin/activate
-  pip install -r requirements.txt
-  python dorkeye.py --wizard
+python dorkeye.py --wizard
 ```
 
 <img width="1175" height="982" alt="dev5 0wiz" src="https://github.com/user-attachments/assets/79253966-b2ed-431e-9d46-aaa8d8297c82" />
 
----
-
-```bash
-"Help:"
-  python3 dorkeye.py -h
-
-"Deactivate environment:"
-  deactivate
-
-"Remove environment:"
-  rm -rf dorkeye_env
-```
 ---
 
 ## Usage 
@@ -267,14 +254,15 @@ DorkEye/
 ```
 ---
 
-## Example DorkEye Report
+## SQL Injection
+<img width="2048" height="1564" alt="image" src="https://github.com/user-attachments/assets/17dc0710-c057-4485-8c25-805e2dda0a0b" />
 
+
+## Report
 ![image](https://github.com/user-attachments/assets/28b71d4e-0cb2-478d-a1f2-f49c98f9f8aa)
 <img width="1142" height="730" alt="image" src="https://github.com/user-attachments/assets/1f694bbc-af46-4bec-8654-6ff0b762f199" />
 
 ---
-
-## ![WARNING](https://img.shields.io/badge/Legal%20Disclaimer-red)
 
 > [!WARNING] 
 **DorkEye is provided for educational and authorized security-testing purposes only.**
