@@ -26,6 +26,8 @@
 # -----
 #  Note: all categories use nested soft/medium/aggressive dorks,
 #        except "sensitive", which uses flat mode (mode: aggressive)
+#  Scope invariant: every dork is anchored to site:{domain} so the
+#        default template only reviews your own / authorized assets.
 # ------------------------------------------------------------
 #  Usage:
 #    python dorkeye.py --dg=sqli --mode=soft
@@ -42,6 +44,7 @@
 variables:
 
   domain:
+    - example.com
     - com
 
   param:
@@ -663,6 +666,29 @@ templates:
         - 'site:{domain} intitle:"index of" intext:"backup"'
 
   # ──────────────────────────────────────────────
+  #  FTP / INDEXED LISTINGS
+  # ──────────────────────────────────────────────
+  ftp:
+    description: "Publicly indexed FTP directory listings on your own / authorized domain"
+    dorks:
+      soft:
+        - 'site:{domain} intitle:"index of" inurl:ftp'
+        - 'site:*.{domain} intitle:"index of" inurl:ftp'
+        - 'site:{domain} "Index of /" inurl:ftp -inurl:(html|htm|php)'
+        - 'site:{domain} intitle:"index of" "Parent Directory" inurl:ftp'
+      medium:
+        - 'site:{domain} intitle:"index of" inurl:ftp filetype:{extension}'
+        - 'site:*.{domain} intitle:"index of" inurl:ftp filetype:{extension}'
+        - 'site:{domain} intitle:"index of" inurl:ftp "Last modified" "Size"'
+        - 'site:{domain} intext:"ftp://" inurl:{param}'
+        - 'site:{domain} ("vsftpd" OR "ProFTPD" OR "Pure-FTPd" OR "FileZilla Server")'
+      aggressive:
+        - 'site:{domain} intitle:"index of" inurl:ftp filetype:{extension} intext:{sense}'
+        - 'site:*.{domain} intitle:"index of" inurl:ftp filetype:{extension} "{sense}"'
+        - 'site:{domain} intitle:"index of" inurl:ftp "Parent Directory" "{sense}"'
+        - 'site:{domain} inurl:ftp filetype:{extension} intext:{sqli_db}'
+
+  # ──────────────────────────────────────────────
   #  ERROR PAGES
   # ──────────────────────────────────────────────
   errors:
@@ -724,32 +750,33 @@ templates:
 
   # ──────────────────────────────────────────────
   #  CLOUD MISCONFIGURATIONS
+  #  NOTE: scoped to YOUR assets. {domain} matches your own buckets /
+  #        references; replace with your bucket-naming prefix if needed.
+  #        (The original internet-wide + PII variant was intentionally
+  #         removed — it searched third-party data and is out of scope.)
   # ──────────────────────────────────────────────
   cloud:
-    description: "Cloud storage and service misconfigurations"
+    description: "Your own cloud storage / buckets exposed in public indexes (scope by your domain or org name)"
     dorks:
       soft:
-        - 'site:s3.amazonaws.com'
-        - 'site:blob.core.windows.net'
-        - 'site:storage.googleapis.com'
-        - 'site:s3.amazonaws.com intitle:"index of"'
+        - 'site:s3.amazonaws.com intext:{domain}'
+        - 'site:blob.core.windows.net intext:{domain}'
+        - 'site:storage.googleapis.com intext:{domain}'
+        - 'site:{domain} intext:"s3.amazonaws.com"'
       medium:
-        - 'site:s3.amazonaws.com filetype:{extension}'
-        - 'site:blob.core.windows.net filetype:{extension}'
-        - 'site:storage.googleapis.com filetype:{extension}'
-        - 'site:s3.amazonaws.com intext:{sense}'
-        - 'site:blob.core.windows.net inurl:{param}'
-        - 'site:storage.googleapis.com intext:{sqli_db}'
+        - 'site:s3.amazonaws.com intext:{domain} filetype:{extension}'
+        - 'site:blob.core.windows.net intext:{domain} filetype:{extension}'
+        - 'site:storage.googleapis.com intext:{domain} filetype:{extension}'
+        - 'site:s3.amazonaws.com inurl:{domain}'
+        - 'site:{domain} intext:"blob.core.windows.net"'
+        - 'site:{domain} intext:"storage.googleapis.com"'
       aggressive:
-        - 'site:s3.amazonaws.com filetype:{extension} intext:{sense}'
-        - 'site:blob.core.windows.net filetype:{extension} "{sense}"'
-        - 'site:storage.googleapis.com filetype:{extension} "{sqli_db}"'
-        - 'site:s3.amazonaws.com inurl:{param} filetype:{extension}'
-        - 'site:blob.core.windows.net intext:{sense} intext:{sqli_db}'
-        - 'site:storage.googleapis.com inurl:{param} filetype:{extension}'
-        - 'site:s3.amazonaws.com filetype:{extension} "{sense}" "{sqli_db}"'
-        - 'site:blob.core.windows.net filetype:{extension} intext:"password"'
-        - 'site:storage.googleapis.com filetype:{extension} intext:"confidential"'
+        - 'site:s3.amazonaws.com intext:{domain} intitle:"index of"'
+        - 'site:s3.amazonaws.com intext:{domain} filetype:{extension} intext:"backup"'
+        - 'site:blob.core.windows.net intext:{domain} filetype:{extension}'
+        - 'site:storage.googleapis.com intext:{domain} filetype:{extension}'
+        - 'site:{domain} inurl:{param} intext:"s3.amazonaws.com"'
+        - 'site:{domain} intext:"AKIA" filetype:{extension}'
 
   # ──────────────────────────────────────────────
   #  LOGIN PAGES
