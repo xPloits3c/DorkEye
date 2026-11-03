@@ -674,14 +674,17 @@ templates:
       soft:
         - 'site:{domain} intitle:"index of" inurl:ftp'
         - 'site:*.{domain} intitle:"index of" inurl:ftp'
-        - 'site:{domain} "Index of /" inurl:ftp -inurl:(html|htm|php)'
+        - 'site:{domain} "Index of /" inurl:ftp -inurl:html -inurl:htm -inurl:php'
         - 'site:{domain} intitle:"index of" "Parent Directory" inurl:ftp'
       medium:
         - 'site:{domain} intitle:"index of" inurl:ftp filetype:{extension}'
         - 'site:*.{domain} intitle:"index of" inurl:ftp filetype:{extension}'
         - 'site:{domain} intitle:"index of" inurl:ftp "Last modified" "Size"'
         - 'site:{domain} intext:"ftp://" inurl:{param}'
-        - 'site:{domain} ("vsftpd" OR "ProFTPD" OR "Pure-FTPd" OR "FileZilla Server")'
+        - 'site:{domain} inurl:ftp intext:"vsftpd"'
+        - 'site:{domain} inurl:ftp intext:"ProFTPD"'
+        - 'site:{domain} inurl:ftp intext:"Pure-FTPd"'
+        - 'site:{domain} inurl:ftp intext:"FileZilla Server"'
       aggressive:
         - 'site:{domain} intitle:"index of" inurl:ftp filetype:{extension} intext:{sense}'
         - 'site:*.{domain} intitle:"index of" inurl:ftp filetype:{extension} "{sense}"'
