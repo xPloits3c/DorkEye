@@ -59,8 +59,8 @@
 |---------|---------|
 | 🧙 Wizard | [Interactive guided session — all options](Docs/wizard.md) |
 | ⚙️ Dork Generator | [YAML template modes: `soft` / `medium` / `aggressive`](Docs/dork_generator.md) |
-| 📱 All Systems | [Android/Termux](Docs/devices/termux.md) · [iOS/iSH](Docs/devices/ish.md) · [macOS](Docs/devices/) · [Linux](Docs/devices/) · [Windows](Docs/devices/windows.md) |
-| 🎯 SQLi-XSS | [Test URL’s directly with `-u` and `-f`](Docs/sqli.md) |
+| 📱 All Systems | [Android/Termux](Docs/devices/termux.md) · [iOS/iSH](Docs/devices/ish.md) · [macOS](Docs/INSTALL.md) · [Linux](Docs/INSTALL.md) · [Windows](Docs/devices/windows.md) |
+| 🎯 SQLi-XSS | [Test URLs directly with `-u` and `-f`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi/XSS/analysis/crawl on saved result files with `-f`](Docs/cli.md) |
 | 💉 SQL Injection | [5 methods: 105 payloads](Docs/sqli.md) |
 | 💉 XSS Injection | [4 methods: 111 payloads](Docs/xss.md) |
@@ -213,6 +213,7 @@ DorkEye/
 │     /workflows/
 │        └── claude-dorkeye.yml       ← GitHub Actions AI agent
 │ /Docs/
+│    ├── overview.md                  ← Project overview
 │    ├── cli.md                       ← Full CLI reference (38 flags)
 │    ├── wizard.md                    ← Interactive wizard guide
 │    ├── sqli.md                      ← SQL injection reference
@@ -223,9 +224,10 @@ DorkEye/
 │    ├── fingerprinting.md            ← HTTP fingerprinting guide
 │    ├── http_fingerprints.md         ← Fingerprint profiles reference
 │    ├── webconsole.md                ← Web Console guide
-│    ├── termux.md                    ← Termux / Android setup
-│    ├── ish.md                       ← iSH / iOS setup (lite mode)
-│    ├── windows.md                   ← Windows setup (install.bat)
+│     /devices/
+│        ├── termux.md                ← Termux / Android setup
+│        ├── ish.md                   ← iSH / iOS setup (lite mode)
+│        └── windows.md               ← Windows setup (install.bat)
 │    ├── output_formats.md            ← Output formats guide
 │    ├── file_categories.md           ← File categories guide
 │    ├── dork_generator.md            ← Dork generator guide
