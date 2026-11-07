@@ -5,7 +5,7 @@
 
 ---
 
-# DorkEye – OSINT Google Dorking Tool
+# DorkEye – OSINT Dorking Tool
 
 <!-- ── Row 1: Project identity ── -->
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
@@ -103,7 +103,7 @@
   pip install -r requirements.txt
   python dorkeye.py --wizard
 ```
-# One-command install — Alpine / iOS (iSH)
+# Alpine / iOS (iSH)
 Recommended for **iOS users via [iSH](https://ish.app)** (Alpine Linux) and any Alpine-based system.<br>
 `install.sh` auto-detects the environment and runs the matching setup.
 [![Docs](https://img.shields.io/badge/📖_Docs-blue)](Docs/devices/ish.md)
