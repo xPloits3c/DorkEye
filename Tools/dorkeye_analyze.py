@@ -85,7 +85,6 @@ from dorkeye_patterns import (
     censor             as _censor_base,
     secret_confidence  as _secret_confidence,
     esc                as _esc,
-    safe_href          as _safe_href,
     html_link          as _link,
     md_cell            as _md_cell,
     md_code            as _md_code,
