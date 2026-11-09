@@ -83,6 +83,12 @@ from dorkeye_patterns import (
     SKIP_EXTENSIONS    as _SKIP_EXT,
     label_from_score   as _label,
     censor             as _censor_base,
+    secret_confidence  as _secret_confidence,
+    esc                as _esc,
+    html_link          as _link,
+    md_cell            as _md_cell,
+    md_code            as _md_code,
+    REPORT_CSP_META    as _REPORT_CSP_META,
 )
 
 
@@ -92,6 +98,8 @@ from dorkeye_patterns import (
 
 def _censor(value: str, show: int = 4) -> str:
     return _censor_base(value, show=show)
+
+
 
 
 class _ScriptStyleStripper(_HTMLParser):
@@ -380,7 +388,7 @@ def scan_secrets(results: List[dict]) -> Tuple[List[dict], List[dict]]:
                     "type":       category,
                     "desc":       description,
                     "value":      _censor(raw_val),
-                    "confidence": "HIGH",
+                    "confidence": _secret_confidence(description),
                     "context":    context[:160],
                     "source":     url,
                 })
@@ -455,41 +463,44 @@ def _report_html(results, all_secrets, counts, top, target, now) -> str:
     def badge(lbl: str) -> str:
         c = _sc.get(lbl, "#888")
         return (f'<span style="background:{c};color:#000;padding:1px 8px;'
-                f'border-radius:3px;font-size:11px;font-weight:bold">{lbl}</span>')
+                f'border-radius:3px;font-size:11px;font-weight:bold">{_esc(lbl)}</span>')
 
     rows_top = "".join(
         f"<tr>"
-        f"<td>{r.get('triage_score',0)}</td>"
+        f"<td>{_esc(r.get('triage_score',0))}</td>"
         f"<td>{badge(r.get('triage_label','?'))}</td>"
-        f"<td><a href='{r.get('url','')}' target='_blank'>{r.get('url','')[:85]}</a></td>"
-        f"<td>{', '.join(r.get('triage_reasons',[]))[:70]}</td>"
+        f"<td>{_link(r.get('url',''), 85)}</td>"
+        f"<td>{_esc(', '.join(map(str, r.get('triage_reasons') or []))[:70])}</td>"
         f"</tr>"
         for r in top[:30]
     )
     rows_all = "".join(
         f"<tr>"
-        f"<td>{r.get('triage_score',0)}</td>"
+        f"<td>{_esc(r.get('triage_score',0))}</td>"
         f"<td>{badge(r.get('triage_label','?'))}</td>"
-        f"<td><a href='{r.get('url','')}' target='_blank'>{r.get('url','')[:85]}</a></td>"
-        f"<td>{r.get('title','')[:55]}</td>"
+        f"<td>{_link(r.get('url',''), 85)}</td>"
+        f"<td>{_esc(str(r.get('title') or '')[:55])}</td>"
         f"<td>{'✓' if r.get('secrets') else ''}</td>"
         f"</tr>"
         for r in results
     )
     rows_sec = "".join(
         f"<tr>"
-        f"<td><code>{s.get('type','?')}</code></td>"
-        f"<td>{s.get('desc','')[:40]}</td>"
-        f"<td><code>{s.get('value','?')}</code></td>"
-        f"<td>{s.get('confidence','?')}</td>"
-        f"<td><a href='{s.get('source','')}' target='_blank'>{s.get('source','')[:60]}</a></td>"
+        f"<td><code>{_esc(s.get('type','?'))}</code></td>"
+        f"<td>{_esc(str(s.get('desc') or '')[:40])}</td>"
+        f"<td><code>{_esc(s.get('value','?'))}</code></td>"
+        f"<td>{_esc(s.get('confidence','?'))}</td>"
+        f"<td>{_link(s.get('source',''), 60)}</td>"
         f"</tr>"
         for s in all_secrets
     )
 
+    target_esc = _esc(target)
+
     return f"""<!DOCTYPE html>
 <html lang="it"><head><meta charset="UTF-8">
-<title>DorkEye Analyzer — {target or 'Report'}</title>
+{_REPORT_CSP_META}
+<title>DorkEye Analyzer — {target_esc or 'Report'}</title>
 <style>
 :root{{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--text:#c9d1d9;--acc:#58a6ff;--brd:#30363d}}
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -514,7 +525,7 @@ footer{{margin-top:32px;font-size:11px;color:#8b949e;text-align:center}}
 <h1>&#128065; DorkEye Analyzer Report</h1>
 <div class="meta">
   Generated: {now} &nbsp;|&nbsp;
-  Target: <code>{target or 'N/A'}</code> &nbsp;|&nbsp;
+  Target: <code>{target_esc or 'N/A'}</code> &nbsp;|&nbsp;
   DorkEye Analyzer v1.0 (no-AI)
 </div>
 <h2>Metrics</h2>
@@ -540,7 +551,7 @@ footer{{margin-top:32px;font-size:11px;color:#8b949e;text-align:center}}
 def _report_md(results, all_secrets, counts, top, target, now) -> str:
     lines = [
         "# DorkEye Analyzer Report",
-        f"\n> {now}  |  Target: `{target or 'N/A'}`  |  DorkEye Analyzer v1.0 (no-AI)\n",
+        f"\n> {now}  |  Target: `{_md_code(target) or 'N/A'}`  |  DorkEye Analyzer v1.0 (no-AI)\n",
         "---\n",
         "## Metrics\n",
         "| Label | Count |", "|-------|-------|",
@@ -556,8 +567,9 @@ def _report_md(results, all_secrets, counts, top, target, now) -> str:
                   "| Score | Label | URL | Reasons |", "|-------|-------|-----|---------|"]
         for r in top[:30]:
             lines.append(
-                f"| {r.get('triage_score',0)} | **{r.get('triage_label','')}** "
-                f"| `{r.get('url','')[:80]}` | {', '.join(r.get('triage_reasons',[]))[:60]} |"
+                f"| {_md_cell(r.get('triage_score',0))} | **{_md_cell(r.get('triage_label',''))}** "
+                f"| `{_md_code(str(r.get('url') or '')[:80])}` "
+                f"| {_md_cell(', '.join(map(str, r.get('triage_reasons') or []))[:60])} |"
             )
     if all_secrets:
         lines += ["\n---\n", f"## Secrets Found ({len(all_secrets)})\n",
@@ -565,8 +577,8 @@ def _report_md(results, all_secrets, counts, top, target, now) -> str:
                   "|------|-------------|-------|--------|"]
         for s in all_secrets:
             lines.append(
-                f"| **{s.get('type','?')}** | {s.get('desc','')[:35]} "
-                f"| `{s.get('value','?')}` | {s.get('source','?')[:60]} |"
+                f"| **{_md_cell(s.get('type','?'))}** | {_md_cell(str(s.get('desc') or '')[:35])} "
+                f"| `{_md_code(s.get('value','?'))}` | {_md_cell(str(s.get('source') or '?')[:60])} |"
             )
     lines += [
         "\n---\n", f"## All Results ({len(results)})\n",
@@ -574,8 +586,8 @@ def _report_md(results, all_secrets, counts, top, target, now) -> str:
     ]
     for r in results:
         lines.append(
-            f"| {r.get('triage_score',0)} | {r.get('triage_label','?')} "
-            f"| `{r.get('url','')[:75]}` | {'🔴' if r.get('secrets') else ''} |"
+            f"| {_md_cell(r.get('triage_score',0))} | {_md_cell(r.get('triage_label','?'))} "
+            f"| `{_md_code(str(r.get('url') or '')[:75])}` | {'🔴' if r.get('secrets') else ''} |"
         )
     lines.append(f"\n\n---\n*DorkEye Analyzer v1.0 (no-AI) — {now}*")
     return "\n".join(lines)

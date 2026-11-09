@@ -125,6 +125,13 @@ from dorkeye_patterns import (
     label_from_score,
     censor             as _censor_shared,
     luhn_check         as _luhn_check,
+    secret_confidence  as _secret_confidence,
+    esc                as _esc,
+    html_link          as _link,
+    md_cell            as _md_cell,
+    md_code            as _md_code,
+    md_text            as _md_text,
+    REPORT_CSP_META    as _REPORT_CSP_META,
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1313,17 +1320,18 @@ class SecurityAgent(BaseAgent):
             pills = " ".join(
                 f'<span style="background:{color}20;color:{color};'
                 f'border:1px solid {color}40;padding:1px 6px;border-radius:3px;'
-                f'font-size:10px;margin-right:3px">{ind.category}</span>'
+                f'font-size:10px;margin-right:3px">{_esc(ind.category)}</span>'
                 for ind in v.indicators[:4]
             )
+            _url = str(v.url or "")
             rows.append(
                 f"<tr style='border-left:3px solid {color}'>"
                 f"<td><span style='background:{color};color:#fff;padding:2px 8px;"
                 f"border-radius:4px;font-size:10px;font-weight:700'>"
-                f"{v.threat_level.name}</span></td>"
-                f"<td style='font-weight:700;text-align:center'>{v.threat_score}/100</td>"
-                f"<td title='{v.url}'><a href='{v.url}' target='_blank'>"
-                f"{v.url[:65]}{'...' if len(v.url) > 65 else ''}</a></td>"
+                f"{_esc(v.threat_level.name)}</span></td>"
+                f"<td style='font-weight:700;text-align:center'>{_esc(v.threat_score)}/100</td>"
+                f"<td title=\"{_esc(_url)}\">"
+                f"{_link(_url, 65, '...' if len(_url) > 65 else '')}</td>"
                 f"<td>{pills}</td>"
                 f"<td>{'🚫' if v.blocked else '✓'}</td></tr>"
             )
@@ -1558,7 +1566,7 @@ class SecretsAgent(BaseAgent):
                     "type":       category,
                     "detection":  "REGEX",
                     "value":      _censor(raw_value),
-                    "confidence": "HIGH",
+                    "confidence": _secret_confidence(description),
                     "severity":   severity,
                     "context":    context[:160],
                     "source":     url,
@@ -1658,10 +1666,10 @@ class ReportAgent(BaseAgent):
 
         lines = [
             "# DorkEye Analysis Report",
-            f"\n> {now}  |  Target: `{target or 'N/A'}`  |  DorkEye v4.8 + Agents v3.1\n",
+            f"\n> {now}  |  Target: `{_md_code(target) or 'N/A'}`  |  DorkEye v4.8 + Agents v3.1\n",
             "---\n",
             "## Summary\n",
-            analysis.get("summary", "_No LLM analysis available._"),
+            _md_text(analysis.get("summary", "_No LLM analysis available._")),
             "\n---\n",
             "## Metrics\n",
             "| Label | Count |",
@@ -1701,11 +1709,11 @@ class ReportAgent(BaseAgent):
             ]
             for t in sec_threats[:30]:
                 cats = ", ".join(
-                    i.get("category", "?") for i in t.get("indicators", [])[:3]
+                    str(i.get("category", "?")) for i in t.get("indicators", [])[:3]
                 )
                 lines.append(
-                    f"| {t.get('threat_score', 0)} | **{t.get('threat_level', '?')}** "
-                    f"| `{t.get('url', '')[:65]}` | {cats} |"
+                    f"| {_md_cell(t.get('threat_score', 0))} | **{_md_cell(t.get('threat_level', '?'))}** "
+                    f"| `{_md_code(str(t.get('url') or '')[:65])}` | {_md_cell(cats)} |"
                 )
 
         if top:
@@ -1713,8 +1721,8 @@ class ReportAgent(BaseAgent):
                       "| Score | Label | URL | Reason |", "|-------|-------|-----|--------|"]
             for r in top[:25]:
                 lines.append(
-                    f"| {r.get('triage_score',0)} | **{r.get('triage_label','')}** "
-                    f"| `{r.get('url','')[:75]}` | {r.get('triage_reason','')[:60]} |"
+                    f"| {_md_cell(r.get('triage_score',0))} | **{_md_cell(r.get('triage_label',''))}** "
+                    f"| `{_md_code(str(r.get('url') or '')[:75])}` | {_md_cell(str(r.get('triage_reason') or '')[:60])} |"
                 )
         if secrets:
             lines += ["\n---\n", f"## Secrets Found ({len(secrets)})\n",
@@ -1722,27 +1730,27 @@ class ReportAgent(BaseAgent):
                       "|------|----------|-----------|-------|--------|"]
             for s in secrets:
                 lines.append(
-                    f"| {s.get('type','?')} | {s.get('severity','?')} | {s.get('detection','?')} "
-                    f"| `{s.get('value','?')}` | {s.get('source','?')[:60]} |"
+                    f"| {_md_cell(s.get('type','?'))} | {_md_cell(s.get('severity','?'))} | {_md_cell(s.get('detection','?'))} "
+                    f"| `{_md_code(s.get('value','?'))}` | {_md_cell(str(s.get('source','?'))[:60])} |"
                 )
         if pii:
             lines += ["\n---\n", f"## PII Detected ({len(pii)})\n",
                       "| Type | Value | Source |", "|------|-------|--------|"]
             for p in pii[:50]:
-                lines.append(f"| {p.get('type','?')} | `{p.get('value','?')}` | {p.get('source','?')[:60]} |")
+                lines.append(f"| {_md_cell(p.get('type','?'))} | `{_md_code(p.get('value','?'))}` | {_md_cell(str(p.get('source','?'))[:60])} |")
         if emails:
             lines += ["\n---\n", f"## Emails Harvested ({len(emails)})\n",
                       "| Category | Email | Source |", "|----------|-------|--------|"]
             for e in emails[:50]:
-                lines.append(f"| {e.get('category','?')} | `{e.get('email','?')}` | {e.get('source','?')[:60]} |")
+                lines.append(f"| {_md_cell(e.get('category','?'))} | `{_md_code(e.get('email','?'))}` | {_md_cell(str(e.get('source','?'))[:60])} |")
         if subs:
             lines += ["\n---\n", "## Subdomains Found\n"]
             for bd, sub_list in subs.items():
-                lines.append(f"**{bd}**: {', '.join(sub_list[:20])}")
+                lines.append(f"**{_md_text(bd)}**: {_md_text(', '.join(map(str, sub_list[:20])))}")
         if pats:
-            lines += ["\n---\n", "## Detected Patterns\n"] + [f"- {p}" for p in pats]
+            lines += ["\n---\n", "## Detected Patterns\n"] + [f"- {_md_text(p)}" for p in pats]
         if recs:
-            lines += ["\n---\n", "## Recommendations\n"] + [f"- {r}" for r in recs]
+            lines += ["\n---\n", "## Recommendations\n"] + [f"- {_md_text(r)}" for r in recs]
 
         lines += [
             "\n---\n",
@@ -1752,8 +1760,8 @@ class ReportAgent(BaseAgent):
         ]
         for r in results:
             lines.append(
-                f"| {r.get('triage_score',0)} | {r.get('triage_label','?')} "
-                f"| `{r.get('url','')[:70]}` | {r.get('title','N/A')[:50]} |"
+                f"| {_md_cell(r.get('triage_score',0))} | {_md_cell(r.get('triage_label','?'))} "
+                f"| `{_md_code(str(r.get('url') or '')[:70])}` | {_md_cell(str(r.get('title','N/A'))[:50])} |"
             )
         lines.append(f"\n\n---\n*DorkEye v4.8 + Agents v3.1 — {now}*")
         return "\n".join(lines)
@@ -1777,52 +1785,52 @@ class ReportAgent(BaseAgent):
 
         def badge(lbl, colors=_sc):
             c = colors.get(lbl,"#888")
-            return f'<span style="background:{c};color:#000;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:bold">{lbl}</span>'
+            return f'<span style="background:{c};color:#000;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:bold">{_esc(lbl)}</span>'
 
         rows_top = "".join(
-            f"<tr><td>{r.get('triage_score',0)}</td><td>{badge(r.get('triage_label','?'))}</td>"
-            f"<td><a href='{r.get('url','')}' target='_blank'>{r.get('url','')[:80]}</a></td>"
-            f"<td>{r.get('triage_reason','')[:70]}</td></tr>"
+            f"<tr><td>{_esc(r.get('triage_score',0))}</td><td>{badge(r.get('triage_label','?'))}</td>"
+            f"<td>{_link(r.get('url',''), 80)}</td>"
+            f"<td>{_esc(str(r.get('triage_reason') or '')[:70])}</td></tr>"
             for r in top[:25]
         )
         rows_all = "".join(
-            f"<tr><td>{r.get('triage_score',0)}</td><td>{badge(r.get('triage_label','?'))}</td>"
-            f"<td><a href='{r.get('url','')}' target='_blank'>{r.get('url','')[:80]}</a></td>"
-            f"<td>{r.get('title','N/A')[:55]}</td></tr>"
+            f"<tr><td>{_esc(r.get('triage_score',0))}</td><td>{badge(r.get('triage_label','?'))}</td>"
+            f"<td>{_link(r.get('url',''), 80)}</td>"
+            f"<td>{_esc(str(r.get('title','N/A'))[:55])}</td></tr>"
             for r in results
         )
         rows_sec = "".join(
-            f"<tr><td><code>{s.get('type','?')}</code></td>"
+            f"<tr><td><code>{_esc(s.get('type','?'))}</code></td>"
             f"<td>{badge(s.get('severity','?'), _sv)}</td>"
             f"<td><span style='color:{'#4af' if s.get('detection')=='LLM' else '#fa4'}'>"
-            f"{s.get('detection','?')}</span></td>"
-            f"<td><code>{s.get('value','?')}</code></td>"
-            f"<td>{s.get('source','?')[:60]}</td></tr>"
+            f"{_esc(s.get('detection','?'))}</span></td>"
+            f"<td><code>{_esc(s.get('value','?'))}</code></td>"
+            f"<td>{_esc(str(s.get('source','?'))[:60])}</td></tr>"
             for s in secrets
         )
         rows_pii = "".join(
-            f"<tr><td><code>{p.get('type','?')}</code></td>"
-            f"<td><code>{p.get('value','?')}</code></td>"
-            f"<td>{p.get('desc','')[:50]}</td>"
-            f"<td>{p.get('source','?')[:60]}</td></tr>"
+            f"<tr><td><code>{_esc(p.get('type','?'))}</code></td>"
+            f"<td><code>{_esc(p.get('value','?'))}</code></td>"
+            f"<td>{_esc(str(p.get('desc') or '')[:50])}</td>"
+            f"<td>{_esc(str(p.get('source','?'))[:60])}</td></tr>"
             for p in pii[:100]
         )
         rows_email = "".join(
-            f"<tr><td>{e.get('category','?')}</td>"
-            f"<td><code>{e.get('email','?')}</code></td>"
-            f"<td>{e.get('source','?')[:60]}</td></tr>"
+            f"<tr><td>{_esc(e.get('category','?'))}</td>"
+            f"<td><code>{_esc(e.get('email','?'))}</code></td>"
+            f"<td>{_esc(str(e.get('source','?'))[:60])}</td></tr>"
             for e in emails[:100]
         )
         rows_subs = "".join(
-            f"<tr><td><b>{bd}</b></td><td>{', '.join(sl[:15])}</td></tr>"
+            f"<tr><td><b>{_esc(bd)}</b></td><td>{_esc(', '.join(map(str, sl[:15])))}</td></tr>"
             for bd, sl in subs.items()
         )
         rows_cve = "".join(
-            f"<tr><td><code>{d}</code></td></tr>"
+            f"<tr><td><code>{_esc(d)}</code></td></tr>"
             for d in cve_d[:30]
         )
-        pats_html = "".join(f"<li>{p}</li>" for p in pats)
-        recs_html = "".join(f"<li>{r}</li>" for r in recs)
+        pats_html = "".join(f"<li>{_esc(p)}</li>" for p in pats)
+        recs_html = "".join(f"<li>{_esc(r)}</li>" for r in recs)
 
         sec_metrics_html = ""
         if sec_stats:
@@ -1844,7 +1852,8 @@ class ReportAgent(BaseAgent):
 
         return f"""<!DOCTYPE html>
 <html lang="it"><head><meta charset="UTF-8">
-<title>DorkEye Agents Report — {target or 'Session'}</title>
+{_REPORT_CSP_META}
+<title>DorkEye Agents Report — {_esc(target) or 'Session'}</title>
 <style>
 :root{{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--text:#c9d1d9;--acc:#58a6ff;--brd:#30363d}}
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -1868,8 +1877,8 @@ ul{{padding-left:18px}}li{{margin:3px 0}}
 footer{{margin-top:36px;font-size:11px;color:#8b949e;text-align:center}}
 </style></head><body>
 <h1>&#128065; DorkEye Report</h1>
-<div class="meta">Generated: {now} &nbsp;|&nbsp; Target: <code>{target or 'N/A'}</code> &nbsp;|&nbsp; DorkEye Project</div>
-{'<h2>Summary</h2><div class="card">'+summary+'</div>' if summary else ''}
+<div class="meta">Generated: {now} &nbsp;|&nbsp; Target: <code>{_esc(target) or 'N/A'}</code> &nbsp;|&nbsp; DorkEye Project</div>
+{'<h2>Summary</h2><div class="card">'+_esc(summary)+'</div>' if summary else ''}
 <h2>Metrics</h2>
 <div class="metrics">
   <div class="metric"><div class="num" style="color:#ff4444">{counts['CRITICAL']}</div><div class="lbl">CRITICAL</div></div>

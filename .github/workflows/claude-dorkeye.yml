@@ -54,20 +54,23 @@ jobs:
           claude_args: |
             --max-turns 10
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob,Grep"
-            --append-system-prompt "You are the Senior Security Auditor for DorkEye. Focus: XSS in reports, SQLi logic, and Python 3.8 compatibility. ddgs MUST stay on v4.x (< 5.0.0). Tool modules live in Tools/ and are invoked through the DorkEye dispatcher. Be brutal about bugs but concise."
+            --append-system-prompt "You are the Senior Security Auditor for DorkEye. Focus: XSS in reports, SQLi logic, and Python 3.10 compatibility (minimum runtime, required by ddgs 6). ddgs MUST stay on >= 6.0.0 (older 4.x/5.x APIs return no results). Tool modules live in Tools/ and are invoked through the DorkEye dispatcher. Be brutal about bugs but concise."
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
             1. Read the diff with `gh pr diff` and open every touched file.
             2. Review only what the PR changes, plus code it directly affects.
-               Pay extra attention if it touches dorkeye.py, Tools/dorkeye_analyze.py,
-               dorkeye_report.py, xss.py or sqli.py (xss.py imports shared classes
+               Pay extra attention if it touches dorkeye.py, Tools/dorkeye_analyze.py
+               or Tools/dorkeye_agents.py (report builders: interpolated values must
+               use the escaping helpers in Tools/dorkeye_patterns.py),
+               Tools/xss.py or Tools/sqli.py (xss.py imports shared classes
                from sqli.py: changes there can break both).
-            3. Flag any syntax or stdlib usage not available in Python 3.8
-               (walrus in comprehensions is fine; match/case, `X | Y` types,
-               built-in generics like list[str] at runtime are not).
-            4. Flag any change that would bump ddgs to >= 5.0.0.
+            3. Flag any syntax or stdlib usage not available in Python 3.10
+               (match/case, `X | Y` types and built-in generics like list[str]
+               are fine; 3.11+ features such as ExceptionGroup/except*,
+               tomllib, typing.Self or PEP 695 generics are not).
+            4. Flag any change that would lower ddgs below 6.0.0.
             Use inline comments for specific bugs, then post ONE summary table
             of findings with severity via `gh pr comment`. If nothing is wrong,
             say so in one line.
@@ -108,7 +111,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --max-turns 15
-            --append-system-prompt "You are Claude, integrated into DorkEye (by xPloits3c). You know the Python/YAML architecture. Constraints: Python 3.8 compatibility, ddgs < 5.0.0, tool modules in Tools/ are run via the DorkEye dispatcher, keep the repo root clean (iSH files go in iOS/). Never push to master: work on a branch and open a PR. Answer in a technical, solution-oriented way."
+            --append-system-prompt "You are Claude, integrated into DorkEye (by xPloits3c). You know the Python/YAML architecture. Constraints: Python >= 3.10 (minimum runtime, required by ddgs 6), ddgs >= 6.0.0, tool modules in Tools/ are run via the DorkEye dispatcher, keep the repo root clean (iSH files go in iOS/). Never push to master: work on a branch and open a PR. Answer in a technical, solution-oriented way."
 
   # ───────────────────────────────────────────────────────────────────────────
   # JOB 3: Weekly audit
@@ -132,7 +135,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          # Audit tooling runs on 3.12; the project itself targets 3.8.
+          # Audit tooling runs on 3.12; the project itself targets Python >= 3.10 (ddgs 6).
           python-version: "3.12"
 
       - name: Setup & Pre-Audit
@@ -162,14 +165,31 @@ jobs:
           claude_args: |
             --max-turns 60
             --allowedTools "Read,Glob,Grep,Bash(gh issue create:*),Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue comment:*)"
-            --append-system-prompt "Run the DorkEye weekly audit. Raw data is in bandit_summary.json and pip_summary.json. Keep ddgs < 5.0.0: never recommend upgrading it to 5.x, even if pip-audit flags it; suggest a mitigation instead. Python 3.8 compatibility is required."
+            --append-system-prompt "Run the DorkEye weekly audit. Raw data is in bandit_summary.json and pip_summary.json. Keep ddgs >= 6.0.0: never recommend downgrading it to 4.x/5.x (older APIs return no results); if pip-audit flags it, suggest a 6.x upgrade or a mitigation. Python >= 3.10 is the minimum runtime (required by ddgs 6); fixes must not need 3.11+."
           prompt: |
             REPO: ${{ github.repository }}
 
-            1. Check for confidence gaps in Tools/dorkeye_analyze.py.
-            2. Verify XSS sanitization in dorkeye_report.py.
-            3. Review xss.py and sqli.py for logic bugs.
+            1. Confidence: every SECRET_RULES description in
+               Tools/dorkeye_patterns.py must have an entry in SECRET_CONFIDENCE
+               (unlisted rules silently fall back to MEDIUM). Flag missing or
+               clearly wrong levels.
+            2. Output escaping in EVERY HTML/Markdown report builder. Every
+               interpolated value must go through the shared helpers in
+               Tools/dorkeye_patterns.py (esc, safe_href, html_link, md_cell,
+               md_code, md_text) and HTML reports must include REPORT_CSP_META:
+               - Tools/dorkeye_analyze.py: _report_html, _report_md
+               - Tools/dorkeye_agents.py: ReportAgent _html and _markdown,
+                 generate_html_section
+               - dorkeye.py: _save_html
+               - Tools/dorkeye_web.py: the JS esc() helper and every innerHTML /
+                 template-literal sink (esc() must also escape quotes when used
+                 inside attributes)
+            3. Review Tools/xss.py and Tools/sqli.py for logic bugs.
             4. Review bandit_summary.json and pip_summary.json; discard false positives.
+               Already accepted, do not report again: requests verify=False in
+               the scanners (they probe self-signed hosts on purpose); the
+               "0.0.0.0" string in db_portscan.py (blocklist entry, not a bind);
+               MD5 in dorkeye.py (usedforsecurity=False, not security-relevant).
 
             Then:
             - Run `gh issue list --label weekly-audit --state open` first.

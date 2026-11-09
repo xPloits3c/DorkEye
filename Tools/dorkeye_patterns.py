@@ -9,6 +9,8 @@ dorkeye_agents.py and dorkeye_analyze.py:
   - TRIAGE_RULES       — regex scoring for OSINT priority classification
   - SECRET_RULES       — credential/secret detection patterns (+ hashes)
   - SECRET_SEVERITY    — type → severity map (CRITICAL/HIGH/MEDIUM/LOW)
+  - SECRET_CONFIDENCE  — rule → match confidence (HIGH/MEDIUM/LOW)
+                         + secret_confidence() lookup helper
   - PII_RULES          — PII patterns geographically organised:
                            · EMAIL           (global)
                            · PHONE_US        (United States & Canada)
@@ -33,6 +35,8 @@ dorkeye_agents.py and dorkeye_analyze.py:
   - SKIP_EXTENSIONS    — binary extensions to skip during fetch
   - label_from_score() — score → label conversion function
   - censor()           — partial masking of sensitive values
+  - esc(), safe_href(), html_link(), md_cell(), md_code(), md_text(),
+    REPORT_CSP_META    — output escaping for HTML/Markdown reports
   - luhn_check()       — credit card number validation (Luhn algorithm)
 
 Changelog v2.0
@@ -47,8 +51,10 @@ Changelog v2.0
 
 from __future__ import annotations
 
+import html as _html
 import re
 from typing import List, Tuple
+from urllib.parse import urlparse
 
 # ── Type aliases ──────────────────────────────────────────────────────────────
 # (category, compiled_pattern, description, has_capture_group)
@@ -122,6 +128,71 @@ def censor(value: str, show: int = 4) -> str:
     if len(v) <= show * 2:
         return "*" * len(v)
     return v[:show] + "…" + v[-show:]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  OUTPUT ESCAPING — shared by every HTML/Markdown report builder.
+#  Report content is attacker-controlled (URLs, titles, page bodies and LLM
+#  output derived from them), so every interpolated value goes through these.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Report CSP: reports ship no JS and no external resources, so block both.
+REPORT_CSP_META: str = (
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
+    'style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'; form-action \'none\'">\n'
+    '<meta name="referrer" content="no-referrer">'
+)
+
+
+def esc(value) -> str:
+    """HTML-escape any value for element text or a quoted attribute."""
+    return _html.escape("" if value is None else str(value), quote=True)
+
+
+def safe_href(url) -> str:
+    """Escaped href for http/https URLs only; anything else → '' (no link)."""
+    url = "" if url is None else str(url).strip()
+    try:
+        scheme = urlparse(url).scheme.lower()
+    except ValueError:
+        return ""
+    return esc(url) if scheme in ("http", "https") else ""
+
+
+def html_link(url, max_len: int, suffix: str = "") -> str:
+    """<a> for safe URLs, plain escaped text otherwise. Truncates before escaping."""
+    url  = "" if url is None else str(url)
+    text = esc(url[:max_len]) + suffix
+    href = safe_href(url)
+    if not href:
+        return text
+    return (f'<a href="{href}" target="_blank" '
+            f'rel="noopener noreferrer">{text}</a>')
+
+
+def md_cell(value) -> str:
+    """Make a value safe for a Markdown table cell (plain text)."""
+    s = "" if value is None else str(value)
+    s = s.replace("\r", " ").replace("\n", " ")
+    s = s.replace("\\", "\\\\").replace("|", "\\|").replace("`", "\\`")
+    return s.replace("<", "&lt;").replace(">", "&gt;")
+
+
+def md_code(value) -> str:
+    """Make a value safe inside a single-backtick Markdown code span in a table.
+
+    GFM honours ``\\|`` inside code spans in table cells; a backtick cannot be
+    escaped inside a code span, so it is percent-encoded (valid in URLs).
+    """
+    s = "" if value is None else str(value)
+    s = s.replace("\r", " ").replace("\n", " ")
+    return s.replace("`", "%60").replace("|", "\\|")
+
+
+def md_text(value) -> str:
+    """Neutralise raw HTML in free Markdown text, keeping Markdown formatting."""
+    s = "" if value is None else str(value)
+    return s.replace("<", "&lt;").replace(">", "&gt;")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -292,6 +363,70 @@ SECRET_SEVERITY: dict = {
     "HASH_SHA512":  "LOW",
     "INTERNAL":     "LOW",
 }
+
+# Per-rule match confidence, keyed by the rule description (3rd SECRET_RULES
+# field). Confidence = how likely a match is a real secret, independent of
+# SECRET_SEVERITY (how bad it would be). Rules with a fixed vendor prefix or
+# unambiguous structure are HIGH; keyword=value patterns are MEDIUM; generic
+# shapes (bare hex, IPs, public material) are LOW. Unlisted rules → MEDIUM.
+SECRET_CONFIDENCE: dict = {
+    # HIGH — vendor prefix / unambiguous structure
+    "DB connection URI":         "HIGH",
+    "JWT token":                 "HIGH",
+    "AWS Access Key ID":         "HIGH",
+    "AWS Secret Key":            "HIGH",
+    "AWS env var":               "HIGH",
+    "Google API Key":            "HIGH",
+    "GCP Service Account":       "HIGH",
+    "Google env var":            "HIGH",
+    "Azure Storage Key":         "HIGH",
+    "Private key":               "HIGH",
+    "Stripe Secret Key":         "HIGH",
+    "GitHub Personal Token":     "HIGH",
+    "Slack token":               "HIGH",
+    "Webhook URL":               "HIGH",
+    "Protocol with credentials": "HIGH",
+    "Bcrypt hash":               "HIGH",
+    "SendGrid API Key":          "HIGH",
+    "Heroku API key":            "HIGH",
+    "Docker PAT":                "HIGH",
+    "NPM token":                 "HIGH",
+    "GitLab PAT":                "HIGH",
+    # MEDIUM — keyword=value or loosely anchored patterns
+    "Generic API key":           "MEDIUM",
+    "API secret":                "MEDIUM",
+    "X-API-Key header value":    "MEDIUM",
+    "Access/auth token":         "MEDIUM",
+    "Bearer token":              "MEDIUM",
+    "Secret token":              "MEDIUM",
+    "Session/refresh token":     "MEDIUM",
+    "Password":                  "MEDIUM",
+    "DB password":               "MEDIUM",
+    "Admin/root password":       "MEDIUM",
+    "DB URI/host env var":       "MEDIUM",
+    "Azure secret":              "MEDIUM",
+    "GitHub token":              "MEDIUM",
+    "Client secret":             "MEDIUM",
+    "Crypto key":                "MEDIUM",
+    ".env secret variable":      "MEDIUM",
+    "NTLM hash pair":            "MEDIUM",
+    "Twilio API Key":            "MEDIUM",
+    "Mailgun API Key":           "MEDIUM",
+    # LOW — generic shapes or non-secret material
+    "DB name/user":              "LOW",
+    "Certificate":               "LOW",
+    "Stripe Public Key":         "LOW",
+    "Internal IP address":       "LOW",
+    "MD5 hash":                  "LOW",
+    "SHA-1 hash":                "LOW",
+    "SHA-256 hash":              "LOW",
+    "SHA-512 hash":              "LOW",
+}
+
+
+def secret_confidence(description: str) -> str:
+    """Return the match confidence (HIGH/MEDIUM/LOW) for a SECRET_RULES entry."""
+    return SECRET_CONFIDENCE.get(description, "MEDIUM")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
