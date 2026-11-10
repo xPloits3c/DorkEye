@@ -39,6 +39,9 @@ The HTML report is a **fully interactive, self-contained single-file** dashboard
 report_20260314_090118.html   ← auto-named when -o is not specified
 ```
 
+When Analyze, DBScan, Crawl or OSINT run in the same session, this report becomes the **Dorks**
+tab of a single tabbed page — see [Tabbed Report](output_formats.md#tabbed-report).
+
 ---
 
 ## Visual Design
@@ -284,6 +287,7 @@ Exports URL metadata (not file content) as text lists, JSON, or CSV.
 | TXT | Numbered list with url, title, category, dork, sqli, waf, timestamp | `text/plain` |
 | JSON | `{ meta: {...}, results: [...] }` | `application/json` |
 | CSV | Headers: url, title, dork, category, ext, sqli, conf, waf, timestamp | `text/csv` |
+| SQLITE | `{report_base}_{timestamp}.sqlite` — all results (not scoped) with every field (url, title, snippet, dork, category, status, SQLi / XSS / WAF results…) — embedded in the page when 8 MB or smaller | `application/x-sqlite3` |
 
 **Filename pattern:** `{report_base}_links_{scope}_{ISO-timestamp}.{ext}`
 

@@ -18,17 +18,18 @@ __H__       xploits3c.github.io/DorkEye
 
 ## 🗂️ Navigation
 
-[![Core Flags](https://img.shields.io/badge/Core_Flags-0077BB?style=flat-square)](#-core-flags)
-[![Detection & Stealth](https://img.shields.io/badge/Detection_%26_Stealth-0077BB?style=flat-square)](#-detection--stealth)
-[![XSS Detection](https://img.shields.io/badge/XSS_Detection-0077BB?style=flat-square)](#-xss-detection)
-[![SQLi Detection](https://img.shields.io/badge/SQLi_Detection-0077BB?style=flat-square)](#-sqli---sql-injection-detection)
-[![Dork Generator](https://img.shields.io/badge/Dork_Generator-0077BB?style=flat-square)](#-dork-generator)
-[![Analysis Pipeline](https://img.shields.io/badge/Analysis_Pipeline-0077BB?style=flat-square)](#-post-search-analysis-pipeline)
-[![Recursive Crawl](https://img.shields.io/badge/Recursive_Crawl-0077BB?style=flat-square)](#-adaptive-recursive-crawl)
-[![Interrupt Control](https://img.shields.io/badge/Interrupt_Control-0077BB?style=flat-square)](#-interrupt-control)
-[![Termux](https://img.shields.io/badge/Termux_%2F_Android-0077BB?style=flat-square)](#-termux--android)
-[![Combinations](https://img.shields.io/badge/Recommended_Combos-0077BB?style=flat-square)](#-recommended-combinations)
-[![Flag Reference](https://img.shields.io/badge/Complete_Flag_Reference-0077BB?style=flat-square)](#-complete-flag-reference)
+[![Core Flags](https://img.shields.io/badge/Core_Flags-0077BB?style=flat-square)](#core-flags)
+[![Detection & Stealth](https://img.shields.io/badge/Detection_%26_Stealth-0077BB?style=flat-square)](#detection--stealth)
+[![XSS Detection](https://img.shields.io/badge/XSS_Detection-0077BB?style=flat-square)](#xss-detection)
+[![SQLi Detection](https://img.shields.io/badge/SQLi_Detection-0077BB?style=flat-square)](#sqli--sql-injection-detection)
+[![Dork Generator](https://img.shields.io/badge/Dork_Generator-0077BB?style=flat-square)](#dork-generator)
+[![Analysis Pipeline](https://img.shields.io/badge/Analysis_Pipeline-0077BB?style=flat-square)](#post-search-analysis-pipeline)
+[![Recursive Crawl](https://img.shields.io/badge/Recursive_Crawl-0077BB?style=flat-square)](#adaptive-recursive-crawl)
+[![OSINT Graph](https://img.shields.io/badge/OSINT_Graph-0077BB?style=flat-square)](#osint-graph)
+[![Interrupt Control](https://img.shields.io/badge/Interrupt_Control-0077BB?style=flat-square)](#interrupt-control)
+[![Termux](https://img.shields.io/badge/Termux_%2F_Android-0077BB?style=flat-square)](#termux--android)
+[![Combinations](https://img.shields.io/badge/Recommended_Combos-0077BB?style=flat-square)](#recommended-combinations)
+[![Flag Reference](https://img.shields.io/badge/Complete_Flag_Reference-0077BB?style=flat-square)](#complete-flag-reference)
 
 ---
 
@@ -696,6 +697,80 @@ python3 dorkeye.py -d dorks.txt --crawl --crawl-stealth --crawl-out=crawl_report
 ---
 
 ## ══════════════════════════════════════════
+## OSINT GRAPH
+## ══════════════════════════════════════════
+
+Passive, keyless recon on the hosts DorkEye finds: subdomains (Certificate Transparency), DNS,
+registrar data, IPs with open ports and known CVEs, ASN / geo, reverse DNS, archived URLs and
+contacts. Everything is correlated into a graph and shown as the **OSINT** tab of the report.
+Full guide: [osint.md](osint.md).
+
+### 🔹 `--osint` — Enable OSINT (intensity 1 / 2 / 3)
+
+```bash
+# Dorks + OSINT on every host found (level 2 = default)
+python3 dorkeye.py -d "site:example.com" --osint -o example.html
+
+# Level 1: registry + Certificate Transparency + DNS only
+python3 dorkeye.py -d "site:example.com" --osint=1 -o quick.html
+
+# Level 3: adds Wayback URLs and one HTTP request per host (touches the target)
+python3 dorkeye.py -d "site:example.com" --osint=3 -o full.html
+```
+
+| Level | Chain | Sources | Touches the target |
+|---|---|---|---|
+| `1` | `recon-basic` | RDAP, crt.sh, DNS | No |
+| `2` | `recon-ip` | Level 1 + Shodan InternetDB, reverse DNS, ASN/geo | No |
+| `3` | `recon-passive` | Level 2 + Wayback, HTTP probe (title, server, `security.txt`) | Yes |
+
+---
+
+### 🔹 `--osint-seed` — Extra / Standalone Seeds
+
+```bash
+# OSINT only — no dork search
+python3 dorkeye.py --osint-seed example.com --osint-seed 203.0.113.10
+
+# Dorks + OSINT, plus a seed the dorks may not find
+python3 dorkeye.py -d "site:example.com" --osint --osint-seed 203.0.113.10 -o example.html
+
+# Single URL: OSINT only (add --sqli / --xss to test it too)
+python3 dorkeye.py -u "https://example.com/page.php?id=1" --osint
+```
+
+Seeds can be domains, hosts, IPs or URLs (a URL is reduced to its host). Repeatable.
+
+---
+
+### 🔹 `--osint-export` — Extra Files
+
+```bash
+python3 dorkeye.py -d "site:example.com" --osint --osint-export csv,json,graphml,txt -o example.html
+```
+
+| Value | File in `Dump/` |
+|---|---|
+| `csv` | `<name>.csv` — all nodes |
+| `json` | `<name>_graph.json` — nodes, edges, clusters, findings |
+| `graphml` | `<name>.graphml` — Gephi / yEd / Cytoscape |
+| `txt` | `<name>_summary.txt` — plain-text summary |
+
+---
+
+### 🔹 `--osint-db` / `--osint-threads` / `--osint-max-nodes`
+
+```bash
+python3 dorkeye.py --osint-seed example.com --osint-db Dump/example_osint.sqlite --osint-threads 4 --osint-max-nodes 5000
+```
+
+Every run starts a fresh graph: `Dump/<-o name>_osint.sqlite` with dorks,
+`Dump/osint_<seed>_<time>.sqlite` for OSINT-only runs, or the `--osint-db` path.
+`--osint-threads` defaults to `2` (kept low for phones), `--osint-max-nodes` to `2000`.
+
+---
+
+## ══════════════════════════════════════════
 ## INTERRUPT CONTROL
 ## ══════════════════════════════════════════
 
@@ -777,6 +852,18 @@ python3 dorkeye.py \
   --crawl-report
 ```
 
+### Recon — Dorks + OSINT Graph + DB Ports
+
+```bash
+python3 dorkeye.py -d "site:example.com" --osint --dbscan --analyze -o recon.html
+```
+
+### OSINT Only — Known Targets
+
+```bash
+python3 dorkeye.py --osint-seed example.com --osint-seed example.org --osint=1 --osint-export csv,txt
+```
+
 ### Re-test Saved Results — SQLi + XSS
 
 ```bash
@@ -835,6 +922,19 @@ python3 dorkeye_analyze.py Dump/results.json --fetch --fmt=html
 | `--crawl-stealth` | flag | off | Stealth delays during crawl |
 | `--crawl-report` | flag | off | Generate crawl HTML report |
 | `--crawl-out` | string | auto | Custom crawl report path |
+| `--dbscan` | flag | off | Scan open database ports on the hosts found |
+| `--dbscan-threads` | int | 60 | Worker threads per host |
+| `--dbscan-timeout` | float | 2.5 | TCP connect timeout (seconds) |
+| `--dbscan-ports` | list | all known | Override the DB ports to scan |
+| `--dbscan-max-hosts` | int | 5000 | Max unique hosts to scan |
+| `--osint` | string | off (`2` if no value) | OSINT graph: `1` / `2` / `3`, a chain name or `.json` chain |
+| `--osint-seed` | string | — | Extra seed (domain / host / IP / URL); alone runs OSINT only. Repeatable |
+| `--osint-db` | string | per run | OSINT SQLite path, recreated every run |
+| `--osint-threads` | int | 2 | OSINT worker threads |
+| `--osint-max-nodes` | int | 2000 | Max OSINT nodes per run |
+| `--osint-export` | string | — | Extra OSINT files: `csv,json,graphml,txt` |
+| `--ui` | flag | off | Launch the Web Console |
+| `--port` | int | 8080 | Web Console port |
 
 ---
 

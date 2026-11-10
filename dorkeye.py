@@ -35,6 +35,9 @@ if str(_TOOLS_DIR) not in sys.path:
 # ─────────────────────────────────────────────────────────────────────────────
 
 from dork_generator import DorkGenerator
+from report import (
+    write_dork_report, build_dork_html, write_report, render_dbscan_html,
+)
 
 # ── SQLi engine ───────────────────────────────────────────────────────────────
 from sqli import (
@@ -76,17 +79,27 @@ except ImportError:
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from rich.table import Table
+from rich import box
 from rich.panel import Panel
 from rich.markup import escape as _rich_escape
+# Search backend.
+#   ddgs      : needs Python >= 3.9 (>= 3.10 for recent releases) and lxml.
+#   ddg_lite  : lxml-free DuckDuckGo client (requests + bs4) shipped in
+#               Devices/iOS/. Used automatically when ddgs is not available:
+#               Python 3.7 / 3.8, iSH (iOS), or any system where lxml/ddgs
+#               can't be installed. Same call signature and result keys.
 try:
     from ddgs import DDGS
+    SEARCH_BACKEND = "ddgs"
 except ImportError:
-    # iSH / Alpine: ddgs needs lxml, which cannot be built there.
-    # Devices/iOS/install_ish.sh installs this lxml-free fallback in the root.
+    _LITE_DIR = Path(__file__).resolve().parent / "Devices" / "iOS"
+    if _LITE_DIR.is_dir() and str(_LITE_DIR) not in sys.path:
+        sys.path.append(str(_LITE_DIR))
     try:
         from ddg_lite import DDGS
+        SEARCH_BACKEND = "ddg_lite"
     except ImportError:
-        print("[!] ddgs is not installed. Run: pip install ddgs\n"
+        print("[!] No search backend found. Run: pip install -r requirements.txt\n"
               "    On iSH (iOS) run: sh install.sh")
         sys.exit(1)
 import socket
@@ -166,7 +179,67 @@ except Exception:
         return ""
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── OSINT Graph (passive, keyless recon) ──────────────────────────────────────
+# Same guarded-import pattern as the DB Port Scanner above: a missing or broken
+# Tools/osint.py leaves DorkEye fully functional, the --osint flags just warn.
+try:
+    from osint import (
+        OsintGraphAgent, save_osint_report, write_html_report, build_osint_html,
+        write_extra_exports, default_db_path, BUILTIN_CHAINS,
+    )
+    _OSINT_AVAILABLE = True
+except Exception:
+    _OSINT_AVAILABLE = False
+    BUILTIN_CHAINS = {}                 # type: ignore[assignment]
+    class OsintGraphAgent:              # type: ignore[no-redef]
+        """Stub: osint.py assente o non importabile."""
+        def __init__(self, **kw): pass
+        def run(self, *a, **kw): return None
+        @staticmethod
+        def seeds_from_results(*a, **kw): return []
+        def build_graph(self, *a, **kw): return {}
+        def export_csv(self, *a, **kw): return ""
+        def close(self): pass
+    def save_osint_report(*a, **kw):    # type: ignore[no-redef]
+        return ""
+    def write_html_report(*a, **kw):    # type: ignore[no-redef]
+        return ""
+    def build_osint_html(*a, **kw):     # type: ignore[no-redef]
+        return ""
+    def write_extra_exports(*a, **kw):  # type: ignore[no-redef]
+        return []
+# ─────────────────────────────────────────────────────────────────────────────
+
 VALID_MODES = ["soft", "medium", "aggressive"]
+
+# ── MetaByte (inlined) ────────────────────────────────────────────────────────
+# MetaByte (xPloits3c/MetaByte) is a small extract-and-dedupe utility: it pulls
+# emails / phone numbers / IPs / URLs out of text and returns unique, sorted
+# results. Its parsers are inlined here so DorkEye extracts natively, with no
+# separate metabyte.py file to ship. Logic kept identical to MetaByte v1.2.
+
+def mb_extract_email(content: str):
+    return sorted(set(re.findall(
+        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", content or "")))
+
+
+def mb_extract_phone(content: str):
+    numbers = re.findall(r"\+?\d[\d\s\-]{6,}\d", content or "")
+    return sorted(set(re.sub(r"\s+|-", "", n) for n in numbers))
+
+
+def mb_extract_ip(content: str):
+    raw = re.findall(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b", content or "")
+    return sorted({ip for ip in raw
+                   if all(0 <= int(o) <= 255 for o in ip.split("."))})
+
+
+def mb_extract_url(content: str, remove_links=None):
+    urls = re.findall(r"https?://[^\s'\",)]+", content or "")
+    if remove_links:
+        urls = [u for u in urls if not any(x in u for x in remove_links)]
+    return sorted(set(urls))
+# ──────────────────────────────────────────────────────────────────────────────
 
 # ══════════════════════════════════════════════════════════════
 #  [7] Termux / Android auto-detection
@@ -782,7 +855,6 @@ class DorkEyeEnhanced:
             console.print(f"[yellow][~] Dork {dork_index}/{total_dorks} skipped.[/yellow]")
             _skip_current = False
 
-        console.print(f"[bold blue][+] Found {len(results)} unique results for this dork[/bold blue]")
         return results
 
     def analyze_results(self, results: List[Dict]) -> List[Dict]:
@@ -795,7 +867,6 @@ class DorkEyeEnhanced:
             and not self.config.get("xss_detection", False)
         ):
             return results
-        console.print("\n[bold yellow][*] Scanning results (files/SQLi/XSS)...[/bold yellow]")
         files_to_analyze  = [r for r in results if r["category"] != "webpage"]
         # SQLi only applies to URLs with GET query parameters: the detector
         # short-circuits parameter-less URLs anyway (no request), so filter them
@@ -1044,6 +1115,11 @@ class DorkEyeEnhanced:
             ):
                 results = self.analyze_results(results)
 
+            # Printed last for this dork: after Searching and the Checking-files
+            # progress bar, so the flow reads search → check → found.
+            console.print(
+                f"[bold blue][+] Found {len(results)} unique results for this dork[/bold blue]")
+
             self.results.extend(results)
             if self.output_file:
                 self.save_results()
@@ -1195,960 +1271,40 @@ class DorkEyeEnhanced:
                 f.write("\n")
 
     def _save_html(self, filename: str):
-        """Build and write the full interactive dark-theme HTML report."""
-        sqli_count = self.stats.get("sqli_vulnerable", 0)
-        sqli_safe  = sum(
-            1 for r in self.results
-            if "sqli_test" in r and r["sqli_test"].get("tested") and not r["sqli_test"].get("vulnerable")
-        )
-        sqli_total = sqli_count + sqli_safe
-        xss_count  = self.stats.get("xss_vulnerable", 0)
-        xss_safe   = sum(
-            1 for r in self.results
-            if "xss_test" in r and r["xss_test"].get("tested") and not r["xss_test"].get("vulnerable")
-        )
-        xss_total  = xss_count + xss_safe
-        waf_count  = self.stats.get("waf_detected", 0)
-        cnt        = {"all": len(self.results), "doc": 0, "sqli": sqli_total, "xss": xss_total, "scripts": 0, "page": 0}
-        for r in self.results:
-            cat = r.get("category", "unknown")
-            if cat in ("documents", "archives", "backups"):    cnt["doc"]     += 1
-            elif cat in ("scripts", "configs", "credentials"): cnt["scripts"] += 1
-            elif cat == "webpage":                             cnt["page"]    += 1
-
-        import json as _json
-        import html as _html_mod
-
-        export_rows = []
-        for r in self.results:
-            sqli_t = r.get("sqli_test", {})
-            if sqli_t.get("tested"):
-                conf   = sqli_t.get("overall_confidence", "")
-                sqli_s = ("critical" if conf == "critical" else "vuln") if sqli_t.get("vulnerable") else "safe"
-            else:
-                sqli_s = "untested"
-            xss_t  = r.get("xss_test", {})
-            if xss_t.get("tested"):
-                xss_s = "vuln" if xss_t.get("vulnerable") else "safe"
-            else:
-                xss_s = "untested"
-            export_rows.append({
-                "url":       r.get("url", ""),
-                "title":     r.get("title", ""),
-                "dork":      r.get("dork", ""),
-                "category":  r.get("category", ""),
-                "ext":       r.get("extension", ""),
-                "timestamp": r.get("timestamp", ""),
-                "sqli":      sqli_s,
-                "conf":      sqli_t.get("overall_confidence", ""),
-                "waf":       sqli_t.get("waf_detected", "") or "",
-                "xss":       xss_s,
-                "xss_types": ",".join(xss_t.get("xss_types_found", [])),
-                "xss_conf":  xss_t.get("overall_confidence", ""),
-            })
-
-        file_rows = []
-        for r in self.results:
-            cat = r.get("category", "webpage")
-            if cat == "webpage":
-                continue
-            file_rows.append({
-                "url":         r.get("url", ""),
-                "title":       r.get("title", ""),
-                "category":    cat,
-                "ext":         r.get("extension", ""),
-                "size":        r.get("file_size"),
-                "size_str":    self._format_size(r.get("file_size")),
-                "accessible":  r.get("accessible", False),
-                "status_code": r.get("status_code"),
-                "timestamp":   r.get("timestamp", ""),
-            })
-
-        export_data_js = _json.dumps(export_rows, ensure_ascii=False).replace("</", "<\\/")
-        file_data_js   = _json.dumps(file_rows,   ensure_ascii=False).replace("</", "<\\/")
-        report_base    = os.path.splitext(os.path.basename(filename))[0]
-
-        parts = []
-        parts.append("""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>DorkEye | Report</title>
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier New', monospace; background: #000; color: #00ff41; min-height: 100vh; overflow-x: hidden; }
-        #matrix-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.32; pointer-events: none; }
-        #content { position: relative; z-index: 1; padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
-        .header { background: rgba(0,10,0,0.85); border: 1px solid #00ff41; border-left: 4px solid #00ff41;
-            padding: 22px 28px; margin-bottom: 24px; box-shadow: 0 0 24px rgba(0,255,65,0.15); }
-        .header h1 { font-size: 22px; color: #00ff41; text-shadow: 0 0 10px #00ff41; letter-spacing: 2px; }
-        .header .subtitle { margin-top: 6px; font-size: 12px; color: #009922; letter-spacing: 1px; }
-        .header .blink { animation: blink 1.1s step-end infinite; }
-        @keyframes blink { 50% { opacity: 0; } }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 24px; }
-        .stat-card { background: rgba(0,10,0,0.82); border: 1px solid #00aa2a; padding: 16px 18px; }
-        .stat-card h3 { font-size: 11px; color: #009922; letter-spacing: 1px; text-transform: uppercase; }
-        .stat-card p { font-size: 26px; font-weight: bold; color: #00ff41; margin-top: 8px; text-shadow: 0 0 8px rgba(0,255,65,0.5); }
-        .sqli-alert { background: rgba(40,0,0,0.88); border: 1px solid #ff2222; border-left: 4px solid #ff2222;
-            padding: 14px 20px; margin-bottom: 20px; color: #ff4444; }
-        .sqli-alert h2 { font-size: 15px; letter-spacing: 2px; margin-bottom: 6px; }
-        .sqli-alert p  { font-size: 13px; color: #ff6666; }
-        .waf-alert { background: rgba(30,20,0,0.88); border: 1px solid #ffaa00; border-left: 4px solid #ffaa00;
-            padding: 12px 20px; margin-bottom: 14px; color: #ffcc44; font-size: 13px; }
-        .toolbar { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-        .filter-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; flex: 1; position: relative; }
-        .filter-label { color: #009922; font-size: 12px; letter-spacing: 1px; margin-right: 4px; white-space: nowrap; }
-        .filter-group { position: relative; display: inline-block; }
-        .filter-btn { background: rgba(0,10,0,0.7); border: 1px solid #00aa2a; color: #00aa2a; padding: 5px 13px;
-            font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer; letter-spacing: 2px;
-            text-transform: uppercase; transition: all .15s; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
-        .filter-btn:hover { background: rgba(0,255,65,0.12); border-color: #00ff41; color: #00ff41; }
-        .filter-btn.active { background: #00ff41; color: #000; border-color: #00ff41; font-weight: bold; }
-        .badge { display: inline-block; background: rgba(0,255,65,0.15); border: 1px solid #009922; color: #00ff41;
-            font-size: 9px; padding: 1px 5px; border-radius: 2px; min-width: 20px; text-align: center; }
-        .filter-btn.active .badge { background: rgba(0,0,0,0.25); color: #000; }
-        .has-sub .arrow { font-size: 8px; opacity: 0.7; }
-        .sub-menu { display: none; position: absolute; top: calc(100% + 3px); left: 0; z-index: 200;
-            background: rgba(0,6,0,0.97); border: 1px solid #00aa2a; border-top: 2px solid #00ff41;
-            box-shadow: 0 6px 24px rgba(0,255,65,0.18); min-width: 165px; }
-        .sub-menu.open { display: block; }
-        .sub-btn { display: flex; align-items: center; justify-content: space-between; width: 100%;
-            background: transparent; border: none; border-bottom: 1px solid rgba(0,170,42,0.18);
-            color: #009922; padding: 8px 16px; font-family: 'Courier New', monospace; font-size: 11px;
-            letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; text-align: left; transition: all .12s; gap: 8px; }
-        .sub-btn:last-child { border-bottom: none; }
-        .sub-btn:hover { background: rgba(0,255,65,0.08); color: #00ff41; padding-left: 22px; }
-        .sub-btn.active { color: #00ff41; font-weight: bold; background: rgba(0,255,65,0.06); padding-left: 22px; }
-        .sub-btn .sub-badge { font-size: 9px; color: #005500; background: rgba(0,255,65,0.08);
-            border: 1px solid #003300; padding: 1px 5px; border-radius: 2px; min-width: 22px; text-align: center; }
-        .active-sub-info { font-size: 11px; color: #005500; letter-spacing: 1px; margin-bottom: 10px; min-height: 16px; padding-left: 2px; }
-        .active-sub-info span { color: #00aa44; }
-        .right-btns { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; }
-        .srch-wrap, .export-wrap, .files-wrap { position: relative; flex-shrink: 0; }
-        .rbt { background: rgba(0,10,18,0.85); border: 1px solid #0077bb; color: #00aaff;
-            padding: 5px 13px; font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer;
-            letter-spacing: 2px; text-transform: uppercase; display: inline-flex; align-items: center;
-            gap: 5px; transition: all .15s; white-space: nowrap; }
-        .rbt:hover, .rbt.open { background: rgba(0,100,180,0.2); border-color: #00aaff; color: #fff; }
-        .rpanel { display: none; position: absolute; top: calc(100% + 4px); right: 0; z-index: 400;
-            background: rgba(0,4,12,0.98); border: 1px solid #007acc; border-top: 2px solid #00aaff;
-            box-shadow: 0 10px 40px rgba(0,120,200,0.25); min-width: 370px; }
-        .rpanel.open { display: block; animation: fadeIn .15s ease; }
-        @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
-        .panel-close { position: absolute; top: 7px; right: 10px; background: transparent; border: none;
-            color: #004466; font-size: 14px; cursor: pointer; line-height: 1; padding: 2px 5px;
-            font-family: 'Courier New', monospace; transition: color .12s; z-index: 10; }
-        .panel-close:hover { color: #00aaff; }
-        .ep-section { padding: 10px 16px; border-bottom: 1px solid rgba(0,100,180,0.2); }
-        .ep-section:last-child { border-bottom: none; }
-        .ep-title { font-size: 10px; color: #005588; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
-        .ep-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-        .ep-row:last-child { margin-bottom: 0; }
-        .ep-label { font-size: 11px; color: #0088bb; letter-spacing: 1px; min-width: 115px; flex-shrink: 0; }
-        .ep-label.warn { color: #ffaa00; }
-        .ep-label.danger { color: #ff4444; }
-        .ep-label.safe-lbl { color: #00cc55; }
-        .ep-label.view-lbl { color: #cc88ff; }
-        .exp-btn { background: transparent; border: 1px solid currentColor; padding: 3px 9px;
-            font-family: 'Courier New', monospace; font-size: 10px; cursor: pointer; letter-spacing: 1.5px;
-            text-transform: uppercase; transition: all .12s; }
-        .exp-btn.txt  { color: #00ccff; border-color: #00ccff; } .exp-btn.txt:hover  { background: #00ccff; color: #000; }
-        .exp-btn.json { color: #ffcc00; border-color: #ffcc00; } .exp-btn.json:hover { background: #ffcc00; color: #000; }
-        .exp-btn.csv  { color: #00ff99; border-color: #00ff99; } .exp-btn.csv:hover  { background: #00ff99; color: #000; }
-        .srch-panel { min-width: 320px; }
-        .srch-inner { padding: 14px 16px; }
-        .srch-title { font-size: 10px; color: #005588; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
-        .srch-input-wrap { display: flex; gap: 6px; align-items: center; }
-        .srch-input { flex: 1; background: rgba(0,10,20,0.9); border: 1px solid #007acc; color: #00aaff;
-            font-family: 'Courier New', monospace; font-size: 12px; padding: 6px 10px; outline: none; letter-spacing: 1px; }
-        .srch-input:focus { border-color: #00aaff; box-shadow: 0 0 8px rgba(0,170,255,0.2); }
-        .srch-input::placeholder { color: #003355; }
-        .srch-clear { background: transparent; border: 1px solid #004466; color: #006688; padding: 6px 10px;
-            font-family: 'Courier New', monospace; font-size: 10px; cursor: pointer; letter-spacing: 1px; transition: all .12s; }
-        .srch-clear:hover { border-color: #00aaff; color: #00aaff; }
-        .srch-meta { margin-top: 8px; font-size: 10px; color: #004466; letter-spacing: 1px; }
-        .srch-meta span { color: #0088bb; }
-        .srch-scope { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-        .srch-scope-lbl { font-size: 9px; color: #004466; letter-spacing: 1px; }
-        .scope-btn { background: transparent; border: 1px solid #004466; color: #006688; padding: 3px 8px;
-            font-family: 'Courier New', monospace; font-size: 9px; cursor: pointer; letter-spacing: 1px;
-            text-transform: uppercase; transition: all .12s; }
-        .scope-btn.active { background: rgba(0,122,204,0.3); border-color: #007acc; color: #00aaff; }
-        .scope-btn:hover { border-color: #0099cc; color: #0099cc; }
-        .files-panel { min-width: 420px; max-height: 520px; flex-direction: column; }
-        .rpanel.open.files-panel { display: flex; }
-        .files-hdr { padding: 10px 16px; border-bottom: 1px solid rgba(0,100,180,0.2); flex-shrink: 0; }
-        .files-bulk { padding: 8px 16px; border-bottom: 1px solid rgba(0,100,180,0.2); flex-shrink: 0;
-            display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-        .bulk-lbl { font-size: 10px; color: #005588; letter-spacing: 1px; flex: 1; }
-        .files-list { overflow-y: auto; flex: 1; }
-        .file-row { display: flex; align-items: center; gap: 8px; padding: 7px 14px;
-            border-bottom: 1px solid rgba(0,100,180,0.1); transition: background .1s; }
-        .file-row:hover { background: rgba(0,100,180,0.06); }
-        .file-row:last-child { border-bottom: none; }
-        .file-chk { accent-color: #007acc; cursor: pointer; flex-shrink: 0; }
-        .file-info { flex: 1; min-width: 0; }
-        .file-url { font-size: 10px; color: #0088bb; overflow: hidden; text-overflow: ellipsis;
-            white-space: nowrap; display: block; text-decoration: none; }
-        .file-url:hover { color: #00aaff; }
-        .file-cat { font-size: 9px; color: #004466; margin-top: 2px; letter-spacing: 1px; }
-        .file-size { font-size: 10px; color: #005588; flex-shrink: 0; min-width: 55px; text-align: right; }
-        .file-dl { background: transparent; border: none; color: #005588; font-size: 14px;
-            cursor: pointer; text-decoration: none; flex-shrink: 0; transition: color .12s;
-            line-height: 1; padding: 0 2px; }
-        .file-dl:hover { color: #00aaff; }
-        .files-empty { padding: 20px 16px; font-size: 11px; color: #004466; text-align: center; letter-spacing: 1px; }
-        .table-wrap { background: rgba(0,8,0,0.82); border: 1px solid #00aa2a; overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 290px); min-height: 200px; }
-        thead th { background: rgba(0,10,0,0.97); color: #00ff41; padding: 11px 10px; text-align: left;
-            border-bottom: 1px solid #00aa2a; font-size: 11px; letter-spacing: 2px;
-            text-transform: uppercase; white-space: nowrap; position: sticky; top: 0; z-index: 5; }
-        table { width: 100%; border-collapse: collapse; table-layout: auto; }
-        col.c-num   { width: 36px; }
-        col.c-url   { min-width: 180px; }
-        col.c-title { min-width: 120px; width: 14%; }
-        col.c-cat   { min-width: 90px;  width: 9%; }
-        col.c-sqli  { min-width: 110px; width: 10%; }
-        col.c-xss   { min-width: 110px; width: 10%; }
-        col.c-waf   { min-width: 70px;  width: 7%; }
-        col.c-size  { min-width: 54px;  width: 6%; }
-        td { padding: 9px 10px; border-bottom: 1px solid rgba(0,170,42,0.15); font-size: 12px;
-            vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        tr:hover td { background: rgba(0,255,65,0.04); }
-        tr.hidden { display: none; }
-        tr.srch-hidden { display: none; }
-        a { color: #00aaff; text-decoration: none; }
-        a:hover { color: #00ff41; }
-        .category { display: inline-block; padding: 2px 7px; border: 1px solid; font-size: 10px;
-            letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
-        .category-documents   { border-color: #ff6b6b; color: #ff6b6b; }
-        .category-archives    { border-color: #ffa500; color: #ffa500; }
-        .category-databases   { border-color: #b47fff; color: #b47fff; }
-        .category-backups     { border-color: #e67e22; color: #e67e22; }
-        .category-configs     { border-color: #1abc9c; color: #1abc9c; }
-        .category-scripts     { border-color: #f1c40f; color: #f1c40f; }
-        .category-webpage     { border-color: #7f8c8d; color: #7f8c8d; }
-        .category-credentials { border-color: #e74c3c; color: #e74c3c; }
-        .sqli-critical { color: #ff00ff; font-weight: bold; text-shadow: 0 0 6px #ff00ff; }
-        .sqli-vuln     { color: #ff3333; font-weight: bold; }
-        .sqli-safe     { color: #00ff41; }
-        .sqli-untested { color: #444; }
-        .xss-vuln      { color: #ffaa00; font-weight: bold; }
-        .xss-safe      { color: #00ff41; }
-        .xss-untested  { color: #444; }
-        .waf-label     { font-size: 10px; color: #ffaa00; border: 1px solid #ffaa00; padding: 1px 5px; letter-spacing: 1px; white-space: nowrap; }
-        .url-cell { display: flex; align-items: center; gap: 6px; overflow: hidden; }
-        .url-cell a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-        .dl-btn { flex-shrink: 0; background: transparent; border: none; color: #005588;
-            font-size: 15px; cursor: pointer; text-decoration: none; line-height: 1;
-            padding: 0; transition: color .12s; }
-        .dl-btn:hover { color: #00aaff; }
-        .info-btn { flex-shrink: 0; background: transparent; border: none; color: #004455;
-            font-size: 13px; cursor: pointer; line-height: 1; padding: 0 1px;
-            transition: color .12s; font-family: 'Courier New', monospace; }
-        .info-btn:hover { color: #00ccff; }
-        .info-overlay { display: none; position: fixed; inset: 0; z-index: 8900;
-            background: rgba(0,0,0,0.72); backdrop-filter: blur(2px); }
-        .info-overlay.open { display: block; animation: fadeIn .15s ease; }
-        .info-popup { display: none; position: fixed; z-index: 9000;
-            top: 50%; left: 50%; transform: translate(-50%,-50%);
-            background: rgba(0,4,12,0.98); border: 1px solid #007acc;
-            border-top: 3px solid #00aaff;
-            box-shadow: 0 0 60px rgba(0,120,200,0.45), 0 0 120px rgba(0,80,160,0.25);
-            width: min(560px, 92vw); max-height: 80vh; overflow-y: auto;
-            font-size: 11px; padding: 18px 20px; }
-        .info-popup.open { display: block; animation: fadeIn .18s ease; }
-        .info-popup-title { font-size: 10px; color: #005588; letter-spacing: 2px;
-            text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid rgba(0,100,180,0.2);
-            padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .info-close { background: transparent; border: none; color: #004466; cursor: pointer;
-            font-size: 14px; font-family: 'Courier New', monospace; padding: 0 3px; transition: color .12s; }
-        .info-close:hover { color: #00aaff; }
-        .info-row { display: flex; gap: 8px; margin-bottom: 5px; align-items: flex-start; }
-        .info-lbl { color: #005588; min-width: 90px; flex-shrink: 0; letter-spacing: 1px; }
-        .info-val { color: #00aaff; word-break: break-all; }
-        .footer { margin-top: 28px; padding: 14px 0; border-top: 1px solid #002200;
-            text-align: center; font-size: 11px; color: #004400; letter-spacing: 2px; }
-        #toast { position: fixed; bottom: 28px; right: 28px; z-index: 9999; background: rgba(0,20,0,0.95);
-            border: 1px solid #00ff41; color: #00ff41; padding: 10px 20px; font-family: 'Courier New', monospace;
-            font-size: 12px; letter-spacing: 1px; opacity: 0; transition: opacity .3s; pointer-events: none; }
-        #toast.show { opacity: 1; }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: #000; }
-        ::-webkit-scrollbar-thumb { background: #003300; }
-        ::-webkit-scrollbar-thumb:hover { background: #00aa2a; }
-    </style>
-</head>
-<body>
-<canvas id="matrix-canvas"></canvas>
-<div id="content">
-    <div class="header">
-        <h1>&#9632; DorkEye | Report <span class="blink">_</span></h1>
-""")
-        parts.append(f'        <div class="subtitle">&#10132; Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} &nbsp;|&nbsp; xploits3c.github.io/DorkEye</div>\n')
-        parts.append("    </div>\n")
-
-        if sqli_count > 0:
-            parts.append(f"""    <div class="sqli-alert">
-        <h2>&#9888; SECURITY ALERT &#9888;</h2>
-        <p><strong>{sqli_count}</strong> potential SQL injection vulnerabilities detected!</p>
-        <p>Review the results marked VULNERABLE below.</p>
-    </div>
-""")
-        if xss_count > 0:
-            parts.append(f"""    <div class="xss-alert" style="background:rgba(40,20,0,0.88);border:1px solid #ffaa00;border-left:4px solid #ffaa00;padding:14px 20px;margin-bottom:20px;color:#ffcc44;">
-        <h2 style="font-size:15px;letter-spacing:2px;margin-bottom:6px;">&#9888; XSS ALERT &#9888;</h2>
-        <p style="font-size:13px;color:#ffdd88;"><strong>{xss_count}</strong> potential Cross-Site Scripting vulnerabilities detected!</p>
-    </div>
-""")
-        if waf_count > 0:
-            parts.append(f"""    <div class="waf-alert">
-        &#9888; <strong>{waf_count}</strong> WAF-protected target(s) detected.
-    </div>
-""")
-        parts.append(f"""    <div class="stats">
-        <div class="stat-card"><h3>&#9632; TOTAL RESULTS</h3><p>{len(self.results)}</p></div>
-        <div class="stat-card"><h3>&#9632; DUPLICATES FILTERED</h3><p>{self.stats.get("duplicates", 0)}</p></div>
-        <div class="stat-card"><h3>&#9632; SQLI VULNERABILITIES</h3><p style="color:#ff3333;">{sqli_count}</p></div>
-        <div class="stat-card"><h3>&#9632; XSS VULNERABILITIES</h3><p style="color:#ffaa00;">{xss_count}</p></div>
-        <div class="stat-card"><h3>&#9632; WAF DETECTED</h3><p style="color:#ffaa00;">{waf_count}</p></div>
-        <div class="stat-card"><h3>&#9632; EXECUTION TIME</h3><p>{round(time.time() - self.start_time, 2)}s</p></div>
-    </div>
-
-    <div class="toolbar">
-      <div class="filter-bar">
-        <span class="filter-label">[ FILTER ]</span>
-        <button class="filter-btn active" data-group="all" onclick="applyFilter(this)">ALL <span class="badge" id="badge-all">{cnt["all"]}</span></button>
-        <div class="filter-group" id="fg-doc">
-            <button class="filter-btn has-sub" data-group="doc" onclick="applyFilter(this)">DOC <span class="badge" id="badge-doc">{cnt["doc"]}</span><span class="arrow">&#9660;</span></button>
-            <div class="sub-menu" id="sub-doc">
-                <button class="sub-btn active" data-sub="doc-all"  onclick="applySubFilter(this,'doc')">ALL      <span class="sub-badge" id="sbadge-doc-all">{cnt["doc"]}</span></button>
-                <button class="sub-btn"        data-sub="doc-pdf"  onclick="applySubFilter(this,'doc')">PDF      <span class="sub-badge" id="sbadge-doc-pdf">-</span></button>
-                <button class="sub-btn"        data-sub="doc-docx" onclick="applySubFilter(this,'doc')">DOCX     <span class="sub-badge" id="sbadge-doc-docx">-</span></button>
-                <button class="sub-btn"        data-sub="doc-xlsx" onclick="applySubFilter(this,'doc')">XLSX     <span class="sub-badge" id="sbadge-doc-xlsx">-</span></button>
-                <button class="sub-btn"        data-sub="doc-ppt"  onclick="applySubFilter(this,'doc')">PPT      <span class="sub-badge" id="sbadge-doc-ppt">-</span></button>
-                <button class="sub-btn"        data-sub="doc-arc"  onclick="applySubFilter(this,'doc')">ARCHIVES <span class="sub-badge" id="sbadge-doc-arc">-</span></button>
-            </div>
-        </div>
-        <div class="filter-group" id="fg-sqli">
-            <button class="filter-btn has-sub" data-group="sqli" onclick="applyFilter(this)">SQLi <span class="badge" id="badge-sqli">{cnt["sqli"]}</span><span class="arrow">&#9660;</span></button>
-            <div class="sub-menu" id="sub-sqli">
-                <button class="sub-btn active" data-sub="sqli-all"      onclick="applySubFilter(this,'sqli')">SQLi ALL      <span class="sub-badge" id="sbadge-sqli-all">{sqli_total}</span></button>
-                <button class="sub-btn"        data-sub="sqli-critical" onclick="applySubFilter(this,'sqli')">SQLi CRITICAL <span class="sub-badge sqli-critical" id="sbadge-sqli-critical">-</span></button>
-                <button class="sub-btn"        data-sub="sqli-vuln"     onclick="applySubFilter(this,'sqli')">SQLi VULN     <span class="sub-badge sqli-vuln" id="sbadge-sqli-vuln">{sqli_count}</span></button>
-                <button class="sub-btn"        data-sub="sqli-safe"     onclick="applySubFilter(this,'sqli')">SQLi SAFE     <span class="sub-badge" id="sbadge-sqli-safe">{sqli_safe}</span></button>
-            </div>
-        </div>
-        <div class="filter-group" id="fg-xss">
-            <button class="filter-btn has-sub" data-group="xss" onclick="applyFilter(this)">XSS <span class="badge" id="badge-xss">{cnt["xss"]}</span><span class="arrow">&#9660;</span></button>
-            <div class="sub-menu" id="sub-xss">
-                <button class="sub-btn active" data-sub="xss-all"  onclick="applySubFilter(this,'xss')">ALL  <span class="sub-badge" id="sbadge-xss-all">{xss_total}</span></button>
-                <button class="sub-btn"        data-sub="xss-vuln" onclick="applySubFilter(this,'xss')">VULN <span class="sub-badge xss-vuln" id="sbadge-xss-vuln">{xss_count}</span></button>
-                <button class="sub-btn"        data-sub="xss-safe" onclick="applySubFilter(this,'xss')">SAFE <span class="sub-badge" id="sbadge-xss-safe">{xss_safe}</span></button>
-            </div>
-        </div>
-        <div class="filter-group" id="fg-scripts">
-            <button class="filter-btn has-sub" data-group="scripts" onclick="applyFilter(this)">SCRIPTS <span class="badge" id="badge-scripts">{cnt["scripts"]}</span><span class="arrow">&#9660;</span></button>
-            <div class="sub-menu" id="sub-scripts">
-                <button class="sub-btn active" data-sub="scripts-all"    onclick="applySubFilter(this,'scripts')">ALL     <span class="sub-badge" id="sbadge-scripts-all">{cnt["scripts"]}</span></button>
-                <button class="sub-btn"        data-sub="scripts-php"    onclick="applySubFilter(this,'scripts')">PHP     <span class="sub-badge" id="sbadge-scripts-php">-</span></button>
-                <button class="sub-btn"        data-sub="scripts-asp"    onclick="applySubFilter(this,'scripts')">ASP     <span class="sub-badge" id="sbadge-scripts-asp">-</span></button>
-                <button class="sub-btn"        data-sub="scripts-sh"     onclick="applySubFilter(this,'scripts')">SH/BAT  <span class="sub-badge" id="sbadge-scripts-sh">-</span></button>
-                <button class="sub-btn"        data-sub="scripts-config" onclick="applySubFilter(this,'scripts')">CONFIGS <span class="sub-badge" id="sbadge-scripts-config">-</span></button>
-                <button class="sub-btn"        data-sub="scripts-creds"  onclick="applySubFilter(this,'scripts')">CREDS   <span class="sub-badge" id="sbadge-scripts-creds">-</span></button>
-            </div>
-        </div>
-        <button class="filter-btn" data-group="page" onclick="applyFilter(this)">PAGE <span class="badge" id="badge-page">{cnt["page"]}</span></button>
-      </div>
-      <div class="right-btns">
-        <div class="srch-wrap" id="srchWrap">
-          <button class="rbt" id="srchToggle" onclick="toggleSearch()">&#128269; SEARCH</button>
-          <div class="rpanel srch-panel" id="srchPanel">
-            <button class="panel-close" onclick="document.getElementById('srchPanel').classList.remove('open');document.getElementById('srchToggle').classList.remove('open')" title="Close">&#10005;</button>
-            <div class="srch-inner">
-              <div class="srch-title">&#9632; Search</div>
-              <div class="srch-input-wrap">
-                <input class="srch-input" id="srchInput" type="text" placeholder="Type to filter results..." oninput="doSearch()" autocomplete="off" spellcheck="false">
-                <button class="srch-clear" onclick="clearSearch()">CLEAR</button>
-              </div>
-              <div class="srch-meta">Matching: <span id="srchCount">-</span> of {len(self.results)} results</div>
-              <div class="srch-scope">
-                <span class="srch-scope-lbl">SCOPE:</span>
-                <button class="scope-btn active" data-scope="url"      onclick="toggleScope(this)">URL</button>
-                <button class="scope-btn active" data-scope="title"    onclick="toggleScope(this)">TITLE</button>
-                <button class="scope-btn active" data-scope="category" onclick="toggleScope(this)">CATEGORY</button>
-                <button class="scope-btn active" data-scope="dork"     onclick="toggleScope(this)">DORK</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="export-wrap" id="exportWrap">
-          <button class="rbt" id="exportToggle" onclick="toggleExportPanel()">&#11015; LINKS</button>
-          <div class="rpanel" id="exportPanel">
-            <button class="panel-close" onclick="document.getElementById('exportPanel').classList.remove('open');document.getElementById('exportToggle').classList.remove('open')" title="Close">&#10005;</button>
-            <div class="ep-section">
-              <div class="ep-title">&#9632; Export Links - All</div>
-              <div class="ep-row">
-                <span class="ep-label">All ({len(self.results)})</span>
-                <button class="exp-btn txt" onclick="doExport('txt','all')">TXT</button>
-                <button class="exp-btn json" onclick="doExport('json','all')">JSON</button>
-                <button class="exp-btn csv" onclick="doExport('csv','all')">CSV</button>
-              </div>
-            </div>
-            <div class="ep-section">
-              <div class="ep-title">&#9632; Export Links - SQLi</div>
-              <div class="ep-row">
-                <span class="ep-label warn">All tested <span id="epCntSqliAll"></span></span>
-                <button class="exp-btn txt"  onclick="doExport('txt','sqli-all')">TXT</button>
-                <button class="exp-btn json" onclick="doExport('json','sqli-all')">JSON</button>
-                <button class="exp-btn csv"  onclick="doExport('csv','sqli-all')">CSV</button>
-              </div>
-              <div class="ep-row">
-                <span class="ep-label danger">VULN <span id="epCntSqliVuln"></span></span>
-                <button class="exp-btn txt"  onclick="doExport('txt','sqli-vuln')">TXT</button>
-                <button class="exp-btn json" onclick="doExport('json','sqli-vuln')">JSON</button>
-                <button class="exp-btn csv"  onclick="doExport('csv','sqli-vuln')">CSV</button>
-              </div>
-              <div class="ep-row">
-                <span class="ep-label safe-lbl">SAFE <span id="epCntSqliSafe"></span></span>
-                <button class="exp-btn txt"  onclick="doExport('txt','sqli-safe')">TXT</button>
-                <button class="exp-btn json" onclick="doExport('json','sqli-safe')">JSON</button>
-                <button class="exp-btn csv"  onclick="doExport('csv','sqli-safe')">CSV</button>
-              </div>
-            </div>
-            <div class="ep-section">
-              <div class="ep-title">&#9632; Export Links - XSS</div>
-              <div class="ep-row">
-                <span class="ep-label warn">All tested <span id="epCntXssAll"></span></span>
-                <button class="exp-btn txt"  onclick="doExport('txt','xss-all')">TXT</button>
-                <button class="exp-btn json" onclick="doExport('json','xss-all')">JSON</button>
-                <button class="exp-btn csv"  onclick="doExport('csv','xss-all')">CSV</button>
-              </div>
-              <div class="ep-row">
-                <span class="ep-label" style="color:#ffaa00;">VULN <span id="epCntXssVuln"></span></span>
-                <button class="exp-btn txt"  onclick="doExport('txt','xss-vuln')">TXT</button>
-                <button class="exp-btn json" onclick="doExport('json','xss-vuln')">JSON</button>
-                <button class="exp-btn csv"  onclick="doExport('csv','xss-vuln')">CSV</button>
-              </div>
-              <div class="ep-row">
-                <span class="ep-label safe-lbl">SAFE <span id="epCntXssSafe"></span></span>
-                <button class="exp-btn txt"  onclick="doExport('txt','xss-safe')">TXT</button>
-                <button class="exp-btn json" onclick="doExport('json','xss-safe')">JSON</button>
-                <button class="exp-btn csv"  onclick="doExport('csv','xss-safe')">CSV</button>
-              </div>
-            </div>
-            <div class="ep-section">
-              <div class="ep-title">&#9632; Current View</div>
-              <div class="ep-row">
-                <span class="ep-label view-lbl">Visible <span id="epCntView"></span></span>
-                <button class="exp-btn txt"  onclick="doExport('txt','view')">TXT</button>
-                <button class="exp-btn json" onclick="doExport('json','view')">JSON</button>
-                <button class="exp-btn csv"  onclick="doExport('csv','view')">CSV</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="files-wrap" id="filesWrap">
-          <button class="rbt" id="filesToggle" onclick="toggleFilesPanel()">&#128196; FILES</button>
-          <div class="rpanel files-panel" id="filesPanel">
-            <div class="files-hdr" style="position:relative">
-              <div class="ep-title" style="margin-bottom:0">&#9632; Download Files</div>
-              <button class="panel-close" onclick="document.getElementById('filesPanel').classList.remove('open');document.getElementById('filesToggle').classList.remove('open')" title="Close">&#10005;</button>
-            </div>
-            <div class="files-bulk">
-              <span class="bulk-lbl">Selected: <span id="selCount">0</span></span>
-              <button class="exp-btn txt"  onclick="selectAllFiles(true)"  style="font-size:9px;padding:2px 7px">ALL</button>
-              <button class="exp-btn txt"  onclick="selectAllFiles(false)" style="font-size:9px;padding:2px 7px;color:#555;border-color:#333">NONE</button>
-              <button class="exp-btn csv"  onclick="exportSelectedFiles('list')" style="font-size:9px;padding:2px 7px">LIST (TXT)</button>
-              <button class="exp-btn json" onclick="exportSelectedFiles('json')" style="font-size:9px;padding:2px 7px">LIST (JSON)</button>
-            </div>
-            <div class="files-list" id="filesList">
-""")
-
-        if file_rows:
-            for idx_f, fr in enumerate(file_rows):
-                size_str      = fr.get("size_str", "N/A")
-                is_accessible = fr.get("accessible", False)
-                opacity_style = "" if is_accessible else ' style="opacity:.45"'
-                status_icon   = "✓" if is_accessible else "✗"
-                status_color  = "#00aa44" if is_accessible else "#663333"
-                status_code   = fr.get("status_code", "?")
-                url_raw       = fr.get("url", "")
-                url_esc       = _html_mod.escape(url_raw, quote=True)
-                url_short     = _html_mod.escape(url_raw[:62] + ("..." if len(url_raw) > 62 else ""), quote=False)
-                cat_str       = fr.get("category", "").upper()
-                ext_str       = fr.get("ext", "")
-                parts.append(f"""              <div class="file-row"{opacity_style}>
-                <input class="file-chk" type="checkbox" data-fidx="{idx_f}" onchange="updateSelCount()">
-                <span style="font-size:9px;color:{status_color};flex-shrink:0" title="HTTP {status_code}">{status_icon}</span>
-                <div class="file-info">
-                  <a class="file-url" href="{url_esc}" target="_blank" title="{url_esc}">{url_short}</a>
-                  <div class="file-cat">{cat_str} &nbsp;{ext_str}</div>
-                </div>
-                <span class="file-size">{size_str}</span>
-                <a class="file-dl" href="{url_esc}" download>&#8681;</a>
-              </div>
-""")
-        else:
-            parts.append('              <div class="files-empty">No file results in this report.</div>\n')
-
-        parts.append(f"""            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="active-sub-info" id="sub-info"></div>
-    <div class="table-wrap">
-    <table>
-        <colgroup>
-          <col class="c-num"><col class="c-url"><col class="c-title">
-          <col class="c-cat"><col class="c-sqli"><col class="c-xss"><col class="c-waf"><col class="c-size">
-        </colgroup>
-        <thead><tr>
-          <th>#</th><th>URL</th><th>Title</th>
-          <th>Category</th><th>SQLi</th><th>XSS</th><th>WAF</th><th>Size</th>
-        </tr></thead>
-        <tbody id="results-tbody">
-""")
-
-        for idx, result in enumerate(self.results, 1):
-            size        = self._format_size(result.get('file_size'))
-            category    = result.get('category', 'unknown')
-            ext         = result.get('extension', '').lower()
-            url         = result['url']
-            url_display = _html_mod.escape(url[:70] + ('...' if len(url) > 70 else ''), quote=False)
-            title_disp  = (result.get('title', 'N/A') or 'N/A')[:40]
-            dork_val    = _html_mod.escape(result.get('dork', '') or '', quote=True)
-            url_esc_td  = _html_mod.escape(url, quote=True)
-            title_esc   = _html_mod.escape(title_disp, quote=True)
-
-            sqli_status = "N/A"
-            sqli_class  = "sqli-untested"
-            sqli_data   = "untested"
-            sqli_conf   = ""
-            waf_label   = ""
-            xss_status  = "N/A"
-            xss_class   = "xss-untested"
-            xss_data    = "untested"
-
-            _sqli_t      = result.get("sqli_test", {})
-            _vuln_str    = ""
-            _payload_str = ""
-            if _sqli_t.get("tested"):
-                _vuln_str = "VULNERABLE" if _sqli_t.get("vulnerable") else "SAFE"
-                _conf_str = _sqli_t.get("overall_confidence", "")
-                if _conf_str:
-                    _vuln_str += f" ({_conf_str})"
-                _details = []
-                for _tt in _sqli_t.get("tests", []):
-                    if _tt.get("vulnerable"):
-                        _m   = _tt.get("method", "")
-                        _evs = " | ".join(_tt.get("evidence", [])[:2])
-                        _param = _tt.get("parameter", "")
-                        _details.append(f"{_m}" + (f"[{_param}]" if _param else "") + (f": {_evs[:80]}" if _evs else ""))
-                _payload_str = " ↳ ".join(_details[:3])
-            _waf_info = _sqli_t.get("waf_detected", "") or ""
-
-            _xss_t       = result.get("xss_test", {})
-            _xss_str     = ""
-            _xss_det_str = ""
-            if _xss_t.get("tested"):
-                _xss_str = "VULNERABLE" if _xss_t.get("vulnerable") else "SAFE"
-                _xconf   = _xss_t.get("overall_confidence", "")
-                _xtypes  = ",".join(_xss_t.get("xss_types_found", []))
-                if _xconf:
-                    _xss_str += f" ({_xconf})"
-                if _xtypes:
-                    _xss_str += f" [{_xtypes}]"
-                _xdet = []
-                for _xt in _xss_t.get("tests", []):
-                    if _xt.get("vulnerable"):
-                        _xdet.append(_xt.get("type", "") + ": " + " | ".join(_xt.get("evidence", [])[:1]))
-                _xss_det_str = " ↳ ".join(_xdet[:3])
-
-            import json as _json_local
-            _info_obj = _json_local.dumps({
-                "url":       url,
-                "title":     result.get("title", "") or "",
-                "snippet":   (result.get("snippet", "") or "")[:200],
-                "dork":      result.get("dork", "") or "",
-                "category":  category,
-                "ext":       ext,
-                "ts":        result.get("timestamp", "") or "",
-                "sqli":      _vuln_str,
-                "payload":   _payload_str,
-                "waf":       _waf_info,
-                "xss":       _xss_str,
-                "xss_det":   _xss_det_str,
-                "size":      size,
-            }, ensure_ascii=False).replace("'", "&#39;").replace("</", "<\\/")
-
-            if "sqli_test" in result and result["sqli_test"].get("tested", False):
-                conf      = result["sqli_test"].get("overall_confidence", "none")
-                sqli_conf = conf
-                if result["sqli_test"].get("vulnerable", False):
-                    if conf == SQLiConfidence.CRITICAL.value:
-                        sqli_status = "&#9888; CRITICAL"
-                        sqli_class  = "sqli-critical"
-                        sqli_data   = "critical"
-                    else:
-                        sqli_status = f"VULN ({conf})"
-                        sqli_class  = "sqli-vuln"
-                        sqli_data   = "vuln"
-                else:
-                    sqli_status = "SAFE"
-                    sqli_class  = "sqli-safe"
-                    sqli_data   = "safe"
-
-                waf = result["sqli_test"].get("waf_detected", "")
-                if waf:
-                    waf_label = f'<span class="waf-label">{_html_mod.escape(waf)}</span>'
-
-            if "xss_test" in result and result["xss_test"].get("tested", False):
-                if result["xss_test"].get("vulnerable", False):
-                    _xtypes_short = ",".join(result["xss_test"].get("xss_types_found", []))[:30]
-                    xss_status = f"VULN [{_xtypes_short}]"
-                    xss_class  = "xss-vuln"
-                    xss_data   = "vuln"
-                else:
-                    xss_status = "SAFE"
-                    xss_class  = "xss-safe"
-                    xss_data   = "safe"
-
-            parts.append(f"""            <tr data-category="{category}" data-ext="{ext}" data-sqli="{sqli_data}" data-conf="{sqli_conf}" data-xss="{xss_data}"
-                data-idx="{idx-1}" data-url="{url_esc_td}" data-title="{title_esc}" data-dork="{dork_val}">
-                <td style="color:#444">{idx}</td>
-                <td><div class="url-cell"><a href="{url_esc_td}" target="_blank" title="{url_esc_td}">{url_display}</a><a class="dl-btn" href="{url_esc_td}" download>&#8681;</a><button class="info-btn" onclick="showInfo(this)" data-info='{_info_obj}' title="Details">&#9432;</button></div></td>
-                <td title="{title_esc}">{_html_mod.escape(title_disp)}</td>
-                <td><span class="category category-{category}">{category}</span></td>
-                <td class="{sqli_class}">{sqli_status}</td>
-                <td class="{xss_class}">{xss_status}</td>
-                <td>{waf_label}</td>
-                <td>{size}</td>
-            </tr>
-""")
-
-        parts.append(f"""        </tbody>
-    </table>
-    </div>
-    <div class="footer">DorkEye v5.1 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
-</div>
-
-<div id="toast"></div>
-<div class="info-overlay" id="infoOverlay" onclick="closeInfo()"></div>
-<div class="info-popup" id="infoPopup">
-  <div class="info-popup-title">
-    <span>&#9432; RESULT DETAILS</span>
-    <button class="info-close" onclick="closeInfo()">&#10005;</button>
-  </div>
-  <div id="infoBody"></div>
-</div>
-
-<script>
-const EXPORT_DATA = {export_data_js};
-const FILE_DATA   = {file_data_js};
-const REPORT_BASE = "{report_base}";
-</script>
-
-<script>
-(function(){{
-    const c=document.getElementById('matrix-canvas'),ctx=c.getContext('2d');
-    const CH='アイウエオカキクケコ0123456789ABCDEF';
-    const FS=14;let cols,drops;
-    function resize(){{c.width=window.innerWidth;c.height=window.innerHeight;cols=Math.floor(c.width/FS);drops=Array.from({{length:cols}},()=>Math.random()*-100);}}
-    function draw(){{ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);for(let i=0;i<cols;i++){{const ch=CH[Math.floor(Math.random()*CH.length)];ctx.fillStyle=Math.random()>.95?'#fff':'#00ff41';ctx.font=FS+'px monospace';ctx.fillText(ch,i*FS,drops[i]*FS);if(drops[i]*FS>c.height&&Math.random()>.975)drops[i]=0;drops[i]+=.5+Math.random()*.5;}}}}
-    resize();window.addEventListener('resize',resize);setInterval(draw,45);
-}})();
-
-const GROUP_CATS={{
-  "doc":["documents","archives","backups"],
-  "scripts":["scripts","configs","credentials"],
-  "page":["webpage"]
-}};
-const SUB_PRED={{
-  "doc-all":()=>true,
-  "doc-pdf":(r)=>r.dataset.ext===".pdf",
-  "doc-docx":(r)=>[".doc",".docx",".odt"].includes(r.dataset.ext),
-  "doc-xlsx":(r)=>[".xls",".xlsx",".ods"].includes(r.dataset.ext),
-  "doc-ppt":(r)=>[".ppt",".pptx"].includes(r.dataset.ext),
-  "doc-arc":(r)=>[".zip",".rar",".tar",".gz",".7z",".bz2"].includes(r.dataset.ext),
-  "sqli-all":(r)=>["vuln","safe","critical"].includes(r.dataset.sqli),
-  "sqli-critical":(r)=>r.dataset.sqli==="critical",
-  "sqli-vuln":(r)=>["vuln","critical"].includes(r.dataset.sqli),
-  "sqli-safe":(r)=>r.dataset.sqli==="safe",
-  "xss-all":(r)=>["vuln","safe"].includes(r.dataset.xss),
-  "xss-vuln":(r)=>r.dataset.xss==="vuln",
-  "xss-safe":(r)=>r.dataset.xss==="safe",
-  "scripts-all":()=>true,
-  "scripts-php":(r)=>r.dataset.ext===".php",
-  "scripts-asp":(r)=>[".asp",".aspx"].includes(r.dataset.ext),
-  "scripts-sh":(r)=>[".sh",".bat",".ps1"].includes(r.dataset.ext),
-  "scripts-config":(r)=>[".conf",".config",".ini",".yaml",".yml",".json",".xml"].includes(r.dataset.ext),
-  "scripts-creds":(r)=>[".env",".git",".svn",".htpasswd"].includes(r.dataset.ext)
-}};
-let activeGroup="all",activeSub=null;
-function closeAllSubMenus(){{document.querySelectorAll('.sub-menu.open').forEach(m=>m.classList.remove('open'));}}
-function applyFilter(btn){{
-  const group=btn.dataset.group;
-  if(btn.classList.contains('has-sub')){{
-    if(activeGroup===group){{const m=document.getElementById('sub-'+group);if(m)m.classList.contains('open')?m.classList.remove('open'):m.classList.add('open');return;}}
-    activeGroup=group;activeSub=group+'-all';
-    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
-    const menu=document.getElementById('sub-'+group);
-    if(menu){{menu.querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));menu.querySelector('.sub-btn').classList.add('active');closeAllSubMenus();menu.classList.add('open');}}
-  }}else{{
-    closeAllSubMenus();document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');activeGroup=group;activeSub=null;
-  }}
-  renderRows();updateInfoBar();updateExportCounts();
-}}
-function applySubFilter(btn,groupId){{
-  btn.closest('.sub-menu').querySelectorAll('.sub-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');activeSub=btn.dataset.sub;renderRows();updateInfoBar();updateExportCounts();
-}}
-function renderRows(){{
-  const rows=document.querySelectorAll('#results-tbody tr');
-  const pred=activeSub?(SUB_PRED[activeSub]||(()=>true)):(()=>true);
-  rows.forEach(row=>{{
-    let hide=false;
-    if(activeGroup!=='all'){{
-      if(activeGroup==='sqli'){{hide=!pred(row);}}
-      else if(activeGroup==='xss'){{hide=!pred(row);}}
-      else{{const cats=GROUP_CATS[activeGroup]||[];hide=!cats.includes(row.dataset.category||'');if(!hide)hide=!pred(row);}}
-    }}
-    hide?row.classList.add('hidden'):row.classList.remove('hidden');
-    if(!hide)applySearchToRow(row);else row.classList.remove('srch-hidden');
-  }});
-}}
-function buildSubBadges(){{
-  const rows=Array.from(document.querySelectorAll('#results-tbody tr'));
-  const inG=cats=>r=>cats.includes(r.dataset.category||'');
-  const docR=rows.filter(inG(GROUP_CATS['doc']));
-  const sqliR=rows.filter(r=>["vuln","safe","critical"].includes(r.dataset.sqli));
-  const xssR=rows.filter(r=>["vuln","safe"].includes(r.dataset.xss));
-  const scR=rows.filter(inG(GROUP_CATS['scripts']));
-  const s=(id,n)=>{{const el=document.getElementById(id);if(el)el.textContent=n;}};
-  s('sbadge-doc-all',docR.length);
-  s('sbadge-doc-pdf',docR.filter(r=>r.dataset.ext==='.pdf').length);
-  s('sbadge-doc-docx',docR.filter(r=>['.doc','.docx','.odt'].includes(r.dataset.ext)).length);
-  s('sbadge-doc-xlsx',docR.filter(r=>['.xls','.xlsx','.ods'].includes(r.dataset.ext)).length);
-  s('sbadge-doc-ppt',docR.filter(r=>['.ppt','.pptx'].includes(r.dataset.ext)).length);
-  s('sbadge-doc-arc',docR.filter(r=>['.zip','.rar','.tar','.gz','.7z','.bz2'].includes(r.dataset.ext)).length);
-  s('sbadge-sqli-all',sqliR.length);
-  s('sbadge-sqli-critical',sqliR.filter(r=>r.dataset.sqli==='critical').length);
-  s('sbadge-sqli-vuln',sqliR.filter(r=>['vuln','critical'].includes(r.dataset.sqli)).length);
-  s('sbadge-sqli-safe',sqliR.filter(r=>r.dataset.sqli==='safe').length);
-  s('sbadge-xss-all',xssR.length);
-  s('sbadge-xss-vuln',xssR.filter(r=>r.dataset.xss==='vuln').length);
-  s('sbadge-xss-safe',xssR.filter(r=>r.dataset.xss==='safe').length);
-  s('sbadge-scripts-all',scR.length);
-  s('sbadge-scripts-php',scR.filter(r=>r.dataset.ext==='.php').length);
-  s('sbadge-scripts-asp',scR.filter(r=>['.asp','.aspx'].includes(r.dataset.ext)).length);
-  s('sbadge-scripts-sh',scR.filter(r=>['.sh','.bat','.ps1'].includes(r.dataset.ext)).length);
-  s('sbadge-scripts-config',scR.filter(r=>['.conf','.config','.ini','.yaml','.yml','.json','.xml'].includes(r.dataset.ext)).length);
-  s('sbadge-scripts-creds',scR.filter(r=>['.env','.git','.svn','.htpasswd'].includes(r.dataset.ext)).length);
-}}
-function updateInfoBar(){{
-  const bar=document.getElementById('sub-info');if(!bar)return;
-  const visible=document.querySelectorAll('#results-tbody tr:not(.hidden):not(.srch-hidden)').length;
-  if(activeGroup==='all'&&!activeSub){{bar.innerHTML='&#10142; Showing <span>'+visible+'</span> result(s)';return;}}
-  const subLabel=(activeSub||'').split('-').slice(1).join(' ').toUpperCase();
-  bar.innerHTML='&#10142; Filter: <span>'+activeGroup.toUpperCase()+'</span> &rsaquo; <span>'+subLabel+'</span> &mdash; <span>'+visible+'</span> result(s)';
-}}
-let activeScopes=new Set(['url','title','category','dork']);
-function toggleSearch(){{
-  const p=document.getElementById('srchPanel'),t=document.getElementById('srchToggle');
-  const open=p.classList.contains('open');closeAllPanels();
-  if(!open){{p.classList.add('open');t.classList.add('open');setTimeout(()=>document.getElementById('srchInput').focus(),80);}}
-}}
-function toggleScope(btn){{
-  btn.classList.toggle('active');
-  const sc=btn.dataset.scope;
-  btn.classList.contains('active')?activeScopes.add(sc):activeScopes.delete(sc);
-  doSearch();
-}}
-function doSearch(){{
-  const q=document.getElementById('srchInput').value.trim().toLowerCase();
-  const rows=document.querySelectorAll('#results-tbody tr');
-  let match=0;
-  rows.forEach(row=>{{if(!row.classList.contains('hidden')){{const found=applySearchToRow(row,q);if(found)match++;}}else{{row.classList.remove('srch-hidden');}}}});
-  const el=document.getElementById('srchCount');if(el)el.textContent=q?match:'-';
-  updateInfoBar();updateExportCounts();
-}}
-function applySearchToRow(row,q){{
-  if(q===undefined)q=(document.getElementById('srchInput').value||'').trim().toLowerCase();
-  if(!q){{row.classList.remove('srch-hidden');return true;}}
-  let hay='';
-  if(activeScopes.has('url'))    hay+=' '+(row.dataset.url||'');
-  if(activeScopes.has('title'))  hay+=' '+(row.dataset.title||'');
-  if(activeScopes.has('category'))hay+=' '+(row.dataset.category||'');
-  if(activeScopes.has('dork'))   hay+=' '+(row.dataset.dork||'');
-  const found=hay.toLowerCase().includes(q);
-  found?row.classList.remove('srch-hidden'):row.classList.add('srch-hidden');
-  return found;
-}}
-function clearSearch(){{
-  document.getElementById('srchInput').value='';
-  document.querySelectorAll('#results-tbody tr').forEach(r=>r.classList.remove('srch-hidden'));
-  const el=document.getElementById('srchCount');if(el)el.textContent='-';
-  updateInfoBar();updateExportCounts();
-}}
-function toggleExportPanel(){{
-  const p=document.getElementById('exportPanel'),t=document.getElementById('exportToggle');
-  const open=p.classList.contains('open');closeAllPanels();
-  if(!open){{p.classList.add('open');t.classList.add('open');updateExportCounts();}}
-}}
-function updateExportCounts(){{
-  const sqliAll=EXPORT_DATA.filter(r=>["vuln","safe","critical"].includes(r.sqli));
-  const sqliVuln=EXPORT_DATA.filter(r=>["vuln","critical"].includes(r.sqli));
-  const sqliSafe=EXPORT_DATA.filter(r=>r.sqli==="safe");
-  const xssAll=EXPORT_DATA.filter(r=>["vuln","safe"].includes(r.xss));
-  const xssVuln=EXPORT_DATA.filter(r=>r.xss==="vuln");
-  const xssSafe=EXPORT_DATA.filter(r=>r.xss==="safe");
-  const viewIdxs=new Set(Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden):not(.srch-hidden)')).map(r=>parseInt(r.dataset.idx)));
-  const s=(id,n)=>{{const el=document.getElementById(id);if(el)el.textContent='('+n+')';}}; 
-  s('epCntSqliAll',sqliAll.length);s('epCntSqliVuln',sqliVuln.length);s('epCntSqliSafe',sqliSafe.length);
-  s('epCntXssAll',xssAll.length);s('epCntXssVuln',xssVuln.length);s('epCntXssSafe',xssSafe.length);
-  s('epCntView',EXPORT_DATA.filter((_,i)=>viewIdxs.has(i)).length);
-}}
-function _getRows(scope){{
-  if(scope==='all')return EXPORT_DATA;
-  if(scope==='sqli-all')return EXPORT_DATA.filter(r=>["vuln","safe","critical"].includes(r.sqli));
-  if(scope==='sqli-vuln')return EXPORT_DATA.filter(r=>["vuln","critical"].includes(r.sqli));
-  if(scope==='sqli-safe')return EXPORT_DATA.filter(r=>r.sqli==="safe");
-  if(scope==='xss-all')return EXPORT_DATA.filter(r=>["vuln","safe"].includes(r.xss));
-  if(scope==='xss-vuln')return EXPORT_DATA.filter(r=>r.xss==="vuln");
-  if(scope==='xss-safe')return EXPORT_DATA.filter(r=>r.xss==="safe");
-  if(scope==='view'){{const vis=new Set(Array.from(document.querySelectorAll('#results-tbody tr:not(.hidden):not(.srch-hidden)')).map(r=>parseInt(r.dataset.idx)));return EXPORT_DATA.filter((_,i)=>vis.has(i));}}
-  return EXPORT_DATA;
-}}
-function _scopeLabel(scope){{return{{'all':'all','sqli-all':'sqli_tested','sqli-vuln':'sqli_vuln','sqli-safe':'sqli_safe','xss-all':'xss_tested','xss-vuln':'xss_vuln','xss-safe':'xss_safe','view':'view'}}[scope]||scope;}}
-function _download(content,filename,mime){{const blob=new Blob([content],{{type:mime}});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{{URL.revokeObjectURL(a.href);document.body.removeChild(a);}},100);}}
-function _showToast(msg){{const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}}
-function doExport(fmt,scope){{
-  const rows=_getRows(scope);
-  if(!rows.length){{_showToast('No results to export.');return;}}
-  const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-  const base=REPORT_BASE+'_links_'+_scopeLabel(scope)+'_'+ts;
-  if(fmt==='txt'){{
-    const lines=rows.map((r,i)=>{{let s=(i+1)+'. '+r.url+'\\n';if(r.title)s+='   Title: '+r.title+'\\n';if(r.sqli&&r.sqli!=='untested')s+='   SQLi: '+r.sqli.toUpperCase()+'\\n';if(r.xss&&r.xss!=='untested')s+='   XSS: '+r.xss.toUpperCase()+'\\n';s+='   Time: '+r.timestamp+'\\n';return s;}});
-    _download('DorkEye Export\\nScope: '+scope+'\\nGenerated: '+ts+'\\nTotal: '+rows.length+'\\n\\n'+lines.join('\\n'),base+'.txt','text/plain');
-    _showToast('Exported '+rows.length+' links');
-  }}else if(fmt==='json'){{
-    _download(JSON.stringify({{meta:{{generated:ts,scope:scope,total:rows.length}},results:rows}},null,2),base+'.json','application/json');
-    _showToast('Exported '+rows.length+' links');
-  }}else if(fmt==='csv'){{
-    const headers=['url','title','dork','category','ext','sqli','conf','waf','xss','xss_conf','xss_types','timestamp'];
-    const esc=v=>{{const s=String(v??'');return s.includes(',')||s.includes('"')||s.includes('\\n')?'"'+s.replace(/"/g,'""')+'"':s;}};
-    _download([headers.join(','),...rows.map(r=>headers.map(h=>esc(r[h]||'')).join(','))].join('\\r\\n'),base+'.csv','text/csv');
-    _showToast('Exported '+rows.length+' links');
-  }}
-}}
-function toggleFilesPanel(){{
-  const p=document.getElementById('filesPanel'),t=document.getElementById('filesToggle');
-  const open=p.classList.contains('open');closeAllPanels();
-  if(!open){{p.classList.add('open');t.classList.add('open');updateSelCount();}}
-}}
-function updateSelCount(){{const n=document.querySelectorAll('.file-chk:checked').length;const el=document.getElementById('selCount');if(el)el.textContent=n;}}
-function selectAllFiles(val){{document.querySelectorAll('.file-chk').forEach(c=>c.checked=val);updateSelCount();}}
-function exportSelectedFiles(fmt){{
-  const checked=Array.from(document.querySelectorAll('.file-chk:checked'));
-  if(!checked.length){{_showToast('No files selected.');return;}}
-  const rows=checked.map(c=>FILE_DATA[parseInt(c.dataset.fidx)]).filter(Boolean);
-  const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-  const base=REPORT_BASE+'_files_selected_'+ts;
-  if(fmt==='list'){{
-    const lines=rows.map((r,i)=>(i+1)+'. '+r.url+'\\n   Category: '+r.category+'\\n   Size: '+r.size_str+'\\n');
-    _download('DorkEye File List\\nGenerated: '+ts+'\\n\\n'+lines.join('\\n'),base+'.txt','text/plain');
-    _showToast('File list ('+rows.length+') exported');
-  }}else if(fmt==='json'){{
-    _download(JSON.stringify({{meta:{{generated:ts,total:rows.length}},files:rows}},null,2),base+'.json','application/json');
-    _showToast('File list ('+rows.length+') exported');
-  }}
-}}
-function closeAllPanels(){{
-  ['srchPanel','exportPanel','filesPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
-  ['srchToggle','exportToggle','filesToggle'].forEach(id=>document.getElementById(id).classList.remove('open'));
-}}
-document.addEventListener('click',(e)=>{{
-  if(!e.target.closest('.filter-group')&&!e.target.closest('.filter-btn[data-group]'))closeAllSubMenus();
-  if(!e.target.closest('.srch-wrap')&&!e.target.closest('.export-wrap')&&!e.target.closest('.files-wrap'))closeAllPanels();
-}});
-buildSubBadges();updateInfoBar();updateExportCounts();updateSelCount();
-let _infoOpen=false;
-function showInfo(btn){{
-  const d=JSON.parse(btn.getAttribute('data-info'));
-  const sqliColor=d.sqli&&d.sqli.startsWith('VULN')?'#ff3333':d.sqli==='SAFE'?'#00ff41':d.sqli.startsWith('VULNERABLE')?'#ff00ff':'#444';
-  const xssColor=d.xss&&d.xss.startsWith('VULN')?'#ffaa00':d.xss==='SAFE'?'#00ff41':'#444';
-  let rows='';
-  const row=(lbl,val,color)=>val?`<div class="info-row"><span class="info-lbl">${{lbl}}</span><span class="info-val" style="color:${{color||'#00aaff'}}">${{val}}</span></div>`:'';
-  rows+=row('URL',d.url.length>80?d.url.slice(0,80)+'...':d.url);
-  rows+=row('Title',d.title);rows+=row('Category',d.category,'#00cc88');rows+=row('Extension',d.ext,'#ffaa00');
-  rows+=row('Size',d.size,'#009922');rows+=row('Timestamp',d.ts,'#666');rows+=row('Dork',d.dork&&d.dork.length>80?d.dork.slice(0,80)+'...':d.dork,'#cc88ff');
-  rows+=row('Snippet',d.snippet&&d.snippet.length>120?d.snippet.slice(0,120)+'...':d.snippet,'#777');
-  if(d.sqli)rows+=row('SQLi',d.sqli,sqliColor);if(d.payload)rows+=row('SQLi Method',d.payload.length>100?d.payload.slice(0,100)+'...':d.payload,'#ff6666');
-  if(d.xss)rows+=row('XSS',d.xss,xssColor);if(d.xss_det)rows+=row('XSS Detail',d.xss_det.length>100?d.xss_det.slice(0,100)+'...':d.xss_det,'#ffcc66');
-  if(d.waf)rows+=row('WAF','! '+d.waf,'#ffaa00');
-  document.getElementById('infoBody').innerHTML=rows||'<span style="color:#444">No details.</span>';
-  document.getElementById('infoPopup').classList.add('open');
-  document.getElementById('infoOverlay').classList.add('open');
-  _infoOpen=true;document.body.style.overflow='hidden';
-}}
-function closeInfo(){{document.getElementById('infoPopup').classList.remove('open');document.getElementById('infoOverlay').classList.remove('open');document.body.style.overflow='';_infoOpen=false;}}
-document.addEventListener('keydown',(e)=>{{if(_infoOpen&&e.key==='Escape')closeInfo();}});
-</script>
-</body>
-</html>""")
-
-        html = "".join(parts)
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(html)
-
-    def _format_size(self, size):
-        """Format byte count to human-readable string."""
-        if size is None:
-            return "N/A"
-        try:
-            size = float(size)
-        except (TypeError, ValueError):
-            return "N/A"
-        if size < 0:
-            return "N/A"
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if size < 1024:
-                return f"{size:.1f} {unit}"
-            size /= 1024
-        return f"{size:.1f} TB"
-
+        """Render the interactive HTML report via the shared report engine."""
+        write_dork_report(filename, self.results, self.stats, self.start_time)
     def print_statistics(self):
-        """Print a Rich-formatted statistics table."""
-        table = Table(title="", show_header=False, box=None, padding=(0, 2))
-        table.add_column("Metric", style="cyan")
-        table.add_column("Value",  style="green", justify="right")
+        """Print one Search Statistics block (metrics + category breakdown) as
+        sqlmap-style bordered tables."""
         console.print("\n[bold yellow]┌─[ Search Statistics ][/bold yellow]")
-        console.print("[bold yellow]│[/bold yellow]")
-        table.add_row("├─> Total Results Found", str(self.stats.get("total_found", 0)))
-        table.add_row("├─> Unique Results",      str(len(self.results)))
-        table.add_row("├─> Duplicates Removed",  str(self.stats.get("duplicates", 0)))
-        table.add_row("├─> Blacklisted",         str(self.stats.get("blacklisted", 0)))
+
+        table = Table(show_header=True, header_style="bold cyan",
+                      box=box.SQUARE, padding=(0, 1))
+        table.add_column("Metric", style="cyan", no_wrap=True)
+        table.add_column("Value",  style="green", justify="right")
+        table.add_row("Total Results Found", str(self.stats.get("total_found", 0)))
+        table.add_row("Unique Results",      str(len(self.results)))
+        table.add_row("Duplicates Removed",  str(self.stats.get("duplicates", 0)))
+        table.add_row("Blacklisted",         str(self.stats.get("blacklisted", 0)))
         if self.config.get("sqli_detection", False):
-            table.add_row("├─> SQLi Vulnerabilities", f"[bold red]{self.stats.get('sqli_vulnerable', 0)}[/bold red]")
-            table.add_row("├─> WAF Detected",          f"[bold yellow]{self.stats.get('waf_detected', 0)}[/bold yellow]")
+            table.add_row("SQLi Vulnerabilities", f"[bold red]{self.stats.get('sqli_vulnerable', 0)}[/bold red]")
+            table.add_row("WAF Detected",         f"[bold yellow]{self.stats.get('waf_detected', 0)}[/bold yellow]")
         if self.config.get("xss_detection", False):
-            table.add_row("├─> XSS Vulnerabilities",  f"[bold yellow]{self.stats.get('xss_vulnerable', 0)}[/bold yellow]")
-        table.add_row("└─> Execution Time", f"{round(time.time() - self.start_time, 2)}s")
+            table.add_row("XSS Vulnerabilities", f"[bold yellow]{self.stats.get('xss_vulnerable', 0)}[/bold yellow]")
+        table.add_row("Execution Time", f"{round(time.time() - self.start_time, 2)}s")
         console.print(table)
-        categories = {k.replace("category_", ""): v for k, v in self.stats.items() if k.startswith("category_")}
+
+        # Category breakdown — same block, right under the metrics.
+        categories = {k.replace("category_", ""): v for k, v in self.stats.items()
+                      if k.startswith("category_")}
         if categories:
-            cat_table = Table(title="", show_header=False, box=None, padding=(0, 2))
-            cat_table.add_column("Category", style="cyan")
+            cat_table = Table(show_header=True, header_style="bold cyan",
+                              box=box.SQUARE, padding=(0, 1), title="Results by category",
+                              title_style="dim", title_justify="left")
+            cat_table.add_column("Category", style="cyan", no_wrap=True)
             cat_table.add_column("Count",    style="green", justify="right")
-            console.print("\n[bold yellow]┌─[ Results by Category ][/bold yellow]")
-            console.print("[bold yellow]│[/bold yellow]")
-            sorted_cats = sorted(categories.items(), key=lambda x: x[1], reverse=True)
-            for i, (category, count) in enumerate(sorted_cats):
-                prefix = "└─>" if i == len(sorted_cats) - 1 else "├─>"
-                cat_table.add_row(f"{prefix} {category.capitalize()}", str(count))
+            for category, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+                cat_table.add_row(category.capitalize(), str(count))
             console.print(cat_table)
 
 
@@ -2357,8 +1513,15 @@ def run_wizard():
         do_dbscan = ask_yes_no("│  Enable DB port scan (DBScan)?") if _DBSCAN_AVAILABLE else False
         if not _DBSCAN_AVAILABLE:
             console.print("[bold cyan]│[/bold cyan]  [dim]DBScan non disponibile — db_portscan.py mancante[/dim]")
+        # OSINT graph on the hosts found by the dorks (0=no, 1=basic, 2=medium, 3=full)
+        osint_level = 0
+        if _OSINT_AVAILABLE:
+            _ol = ask_string("│  Enable OSINT? 0=no 1=basic 2=medium 3=full", "default 0")
+            osint_level = int(_ol) if _ol.strip() in ("1", "2", "3") else 0
+        else:
+            console.print("[bold cyan]│[/bold cyan]  [dim]OSINT non disponibile — osint.py mancante[/dim]")
         console.print("[bold cyan]└─>[/bold cyan]")
-        return count, do_dbscan
+        return count, do_dbscan, osint_level
 
     def _ask_analyze(output: str) -> bool:
         if not output:
@@ -2526,7 +1689,7 @@ def run_wizard():
                 console.print("[red][!] Invalid choice.[/red]")
                 continue
 
-            count, do_dbscan = collect_run_options(config, ask_count=True)
+            count, do_dbscan, osint_level = collect_run_options(config, ask_count=True)
             output      = pick_output()
             do_analyze  = _ask_analyze(output)
             crawl_opts  = _ask_crawl()
@@ -2564,6 +1727,14 @@ def run_wizard():
                     console.print("\n[yellow][DBScan] Interrotto dall'utente.[/yellow]")
                 except Exception as _dbe_wiz:
                     console.print(f"[yellow][DBScan] Errore: {_rich_escape(str(_dbe_wiz))}[/yellow]")
+
+            if osint_level and dorkeye.results and _OSINT_AVAILABLE:
+                _oseeds = OsintGraphAgent.seeds_from_results(dorkeye.results)
+                if _oseeds:
+                    console.print(
+                        f"\n[bold cyan]┌─[ OSINT Graph (level {osint_level}) ][/bold cyan]"
+                        f"\n[bold cyan]└─>[/bold cyan] Seeding {len(_oseeds)} host(s)...\n")
+                    _run_osint(seeds=_oseeds, args=_mk_osint_args(osint_level))
             continue
 
         if choice == "2":
@@ -2621,7 +1792,7 @@ def run_wizard():
 
             mode_idx = ask_choice("Mode", ["soft", "medium", "aggressive"])
             mode     = VALID_MODES[mode_idx]
-            _, do_dbscan = collect_run_options(config, ask_count=False)
+            _, do_dbscan, osint_level = collect_run_options(config, ask_count=False)
             output      = pick_output()
             do_analyze  = _ask_analyze(output)
             crawl_opts  = _ask_crawl()
@@ -2662,6 +1833,14 @@ def run_wizard():
                     console.print("\n[yellow][DBScan] Interrupted by user.[/yellow]")
                 except Exception as _dbe_wiz2:
                     console.print(f"[red][DBScan] Error: {_rich_escape(str(_dbe_wiz2))}[/red]")
+
+            if osint_level and dorkeye.results and _OSINT_AVAILABLE:
+                _oseeds2 = OsintGraphAgent.seeds_from_results(dorkeye.results)
+                if _oseeds2:
+                    console.print(
+                        f"\n[bold cyan]┌─[ OSINT Graph (level {osint_level}) ][/bold cyan]"
+                        f"\n[bold cyan]└─>[/bold cyan] Seeding {len(_oseeds2)} host(s)...\n")
+                    _run_osint(seeds=_oseeds2, args=_mk_osint_args(osint_level))
             continue
 
         console.print("[red][!] Invalid option.[/red]")
@@ -2729,6 +1908,217 @@ def _make_live_scan_printer(label: str):
 # ══════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════
+
+
+
+# Intensity levels → chains. 1 basic · 2 medium (IP enrichment) · 3 full.
+_OSINT_LEVELS = {"1": "recon-basic", "2": "recon-ip", "3": "recon-passive"}
+
+
+def _osint_on(args) -> bool:
+    """True when OSINT was requested, by --osint (any level) or an explicit seed."""
+    return getattr(args, "osint", None) is not None or bool(getattr(args, "osint_seed", None))
+
+
+def _osint_chain(args) -> str:
+    """Resolve the chain: an intensity number, an explicit chain name/path, or
+    the default (medium) when --osint is bare or only --osint-seed was given."""
+    v = getattr(args, "osint", None)
+    if not v:
+        return "recon-ip"               # default = medium
+    return _OSINT_LEVELS.get(str(v), str(v))
+
+
+def _mk_osint_args(level, **over):
+    """Build a minimal args-like object to drive _run_osint outside argparse
+    (used by the interactive wizard). `level` is 1/2/3 or a chain name."""
+    base = {"osint": str(level), "osint_seed": None, "osint_db": None,
+            "osint_threads": 2, "osint_max_nodes": 2000, "osint_export": ""}
+    base.update(over)
+    return type("OsintArgs", (), base)()
+
+
+def _osint_build(seeds, args, name_hint=None):
+    """
+    Run the OSINT graph and return {html, base, db_path, note} (or None).
+    Writes the SQLite DB + any requested extra exports; the HTML is returned as a
+    string so the caller can either save it standalone or embed it as a tab.
+
+    Every run starts from an empty graph. DB path: --osint-db when given;
+    otherwise Dump/<name_hint>_osint.sqlite (tab of a named report) or
+    Dump/osint_<first seed>_<timestamp>.sqlite (standalone run).
+    """
+    if not _OSINT_AVAILABLE:
+        console.print(
+            "[yellow][!] osint.py not found in Tools — "
+            "copy the file to DorkEye/Tools/ and try again.[/yellow]"
+        )
+        return None
+    if not seeds:
+        console.print("[yellow][OSINT] No seeds provided.[/yellow]")
+        return None
+
+    _dump_dir = Path(__file__).parent / "Dump"
+    _dump_dir.mkdir(exist_ok=True)
+    db_path = getattr(args, "osint_db", None)
+    if not db_path:
+        if name_hint:
+            db_path = str(_dump_dir / f"{name_hint}_osint.sqlite")
+        else:
+            db_path = default_db_path(seeds, str(_dump_dir))
+    agent = OsintGraphAgent(
+        db_path   = db_path,
+        chain     = _osint_chain(args),
+        threads   = getattr(args, "osint_threads", 2),
+        max_nodes = getattr(args, "osint_max_nodes", 2000),
+    )
+    try:
+        report = agent.run(seeds)
+        if not report:
+            return None
+        report.print_summary()
+        _base = str(_dump_dir / Path(db_path).stem)
+        graph = agent.build_graph()
+        html = build_osint_html(report, graph, db_path=db_path)
+        _extra = write_extra_exports(
+            agent, report, graph, _base, getattr(args, "osint_export", ""))
+        note = "export JSON/CSV/TXT/GraphML/SQLite from the page"
+        if _extra:
+            note += " · extra: " + ", ".join(
+                x.split(" → ")[-1].split("/")[-1] for x in _extra if "→" in x)
+        return {"html": html, "base": _base, "db_path": db_path, "note": note}
+    except KeyboardInterrupt:
+        console.print("\n[yellow][OSINT] Stopped by user.[/yellow]")
+        return None
+    except Exception as _oe:
+        console.print(f"[yellow][OSINT] Error: {_rich_escape(str(_oe))}[/yellow]")
+        return None
+    finally:
+        agent.close()
+
+
+def _run_osint(seeds, args, output_file=None):
+    """Standalone OSINT run (no dork results to merge): write its own HTML."""
+    built = _osint_build(seeds, args)
+    if not built:
+        return
+    path = built["base"] + ".html"
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(built["html"])
+    console.print(f"[bold green][✓] OSINT report → {path}[/bold green]  "
+                  f"[dim]({built['note']})[/dim]")
+
+
+def _read_html(path):
+    """Read an HTML file written by a post-search phase (for embedding as a tab)."""
+    try:
+        if path and os.path.isfile(path) and str(path).lower().endswith((".html", ".htm")):
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+    except Exception:
+        pass
+    return None
+
+
+def _write_unified_report(dorkeye_obj, args, output_file):
+    """
+    Assemble ONE unified tabbed report from every phase that produced output in
+    this run: Dorks (always) + Analyze + DBScan + Crawl + OSINT. Each phase
+    stashes its HTML / report object on dorkeye_obj during the post-search
+    phase; this runs last and merges them through report.write_report.
+
+    Returns True when a unified (multi-tab) file was written — in which case the
+    caller skips the generic "Report saved" line, since this already named it.
+    Returns False when there is nothing extra beyond the plain Dorks report
+    (which then stands on its own, unchanged).
+    """
+    rb = Path(output_file).stem if output_file else "report"
+    extra = []       # (label, html) for every phase besides the base Dorks report
+    _cleanup = []    # standalone phase HTML files to remove once embedded
+
+    _ap = getattr(dorkeye_obj, "_analyze_path", None)
+    _ah = _read_html(_ap)
+    if _ah:
+        extra.append(("Analyze", _ah))
+        _cleanup.append(_ap)
+
+    _db = getattr(dorkeye_obj, "_dbscan_report", None)
+    if _db is not None:
+        try:
+            extra.append(("DBScan", render_dbscan_html(_db, rb)))
+        except Exception as _de:
+            console.print(f"[yellow][DBScan] HTML render failed: {_rich_escape(str(_de))}[/yellow]")
+
+    _cp = getattr(dorkeye_obj, "_crawl_path", None)
+    _ch = _read_html(_cp)
+    if _ch:
+        extra.append(("Crawl", _ch))
+        _cleanup.append(_cp)
+
+    # OSINT runs here (needs the dork result hosts as seeds).
+    _osint_note = ""
+    if _osint_on(args):
+        if not _OSINT_AVAILABLE:
+            console.print(
+                "[yellow][!] osint.py not found in Tools — copy it to DorkEye/Tools/.[/yellow]")
+        else:
+            # Explicit --osint-seed values first, then every host in the results.
+            _extra_seeds = [str(x) for x in (getattr(args, "osint_seed", None) or [])]
+            _res_seeds = OsintGraphAgent.seeds_from_results(dorkeye_obj.results)
+            seeds, _seen = [], set()
+            for _sd in _extra_seeds + _res_seeds:
+                _k = _sd.strip().lower()
+                if _k and _k not in _seen:
+                    _seen.add(_k)
+                    seeds.append(_sd.strip())
+            if not seeds:
+                console.print("[yellow][OSINT] No host seeds extracted from results.[/yellow]")
+            else:
+                _src = f"{len(_res_seeds)} host(s) from results"
+                if _extra_seeds:
+                    _src += f" + {len(_extra_seeds)} --osint-seed"
+                console.print(
+                    f"\n[bold cyan]┌─[ OSINT Graph ][/bold cyan]"
+                    f"\n[bold cyan]└─>[/bold cyan] Seeding {_rich_escape(_src)}...\n")
+                built = _osint_build(seeds, args, name_hint=rb)
+                if built:
+                    extra.append(("OSINT", built["html"]))
+                    _osint_note = " · " + built["note"]
+
+    # Nothing beyond the Dorks report → leave the plain report as-is.
+    if not extra:
+        return False
+
+    try:
+        _dump = Path(__file__).parent / "Dump"
+        dork_html = build_dork_html(
+            dorkeye_obj.results, dorkeye_obj.stats, dorkeye_obj.start_time, rb)
+        tabs = [("Dorks", dork_html)] + extra
+        # The unified report is always HTML. When -o asked for another format
+        # (.json/.csv/.txt) that file already holds the results, so the report
+        # goes next to it as <name>.html instead of overwriting it.
+        _out = output_file or "report.html"
+        if not str(_out).lower().endswith((".html", ".htm")):
+            _out = str(Path(str(_out)).with_suffix(".html"))
+        unified = str(_dump / _out)
+        write_report(unified, tabs)
+        # The standalone Analyze/Crawl HTML files are now tabs in the unified
+        # report — remove them so there's a single report on disk.
+        for _p in _cleanup:
+            try:
+                if _p and os.path.abspath(_p) != os.path.abspath(unified):
+                    os.remove(_p)
+            except Exception:
+                pass
+        labels = " · ".join(lbl for lbl, _ in tabs)
+        console.print(
+            f"[bold green][✓] Report → {unified}[/bold green]  "
+            f"[dim](tabs: {labels}{_osint_note})[/dim]")
+        return True
+    except Exception as _ue:
+        console.print(f"[yellow][Report] unified merge failed: {_rich_escape(str(_ue))}[/yellow]")
+        return False
+
 
 def main():
     """Entry point."""
@@ -2822,6 +2212,26 @@ def main():
                         help="Override DB ports to scan (default: all known DB ports)")
     parser.add_argument("--dbscan-max-hosts",type=int, default=5000,
                         help="Max unique hosts to scan (default: 5000)")
+    # ── OSINT Graph ───────────────────────────────────────────────────────────
+    # One switch does it all. Optional intensity 1/2/3 (low/medium/high); bare
+    # --osint = 2 (medium). Seeds come automatically from -u, --osint-seed, or
+    # the hosts found by the dorks. Advanced flags below are all optional.
+    parser.add_argument("--osint",           nargs="?", const="2", default=None,
+                        metavar="LEVEL",
+                        help="Run OSINT. Intensity 1=basic 2=medium(default) 3=full, "
+                             "or a chain name/.json. Seeds from -u / --osint-seed / dork hosts.")
+    parser.add_argument("--osint-seed",      action="append", default=None,
+                        help="[adv] Extra OSINT seed(s) (domain/host/ip/url), added to the "
+                             "-u / dork hosts. Alone: OSINT only. Repeatable.")
+    parser.add_argument("--osint-db",        default=None,
+                        help="[adv] OSINT SQLite path, recreated every run (default: "
+                             "Dump/<-o name>_osint.sqlite, or Dump/osint_<seed>_<time>.sqlite)")
+    parser.add_argument("--osint-threads",   type=int, default=2,
+                        help="[adv] OSINT worker threads (default: 2 — low for small devices)")
+    parser.add_argument("--osint-max-nodes", type=int, default=2000,
+                        help="[adv] Max OSINT nodes to collect (default: 2000)")
+    parser.add_argument("--osint-export",    default="",
+                        help="[adv] Extra OSINT files alongside the HTML: csv,json,graphml,txt")
     # ─────────────────────────────────────────────────────────────────────────
 
     args = parser.parse_args()
@@ -2857,6 +2267,16 @@ def main():
 
     if args.create_config:
         create_sample_config()
+        return
+
+    # ── Standalone OSINT: --osint / --osint-seed with no dork source or URL ───
+    if _osint_on(args) and not (args.dork or args.dg or getattr(args, "url", None)
+                                or getattr(args, "file", None)):
+        _seeds = list(args.osint_seed or [])
+        if not _seeds:
+            parser.error("--osint needs a target: add a seed via --osint-seed, "
+                         "or a URL via -u, or dorks via -d/--dg.")
+        _run_osint(seeds=_seeds, args=args, output_file=None)
         return
 
     if not args.dork and not args.dg and not getattr(args, "url", None) and not getattr(args, "file", None):
@@ -2902,6 +2322,14 @@ def main():
 
     # ── -u / --url: direct test ───────────────────────────────────────────────
     if getattr(args, "url", None):
+        # -u <site> --osint  → seed the OSINT graph from the URL. If no vuln test
+        # was explicitly asked for, OSINT was the intent, so stop after it.
+        if _osint_on(args):
+            _run_osint(seeds=list(args.osint_seed or []) + [args.url],
+                       args=args, output_file=output_file)
+            if not (args.sqli or args.xss):
+                return
+
         target_url   = args.url
         _do_url_sqli = config.get("sqli_detection", False)
         _do_url_xss  = config.get("xss_detection",  False)
@@ -3074,18 +2502,11 @@ def main():
             or _do_crawl
             or _do_dbscan
         )
-        if _post_search:
-            console.print(
-                "\n[bold cyan]┌─[ SEARCH COMPLETE ][/bold cyan]"
-                "\n[bold cyan]└─>[/bold cyan] [dim]Post-search phase running "
-                "(analysis / crawl / dbscan)… final statistics print at the end.[/dim]"
-            )
-        else:
+        if not _post_search:
             dorkeye.print_statistics()
 
         if output_file:
-            dorkeye.save_results()
-            console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
+            dorkeye.save_results()   # write the dork report; single save line printed at the end
 
         if _do_analyze and dorkeye.results and _ANALYZE_AVAILABLE:
             ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -3105,6 +2526,7 @@ def main():
             try:
                 # ReportAgent already prints the saved report path; avoid a duplicate line.
                 _run_agents_pipeline(results=dorkeye.results, llm_plugin=None, args=_analyze_args_f)
+                dorkeye._analyze_path = report_out   # embed as a tab later
             except Exception as _fae:
                 console.print(f"[yellow][Analyzer] Error: {_fae}[/yellow]")
 
@@ -3114,6 +2536,7 @@ def main():
                 _seed_dorks = [r.get("url", "") for r in dorkeye.results[:10]]
             try:
                 _crawl_out_f = run_crawl(seed_dorks=_seed_dorks, args=args, target="")
+                dorkeye._crawl_path = _crawl_out_f.get("report_path")   # embed as a tab later
                 if _crawl_out_f.get("results"):
                     _existing_urls = {r.get("url") for r in dorkeye.results}
                     _new_crawl     = [r for r in _crawl_out_f["results"] if r.get("url") not in _existing_urls]
@@ -3144,20 +2567,29 @@ def main():
                     _db_report = _db_agent.run(dorkeye.results)
                     if _db_report:
                         _db_report.print_summary()
+                        dorkeye._dbscan_report = _db_report   # embed as a tab later
                         # BUG FIX: output_file is just a filename; we must
                         # pass the full Dump/ path so save_dbscan_report
                         # writes next to the main results file and not in CWD.
                         _dump_dir    = Path(__file__).parent / "Dump"
                         _db_out_base = str(_dump_dir / str(output_file)) if output_file else str(_dump_dir / "dorkeye_dbscan.json")
                         _db_saved    = save_dbscan_report(_db_report, _db_out_base)
-                        console.print(f"[bold green][✓] DBScan report → {_db_saved}[/bold green]")
+                        console.print(f"[dim][+] DBScan data (JSON) → {_db_saved}[/dim]")
                 except KeyboardInterrupt:
                     console.print("\n[yellow][DBScan] Interrotto dall'utente.[/yellow]")
                 except Exception as _dbe:
                     console.print(f"[yellow][DBScan] Errore: {_rich_escape(str(_dbe))}[/yellow]")
 
+        # Unified report: Dorks + Analyze + DBScan + Crawl + OSINT (one file).
+        _unified_written = _write_unified_report(dorkeye, args, output_file)
+
         if _post_search:
             dorkeye.print_statistics()
+
+        # One concrete save line (skipped when OSINT already named the unified file).
+        if output_file and (not _unified_written
+                            or not str(output_file).lower().endswith((".html", ".htm"))):
+            console.print(f"\n[bold green][✓] Report saved → Dump/{output_file}[/bold green]")
         return
 
     # ── Dork source ───────────────────────────────────────────────────────────
@@ -3188,14 +2620,9 @@ def main():
         (_do_analyze and dorkeye.results and _ANALYZE_AVAILABLE)
         or getattr(args, "crawl", False)
         or getattr(args, "dbscan", False)
+        or _osint_on(args)
     )
-    if _post_search:
-        console.print(
-            "\n[bold cyan]┌─[ SEARCH COMPLETE ][/bold cyan]"
-            "\n[bold cyan]└─>[/bold cyan] [dim]Post-search phase running "
-            "(analysis / crawl / dbscan)… final statistics print at the end.[/dim]"
-        )
-    else:
+    if not _post_search:
         dorkeye.print_statistics()
 
     if _do_analyze and dorkeye.results and _ANALYZE_AVAILABLE:
@@ -3217,6 +2644,8 @@ def main():
             # ReportAgent already prints the saved report path ("[✓] Report saved: …"),
             # so we don't print a second, near-identical line here.
             _run_agents_pipeline(results=dorkeye.results, llm_plugin=None, args=_analyze_args)
+            if fmt == "html":
+                dorkeye._analyze_path = report_out   # embed as a tab later
         except Exception as _ae:
             console.print(f"[yellow][Agents] Error: {_ae}[/yellow]")
 
@@ -3226,6 +2655,7 @@ def main():
         else:
             try:
                 crawl_out = run_crawl(seed_dorks=dorks, args=args, target="")
+                dorkeye._crawl_path = crawl_out.get("report_path")   # embed as a tab later
                 if crawl_out.get("results"):
                     existing_urls  = {r.get("url") for r in dorkeye.results}
                     new_from_crawl = [r for r in crawl_out["results"] if r.get("url") not in existing_urls]
@@ -3264,6 +2694,7 @@ def main():
                 _db_report = _db_agent.run(dorkeye.results)
                 if _db_report:
                     _db_report.print_summary()
+                    dorkeye._dbscan_report = _db_report   # embed as a tab later
                     # BUG FIX: output_file is just a filename; we must
                     # pass the full Dump/ path so save_dbscan_report
                     # writes next to the main results file and not in CWD.
@@ -3271,7 +2702,7 @@ def main():
                     _db_out_base = str(_dump_dir / str(output_file)) if output_file else str(_dump_dir / "dorkeye_dbscan.json")
                     _db_saved    = save_dbscan_report(_db_report, _db_out_base)
                     console.print(
-                        f"[bold green][✓] DBScan report → {_db_saved}[/bold green]"
+                        f"[dim][+] DBScan data (JSON) → {_db_saved}[/dim]"
                     )
             except KeyboardInterrupt:
                 console.print("\n[yellow][DBScan] Stopped by user.[/yellow]")
@@ -3279,15 +2710,24 @@ def main():
                 console.print(f"[yellow][DBScan] Error: {_rich_escape(str(_dbe))}[/yellow]")
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Unified report: Dorks + Analyze + DBScan + Crawl + OSINT (one file) ───
+    _unified_written = _write_unified_report(dorkeye, args, output_file)
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Deferred Search Statistics: printed now, after every post-search phase,
     # so the full recap sits at the very end of the run.
     if _post_search:
         dorkeye.print_statistics()
 
-    if dorkeye.output_file:
-        console.print(f"\n[bold green][✓] Results saved → Dump/{output_file}[/bold green]")
-    else:
-        console.print(f"\n[dim][~] No output file specified.[/dim]")
+    # One concrete save line. When OSINT produced the unified report, that line
+    # already named the file, so we don't print a second one for the same path.
+    if not _unified_written:
+        if dorkeye.output_file:
+            console.print(f"\n[bold green][✓] Report saved → Dump/{output_file}[/bold green]")
+        else:
+            console.print(f"\n[dim][~] No output file specified.[/dim]")
+    elif dorkeye.output_file and not str(output_file).lower().endswith((".html", ".htm")):
+        console.print(f"\n[bold green][✓] Report saved → Dump/{output_file}[/bold green]")
 
 
 if __name__ == "__main__":

@@ -1,29 +1,41 @@
 # DorkEye Requirements
 # Install with: pip install -r requirements.txt
+#
+# Supported: Python 3.7 and newer. pip picks the right version of each
+# package for the Python in use, so the same file works everywhere.
+# Lines with "; python_version ..." apply only to those Python versions.
 
 # Core HTTP requests management
 # urllib3 is also listed explicitly because it is imported
 # in dorkeye.py and Tools/dorkeye_analyze.py (not only as a dependency of requests)
-requests>=2.32.3,<3.0.0
-urllib3>=2.2.0,<3.0.0
+requests>=2.32.3,<3.0.0; python_version >= "3.8"
+requests>=2.31.0,<3.0.0; python_version < "3.8"
+urllib3>=2.2.0,<3.0.0; python_version >= "3.8"
+urllib3>=2.0.7,<3.0.0; python_version < "3.8"
 
 # YAML configuration and template parsing
-# 6.0.2+ fixes a yaml.load() security issue present in 6.0.1
-PyYAML>=6.0.2,<7.0.0
+# 6.0.2+ fixes a yaml.load() security issue present in 6.0.1 (Python 3.8+);
+# DorkEye only uses yaml.safe_load(), which is not affected on 3.7.
+PyYAML>=6.0.2,<7.0.0; python_version >= "3.8"
+PyYAML>=6.0.1,<7.0.0; python_version < "3.8"
 
 # Terminal formatting and colors
 colorama>=0.4.6
 
 # HTML parsing
 beautifulsoup4>=4.12.0
-lxml>=4.9.0
 
 # Advanced Terminal UI and formatting
 rich>=13.7.0,<14.0.0
 
-# DuckDuckGo Search API integration
-ddgs>=6.0.0
+# DuckDuckGo search
+# ddgs needs Python 3.9+ (and lxml). On Python 3.7 / 3.8, and on iSH (iOS),
+# DorkEye automatically uses its built-in lxml-free DuckDuckGo client
+# (Devices/iOS/ddg_lite.py) instead — nothing else to install.
+ddgs>=6.0.0; python_version >= "3.9"
+lxml>=4.9.0; python_version >= "3.9"
 
 # Local web dashboard (--ui)
 # Required only if you use: python dorkeye.py --ui
-flask>=3.0.0,<4.0.0
+flask>=3.0.0,<4.0.0; python_version >= "3.8"
+flask>=2.2.0,<3.0.0; python_version < "3.8"

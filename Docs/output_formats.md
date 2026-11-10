@@ -19,6 +19,31 @@ If `-o` is omitted, DorkEye generates: `report_YYYYMMDD_HHMMSS.html`
 
 ---
 
+## Tabbed Report
+
+When other phases run with a search (`--analyze`, `--dbscan`, `--crawl`, `--osint`), DorkEye
+writes **one** HTML file with a tab per phase instead of separate reports:
+
+| Tab | Shown when |
+|-----|------------|
+| Dorks | always — the HTML report described below |
+| Analyze | `--analyze` (or analysis accepted at the prompt) |
+| DBScan | `--dbscan` found hosts to scan |
+| Crawl | `--crawl` |
+| OSINT | `--osint` / `--osint-seed` — see [osint.md](osint.md) |
+
+Each tab is the complete, self-contained report of that phase, isolated in its own frame, so
+filters, exports and the OSINT graph keep working exactly as on their own.
+
+| `-o` | Files in `Dump/` |
+|------|------------------|
+| `scan.html` | `scan.html` — the tabbed report |
+| `scan.json` / `.csv` / `.txt` | `scan.json` (results, unchanged) **+** `scan.html` (tabbed report) |
+
+With no extra phase, `-o` is written as usual in the format of its extension.
+
+---
+
 ## HTML Report
 
 The default and most feature-rich format. Opens in any browser — no server required.
@@ -189,6 +214,19 @@ Plain numbered list with per-result details:
    Title: (no title)
    Category: databases
 ```
+
+---
+
+## OSINT Files
+
+`--osint` adds these files to `Dump/` (names follow the OSINT database name, see
+[osint.md](osint.md#database)):
+
+| File | Content |
+|------|---------|
+| `<name>.sqlite` | The graph database (always) |
+| `<name>.html` | Standalone OSINT report (OSINT-only runs; otherwise it is the OSINT tab) |
+| `<name>.csv`, `<name>_graph.json`, `<name>.graphml`, `<name>_summary.txt` | With `--osint-export csv,json,graphml,txt` |
 
 ---
 

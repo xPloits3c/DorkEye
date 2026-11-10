@@ -2643,7 +2643,13 @@ class DorkCrawlerAgent(BaseAgent):
             from ddgs import DDGS
         except ImportError:
             try:
-                from ddg_lite import DDGS  # iSH / Alpine fallback (no lxml)
+                # Lite DuckDuckGo fallback (no lxml): Python < 3.9, iSH / Alpine.
+                import sys as _sys
+                from pathlib import Path as _P
+                _lite = _P(__file__).resolve().parent.parent / "Devices" / "iOS"
+                if _lite.is_dir() and str(_lite) not in _sys.path:
+                    _sys.path.append(str(_lite))
+                from ddg_lite import DDGS
             except ImportError:
                 _log(f"[{self.name}] ddgs not installed. Install with: pip install ddgs", style="red")
                 return self._build_output("ddgs_missing")

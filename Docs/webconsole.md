@@ -128,6 +128,9 @@ Full-featured scan form covering every `dorkeye.py` pipeline option.
 
 XSS type selector (`--xss-type`): `all` / `reflected` / `stored` / `dom`.
 
+OSINT selector (`--osint`): `Off` / `1 — basic` / `2 — medium` / `3 — full`. Runs the
+[OSINT graph](osint.md) on the hosts found; the result is the OSINT tab of the report.
+
 **Mode selector** (`--mode`): `soft` / `medium` / `aggressive` (default: aggressive in the UI).
 
 **Collapsible sections** (expand as needed):

@@ -8,7 +8,7 @@
 # DorkEye – OSINT Dorking Tool
 
 <!-- ── Row 1: Project identity ── -->
-![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
+![Python](https://img.shields.io/badge/Python-3.7%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
 ![Search](https://img.shields.io/badge/Search-DuckDuckGo-FF6600?style=flat-square&logo=duckduckgo&logoColor=white)
@@ -31,7 +31,7 @@
 
 ## What is DorkEye?
 **DorkEye** is an automated `OSINT DORKING TOOL` that discovers exposed web assets through intelligent search queries.
-- It combines a dork generator driven by YAML templates (`soft` / `medium` / `aggressive` modes), an SQL and XSS testing module, a 13-step autonomous analysis pipeline, an adaptive recursive crawler, and a database port scanner.
+- It combines a dork generator driven by YAML templates (`soft` / `medium` / `aggressive` modes), an SQL and XSS testing module, a 13-step autonomous analysis pipeline, an adaptive recursive crawler, a database port scanner and a passive OSINT graph — all collected in a single tabbed HTML report.
 
 - It can identify indexed directories, sensitive files, admin panels, databases, backups, configuration files, credentials, PII data, subdomains, and technology fingerprints — efficiently and with stealth controls.
 
@@ -59,13 +59,15 @@
 |---------|---------|
 | 🧙 Wizard | [Interactive guided session — all options](Docs/wizard.md) |
 | ⚙️ Dork Generator | [YAML template modes: `soft` / `medium` / `aggressive`](Docs/dork_generator.md) |
-| 📱 All Systems | [Android/Termux](Docs/devices/termux.md) · [iOS/iSH](Docs/devices/ish.md) · [macOS](Docs/INSTALL.md) · [Linux](Docs/INSTALL.md) · [Windows](Docs/devices/windows.md) |
+| 📱 All Systems | [Android/Termux](Docs/devices/termux.md) · [iOS/iSH](Docs/devices/ish.md) · [macOS](Docs/INSTALL.md) · [Linux](Docs/INSTALL.md) · [Windows](Docs/devices/windows.md) — Python 3.7+ |
 | 🎯 SQLi-XSS | [Test URLs directly with `-u` and `-f`](Docs/sqli.md) |
 | 📂 File Re-Processing | [Re-run SQLi/XSS/analysis/crawl on saved result files with `-f`](Docs/cli.md) |
 | 💉 SQL Injection | [5 methods: 105 payloads](Docs/sqli.md) |
 | 💉 XSS Injection | [4 methods: 111 payloads](Docs/xss.md) |
 | 🖥️ Web Console | [Matrix-Style local dashboard via browser `--ui`](Docs/webconsole.md) |
 | 🚪 DB Port Scan | [15 services, no-auth probes, 3 severity levels `--dbscan`](Docs/dbscan.md) |
+| 🕸️ OSINT Graph | [Passive, keyless recon graph: subdomains, IPs, CVEs, ASN, contacts `--osint`](Docs/osint.md) |
+| 📑 Unified Report | [One tabbed HTML report: Dorks · Analyze · DBScan · Crawl · OSINT](Docs/output_formats.md#tabbed-report) |
 | 🤖 Agents Pipeline | [13-step autonomous analysis](Docs/agents.md) |
 | 🛡️ HeaderIntelAgent | [Info leaks, missing security headers, outdated server](Docs/agents.md#headerintelagent) |
 | 🧬 TechFingerprintAgent | [35 technologies detected, CVE dorks generated](Docs/agents.md#techfingerprintagent) |
@@ -76,7 +78,7 @@
 | 🔑 HTTP Fingerprinting | [22 browser/OS profiles — Chrome, Firefox, Safari, mobile, etc.](Docs/fingerprinting.md) |
 | 📊 Output Formats | [HTML interactive report — all saved to `Dump/`](Docs/output_formats.md) |
 | 🗂️ File Categories | [7 auto-detected categories - whitelist / blacklist filtering](Docs/file_categories.md) |
-| 🖥️ Full CLI Reference | [All 38 flags and every possible combination](Docs/cli.md) |
+| 🖥️ Full CLI Reference | [All 44 flags and every possible combination](Docs/cli.md) |
 
 ---
 
@@ -155,6 +157,11 @@ python dorkeye.py --wizard
 ```bash
   python3 dorkeye.py -f Dump/results.json --sqli --xss --dbscan --analyze -o retest.html
 ```
+🔹 # OSINT Graph &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/osint.md)
+```bash
+  python3 dorkeye.py -d "site:example.com" --osint -o recon.html
+  python3 dorkeye.py --osint-seed example.com --osint=1
+```
 🔹 # Web Console &nbsp;[![Docs](https://img.shields.io/badge/📖_Docs-2088FF?style=flat-square)](Docs/webconsole.md)
 ```bash
   python3 dorkeye.py --ui
@@ -194,13 +201,16 @@ DorkEye/
 │    ├── dorkeye_patterns.py          ← Shared pattern library
 │    ├── dorkeye_analyze.py           ← Standalone analysis CLI
 │    ├── db_portscan.py               ← Scans exposed database ports
+│    ├── osint.py                     ← Passive OSINT graph (--osint)
+│    ├── report.py                    ← Shared HTML report engine (tabbed report)
 │    ├── dorkeye_web.py               ← Local web interface
 │    ├── sqli.py                      ← 5 Method sqli injection (105 payloads)
 │    └── xss.py                       ← 4 Method xss injection (111 payloads)
 │ /Templates/
 │    ├── dorks_templates.yaml         ← Default template 
 │    ├── example.yaml                 ← Example template
-│    └── sql.yaml                     ← SQLi dork template
+│    ├── sql.yaml                     ← SQLi dork template
+│    └── wp-advanced.yaml             ← WordPress exposure template
 │ /.github/
 │    ├── CODE_OF_CONDUCT.md           ← Community guidelines
 │    ├── CONTRIBUTING.md              ← Contribution guide
@@ -214,13 +224,14 @@ DorkEye/
 │        └── claude-dorkeye.yml       ← GitHub Actions AI agent
 │ /Docs/
 │    ├── overview.md                  ← Project overview
-│    ├── cli.md                       ← Full CLI reference (38 flags)
+│    ├── cli.md                       ← Full CLI reference (44 flags)
 │    ├── wizard.md                    ← Interactive wizard guide
 │    ├── sqli.md                      ← SQL injection reference
 │    ├── xss.md                       ← XSS injection reference
 │    ├── agents.md                    ← Agents pipeline guide
 │    ├── crawler.md                   ← Adaptive crawler guide
 │    ├── dbscan.md                    ← DB port scan guide
+│    ├── osint.md                     ← OSINT graph guide
 │    ├── fingerprinting.md            ← HTTP fingerprinting guide
 │    ├── http_fingerprints.md         ← Fingerprint profiles reference
 │    ├── webconsole.md                ← Web Console guide
@@ -252,8 +263,41 @@ DorkEye/
 │    ├── *.csv
 │    ├── *.json
 │    ├── *.txt
-│    └── *.html
+│    ├── *.html
+│    ├── *_osint.sqlite / osint_*.sqlite ← OSINT graph databases
+│    └── *.graphml                    ← OSINT graph export
 ```
+---
+
+## OSINT Graph
+
+`--osint` turns the hosts found by your dorks into a correlation graph, using public sources only
+and **no API keys**: Certificate Transparency (crt.sh), RDAP, DNS-over-HTTPS, Shodan InternetDB,
+reverse DNS, ASN/geo and the Wayback Machine. Emails and phone numbers are extracted along the way.
+
+| Level | What it collects | Touches the target |
+|-------|------------------|--------------------|
+| `--osint=1` | Registrar data, subdomains, DNS records | No |
+| `--osint` / `--osint=2` | Level 1 + open ports, known CVEs, reverse DNS, ASN / country for every IP | No |
+| `--osint=3` | Level 2 + archived URLs, page title / server / `security.txt` of each host | Yes (one HTTP request per host) |
+
+```bash
+# Dorks + OSINT → one report with Dorks and OSINT tabs
+python3 dorkeye.py -d "site:example.com" --osint -o recon.html
+
+# OSINT only, from known domains / IPs
+python3 dorkeye.py --osint-seed example.com --osint-seed 203.0.113.10
+
+# Full pass with exports for Gephi / spreadsheets
+python3 dorkeye.py -d dorks.txt --osint=3 --osint-export csv,graphml,txt -o target.html
+```
+
+The **OSINT** tab shows the interactive graph, findings (IPs with CVEs, hosts named `admin`, `dev`,
+`staging`…, top open ports), contacts, every IP with ports / ASN / country, shared-IP pivots and
+ASN clusters, and can download everything as JSON, CSV, TXT, GraphML or SQLite.
+Every run builds a fresh graph. Also available from the wizard and the Web Console.
+Full guide: [Docs/osint.md](Docs/osint.md)
+
 ---
 
 ## SQL Injection
