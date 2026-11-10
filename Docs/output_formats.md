@@ -19,6 +19,31 @@ If `-o` is omitted, DorkEye generates: `report_YYYYMMDD_HHMMSS.html`
 
 ---
 
+## Tabbed Report
+
+When other phases run with a search (`--analyze`, `--dbscan`, `--crawl`, `--osint`), DorkEye
+writes **one** HTML file with a tab per phase instead of separate reports:
+
+| Tab | Shown when |
+|-----|------------|
+| Dorks | always — the HTML report described below |
+| Analyze | `--analyze` (or analysis accepted at the prompt) |
+| DBScan | `--dbscan` found hosts to scan |
+| Crawl | `--crawl` |
+| OSINT | `--osint` / `--osint-seed` — see [osint.md](osint.md) |
+
+Each tab is the complete, self-contained report of that phase, isolated in its own frame, so
+filters, exports and the OSINT graph keep working exactly as on their own.
+
+| `-o` | Files in `Dump/` |
+|------|------------------|
+| `scan.html` | `scan.html` — the tabbed report |
+| `scan.json` / `.csv` / `.txt` | `scan.json` (results, unchanged) **+** `scan.html` (tabbed report) |
+
+With no extra phase, `-o` is written as usual in the format of its extension.
+
+---
+
 ## HTML Report
 
 The default and most feature-rich format. Opens in any browser — no server required.
@@ -46,7 +71,7 @@ The default and most feature-rich format. Opens in any browser — no server req
 - `WAF` — WAF name if detected
 - `Size` — formatted file size
 
-**ⓘ Detail popup (v4.8):** clicking the `ⓘ` button on any row opens a floating panel with:
+**ⓘ Detail popup:** clicking the `ⓘ` button on any row opens a floating panel with:
 
 | Field | Content |
 |-------|---------|
@@ -130,7 +155,7 @@ Use `--analyze` to skip the prompt and force yes.
 
 ```json
 {
-  "meta":       { "generated_at": "...", "target": "...", "engine": "DorkEye v4.8 + Agents v3.0" },
+  "meta":       { "generated_at": "...", "target": "...", "engine": "DorkEye v5.2 + Agents v3.1" },
   "metrics":    { "total": 42, "by_label": { "CRITICAL": 3, "HIGH": 8, "..." }, "secrets": 5, "pii": 2, "emails": 7, "subdomains": 4 },
   "secrets":    [{ "type": "AWS_KEY", "severity": "CRITICAL", "value": "AKIA…", "..." }],
   "pii":        [{ "type": "CF_IT", "value": "RSM***", "..." }],
@@ -192,9 +217,22 @@ Plain numbered list with per-result details:
 
 ---
 
+## OSINT Files
+
+`--osint` adds these files to `Dump/` (names follow the OSINT database name, see
+[osint.md](osint.md#database)):
+
+| File | Content |
+|------|---------|
+| `<name>.sqlite` | The graph database (always) |
+| `<name>.html` | Standalone OSINT report (OSINT-only runs; otherwise it is the OSINT tab) |
+| `<name>.csv`, `<name>_graph.json`, `<name>.graphml`, `<name>_summary.txt` | With `--osint-export csv,json,graphml,txt` |
+
+---
+
 ## Analysis Report Formats (`--analyze-fmt`)
 
-The Agents v3.0 pipeline produces its own report separately from the main result file.
+The Agents v3.1 pipeline produces its own report separately from the main result file.
 
 ```bash
 --analyze-fmt html   # full dark-theme HTML with all agent sections (default)

@@ -9,7 +9,7 @@ all with built-in stealth controls.
 - **Repository:** https://github.com/xPloits3c/DorkEye
 - **Website / Docs:** https://xploits3c.github.io/DorkEye/
 - **License:** MIT
-- **Language:** Python 3.9+ (3.8 compatible)
+- **Language:** Python 3.7+ (`ddgs` search backend on 3.9+; built-in lite DuckDuckGo client on 3.7 / 3.8)
 - **Search backend:** DuckDuckGo (lxml-free lite mode available for iSH / iOS)
 
 ---
@@ -55,6 +55,7 @@ attack-surface discovery, and OSINT investigations.
 | **Direct URL testing** | Test a single URL with `-u`, or re-process saved results with `-f` |
 | **Web console** | Matrix-style local dashboard in the browser (`--ui`) |
 | **DB port scan** | Probes 15 database services with no-auth checks, 3 severity levels (`--dbscan`) |
+| **OSINT graph** | Passive, keyless recon graph of the hosts found: subdomains, IPs, CVEs, ASN, contacts (`--osint`) |
 | **Agents pipeline** | 13-step autonomous analysis of discovered targets |
 | **HeaderIntelAgent** | Finds info leaks, missing security headers, outdated servers |
 | **TechFingerprintAgent** | Detects 35 technologies and generates CVE-oriented dorks |
@@ -65,7 +66,7 @@ attack-surface discovery, and OSINT investigations.
 | **HTTP fingerprinting** | 22 browser/OS profiles (Chrome, Firefox, Safari, mobile, and more) |
 | **Output formats** | Interactive HTML report plus CSV / JSON / TXT, saved to `Dump/` |
 | **File categories** | 7 auto-detected categories with whitelist / blacklist filtering |
-| **Full CLI** | 38 flags covering every combination |
+| **Full CLI** | 44 flags covering every combination |
 
 ---
 
@@ -154,6 +155,7 @@ for all 38 flags.
 - [Agents pipeline](https://github.com/xPloits3c/DorkEye/blob/master/Docs/agents.md)
 - [Adaptive crawler](https://github.com/xPloits3c/DorkEye/blob/master/Docs/crawler.md)
 - [DB port scan](https://github.com/xPloits3c/DorkEye/blob/master/Docs/dbscan.md)
+- [OSINT graph](https://github.com/xPloits3c/DorkEye/blob/master/Docs/osint.md)
 - [HTTP fingerprinting](https://github.com/xPloits3c/DorkEye/blob/master/Docs/fingerprinting.md)
 - [Web console](https://github.com/xPloits3c/DorkEye/blob/master/Docs/webconsole.md)
 - [Termux / Android setup](https://github.com/xPloits3c/DorkEye/blob/master/Docs/termux.md)

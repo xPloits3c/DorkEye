@@ -23,6 +23,12 @@ test_installation.bat
 *.html
 results/
 output/
+Dump/
+# OSINT graph output (target data — never commit)
+*.sqlite
+*.sqlite-journal
+*.graphml
+*_summary.txt
 
 # Python
 __pycache__/

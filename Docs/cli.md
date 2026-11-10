@@ -18,6 +18,7 @@
 |`--dg[=CATEGORY]`  |str |Activate Dork Generator; value = category name or `all` (default if omitted)      |
 |`--create-config`  |bool|Write sample `dorkeye_config.yaml` to disk and exit                               |
 |`--ui`             |bool|Launch the Web Console (Flask dashboard) — see **Web Console** section            |
+|`--osint-seed VALUE`|str|OSINT only, starting from this seed — see **OSINT Graph** section                 |
 
 -----
 
@@ -220,6 +221,28 @@ prioritise relevant ports (e.g. a result containing “phpmyadmin” will scan p
 
 -----
 
+## OSINT Graph
+
+Requires `Tools/osint.py`. Passive, keyless recon on the hosts found by the dorks, the `-u`
+URL or explicit seeds. Full guide: [osint.md](osint.md).
+
+|Flag                 |Default                  |Description                                                                    |
+|---------------------|-------------------------|-------------------------------------------------------------------------------|
+|`--osint [LEVEL]`    |off (`2` if no value)    |Run OSINT: `1` basic, `2` medium, `3` full, or a chain name / `.json` chain file|
+|`--osint-seed VALUE` |none                     |Extra seed, added to the dork / `-u` hosts. Repeatable. Alone, OSINT only      |
+|`--osint-db PATH`    |per run                  |SQLite graph, recreated every run; its name also names the report and exports  |
+|`--osint-threads N`  |`2`                      |Worker threads per step                                                        |
+|`--osint-max-nodes N`|`2000`                   |Node cap per run                                                               |
+|`--osint-export LIST`|none                     |Extra files: `csv`, `json`, `graphml`, `txt` (comma-separated)                 |
+
+|Level|Chain          |Sources                                                       |
+|-----|---------------|--------------------------------------------------------------|
+|`1`  |`recon-basic`  |RDAP, crt.sh, DNS                                             |
+|`2`  |`recon-ip`     |Level 1 + Shodan InternetDB, reverse DNS, ASN/geo on every IP |
+|`3`  |`recon-passive`|Level 2 + Wayback URLs and an HTTP probe of each host         |
+
+-----
+
 ## Web Console
 
 Requires Flask (`pip install flask`). Launches a local Matrix-themed dashboard
@@ -292,6 +315,7 @@ Only one input source per invocation.
 
 - `--sqli` and `--xss` are auto-enabled even if not specified
 - Not compatible with `--analyze`, `--crawl`, `-d`, `-f`, `--dg`
+- With `--osint` and no `--sqli`/`--xss`, only OSINT runs (no vulnerability test)
 - Execution stops immediately after the vulnerability tests
 - Result is saved to `-o` if provided
 
@@ -308,6 +332,15 @@ Only one input source per invocation.
 - Works with `-d`, `-f`, `--dg` — not with `-u` (no URL pool to extract hosts from)
 - Skips private/loopback IPs automatically (192.168.x, 10.x, 127.x, etc.)
 - Saves a separate `_dbscan_<ts>.json` + `_dbscan_<ts>.txt` file alongside the main output
+
+### `--osint` constraints
+
+- `--osint-seed`, `--osint-db`, `--osint-threads`, `--osint-max-nodes`, `--osint-export` only take effect when OSINT runs
+- With `-d`, `--dg`, `-f`: seeds are the `--osint-seed` values plus the hosts in the results; the OSINT report becomes a tab of the main `.html` report
+- With `-u`: the URL's host (plus `--osint-seed`) is the seed; without `--sqli`/`--xss`, execution stops after OSINT
+- `--osint-seed` with no other input runs OSINT only (no dork search)
+- Level `3` sends one HTTP request to each discovered host; levels `1` and `2` never contact the target
+- Every run starts a fresh SQLite graph: `Dump/<-o name>_osint.sqlite` with dorks, `Dump/osint_<seed>_<time>.sqlite` for OSINT-only runs, or the `--osint-db` path
 
 ### `--dg` constraints
 
@@ -337,6 +370,10 @@ Run analysis on results? [y/N]:
 ```
 
 Use `--analyze` to force yes and skip the prompt (useful for scripting).
+
+When another phase (Analyze, Crawl, DBScan, OSINT) produces a tabbed report and `-o` is not
+`.html`, the results stay in the `-o` file and the tabbed report is written beside it with the
+same name and `.html`.
 
 ### `-f` / `--file` behaviour
 
@@ -416,6 +453,14 @@ python Tools/db_portscan.py Dump/results.json
 python Tools/db_portscan.py Dump/results.json --timeout 3 --threads 80
 python Tools/db_portscan.py Dump/results.json --ports 3306 5432 27017 6379
 python Tools/db_portscan.py Dump/results.json --stealth --max-hosts 50
+
+# ── OSINT GRAPH ──────────────────────────────────────────────────────────
+python dorkeye.py -d "site:example.com" --osint -o example.html
+python dorkeye.py -f Dump/results.json --osint=1 -o results.html
+python dorkeye.py -d dorks.txt --osint=3 --osint-db Dump/target.sqlite --osint-export csv,graphml -o target.html
+python dorkeye.py --osint-seed example.com --osint-seed 203.0.113.10
+python dorkeye.py -u "https://example.com/page.php?id=1" --osint
+python Tools/osint.py --seed example.com --chain recon-ip --export csv
 
 # ── XSS-ONLY SCAN ────────────────────────────────────────────────────────
 python dorkeye.py -d dorks.txt --xss --xss-type reflected -o results.json

@@ -54,22 +54,24 @@ jobs:
           claude_args: |
             --max-turns 10
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob,Grep"
-            --append-system-prompt "You are the Senior Security Auditor for DorkEye. Focus: XSS in reports, SQLi logic, and Python 3.10 compatibility (minimum runtime, required by ddgs 6). ddgs MUST stay on >= 6.0.0 (older 4.x/5.x APIs return no results). Tool modules live in Tools/ and are invoked through the DorkEye dispatcher. Be brutal about bugs but concise."
+            --append-system-prompt "You are the Senior Security Auditor for DorkEye. Focus: XSS in reports, SQLi logic, and Python 3.7 compatibility (minimum runtime). ddgs MUST stay on >= 6.0.0 (older 4.x/5.x APIs return no results); it is installed only on Python >= 3.9, while 3.7/3.8 use the built-in Devices/iOS/ddg_lite.py. Tool modules live in Tools/ and are invoked through the DorkEye dispatcher. Be brutal about bugs but concise."
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
             1. Read the diff with `gh pr diff` and open every touched file.
             2. Review only what the PR changes, plus code it directly affects.
-               Pay extra attention if it touches dorkeye.py, Tools/dorkeye_analyze.py
-               or Tools/dorkeye_agents.py (report builders: interpolated values must
-               use the escaping helpers in Tools/dorkeye_patterns.py),
+               Pay extra attention if it touches dorkeye.py, Tools/dorkeye_analyze.py,
+               Tools/dorkeye_agents.py, Tools/report.py or Tools/osint.py (report
+               builders: every interpolated value must be escaped),
                Tools/xss.py or Tools/sqli.py (xss.py imports shared classes
                from sqli.py: changes there can break both).
-            3. Flag any syntax or stdlib usage not available in Python 3.10
-               (match/case, `X | Y` types and built-in generics like list[str]
-               are fine; 3.11+ features such as ExceptionGroup/except*,
-               tomllib, typing.Self or PEP 695 generics are not).
+            3. Flag any syntax or stdlib usage not available in Python 3.7:
+               walrus `:=`, positional-only `/` params, f-string `=` (3.8);
+               built-in generics like list[str] or dict | dict at runtime,
+               str.removeprefix, functools.cache, zoneinfo (3.9); match/case,
+               `X | Y` types (3.10); anything newer. Annotations are fine
+               under `from __future__ import annotations`.
             4. Flag any change that would lower ddgs below 6.0.0.
             Use inline comments for specific bugs, then post ONE summary table
             of findings with severity via `gh pr comment`. If nothing is wrong,
@@ -111,7 +113,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --max-turns 15
-            --append-system-prompt "You are Claude, integrated into DorkEye (by xPloits3c). You know the Python/YAML architecture. Constraints: Python >= 3.10 (minimum runtime, required by ddgs 6), ddgs >= 6.0.0, tool modules in Tools/ are run via the DorkEye dispatcher, keep the repo root clean (iSH files go in iOS/). Never push to master: work on a branch and open a PR. Answer in a technical, solution-oriented way."
+            --append-system-prompt "You are Claude, integrated into DorkEye (by xPloits3c). You know the Python/YAML architecture. Constraints: Python >= 3.7 (ddgs only on >= 3.9; 3.7/3.8 use Devices/iOS/ddg_lite.py), ddgs >= 6.0.0, tool modules in Tools/ are run via the DorkEye dispatcher, keep the repo root clean (iSH files go in iOS/). Never push to master: work on a branch and open a PR. Answer in a technical, solution-oriented way."
 
   # ───────────────────────────────────────────────────────────────────────────
   # JOB 3: Weekly audit
@@ -135,7 +137,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          # Audit tooling runs on 3.12; the project itself targets Python >= 3.10 (ddgs 6).
+          # Audit tooling runs on 3.12; the project itself supports Python >= 3.7.
           python-version: "3.12"
 
       - name: Setup & Pre-Audit
@@ -165,7 +167,7 @@ jobs:
           claude_args: |
             --max-turns 60
             --allowedTools "Read,Glob,Grep,Bash(gh issue create:*),Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue comment:*)"
-            --append-system-prompt "Run the DorkEye weekly audit. Raw data is in bandit_summary.json and pip_summary.json. Keep ddgs >= 6.0.0: never recommend downgrading it to 4.x/5.x (older APIs return no results); if pip-audit flags it, suggest a 6.x upgrade or a mitigation. Python >= 3.10 is the minimum runtime (required by ddgs 6); fixes must not need 3.11+."
+            --append-system-prompt "Run the DorkEye weekly audit. Raw data is in bandit_summary.json and pip_summary.json. Keep ddgs >= 6.0.0: never recommend downgrading it to 4.x/5.x (older APIs return no results); if pip-audit flags it, suggest a 6.x upgrade or a mitigation. Python >= 3.7 is the minimum runtime (ddgs only on >= 3.9, ddg_lite fallback below); fixes must not need Python 3.8+ syntax or stdlib."
           prompt: |
             REPO: ${{ github.repository }}
 
@@ -180,7 +182,11 @@ jobs:
                - Tools/dorkeye_analyze.py: _report_html, _report_md
                - Tools/dorkeye_agents.py: ReportAgent _html and _markdown,
                  generate_html_section
-               - dorkeye.py: _save_html
+               - Tools/report.py (shared report engine, own html.escape and
+                 _safe_href): build_dork_html incl. the showInfo() popup JS,
+                 write_report (tab labels + iframe srcdoc), render_dbscan_html
+               - Tools/osint.py: render_html (_h helper; graph data embedded as
+                 JSON in a script tag, rendered with textContent only)
                - Tools/dorkeye_web.py: the JS esc() helper and every innerHTML /
                  template-literal sink (esc() must also escape quotes when used
                  inside attributes)

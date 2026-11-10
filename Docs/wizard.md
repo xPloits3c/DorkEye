@@ -43,6 +43,7 @@ The wizard asks for each option in sequence:
 | Output file | Filename with extension | `results.json` |
 | Run analysis? | `y` / `n` (shown if output is `.json`) | `y` |
 | Run crawl? | `y` / `n` | `n` |
+| Enable OSINT? | `0` no · `1` basic · `2` medium · `3` full ([guide](osint.md)) | `0` |
 
 All prompts have sensible defaults — press Enter to accept.
 
@@ -58,6 +59,7 @@ All prompts have sensible defaults — press Enter to accept.
 | Output file | Filename with extension |
 | Run analysis? | `y` / `n` |
 | Run crawl? | `y` / `n` |
+| Enable OSINT? | `0` / `1` / `2` / `3` |
 
 ---
 

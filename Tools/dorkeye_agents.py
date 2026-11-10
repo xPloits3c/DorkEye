@@ -1666,7 +1666,7 @@ class ReportAgent(BaseAgent):
 
         lines = [
             "# DorkEye Analysis Report",
-            f"\n> {now}  |  Target: `{_md_code(target) or 'N/A'}`  |  DorkEye v4.8 + Agents v3.1\n",
+            f"\n> {now}  |  Target: `{_md_code(target) or 'N/A'}`  |  DorkEye v5.2 + Agents v3.1\n",
             "---\n",
             "## Summary\n",
             _md_text(analysis.get("summary", "_No LLM analysis available._")),
@@ -1763,7 +1763,7 @@ class ReportAgent(BaseAgent):
                 f"| {_md_cell(r.get('triage_score',0))} | {_md_cell(r.get('triage_label','?'))} "
                 f"| `{_md_code(str(r.get('url') or '')[:70])}` | {_md_cell(str(r.get('title','N/A'))[:50])} |"
             )
-        lines.append(f"\n\n---\n*DorkEye v4.8 + Agents v3.1 — {now}*")
+        lines.append(f"\n\n---\n*DorkEye v5.2 + Agents v3.1 — {now}*")
         return "\n".join(lines)
 
     def _html(self, results, analysis, secrets, counts, target, extra=None) -> str:
@@ -1910,7 +1910,7 @@ footer{{margin-top:36px;font-size:11px;color:#8b949e;text-align:center}}
             "meta": {
                 "generated_at": datetime.now().isoformat(),
                 "target":       target or "",
-                "engine":       "DorkEye v5.0 + Agents v3.1",
+                "engine":       "DorkEye v5.2 + Agents v3.1",
             },
             "metrics": {
                 "total":     len(results),
@@ -2643,7 +2643,13 @@ class DorkCrawlerAgent(BaseAgent):
             from ddgs import DDGS
         except ImportError:
             try:
-                from ddg_lite import DDGS  # iSH / Alpine fallback (no lxml)
+                # Lite DuckDuckGo fallback (no lxml): Python < 3.9, iSH / Alpine.
+                import sys as _sys
+                from pathlib import Path as _P
+                _lite = _P(__file__).resolve().parent.parent / "Devices" / "iOS"
+                if _lite.is_dir() and str(_lite) not in _sys.path:
+                    _sys.path.append(str(_lite))
+                from ddg_lite import DDGS
             except ImportError:
                 _log(f"[{self.name}] ddgs not installed. Install with: pip install ddgs", style="red")
                 return self._build_output("ddgs_missing")

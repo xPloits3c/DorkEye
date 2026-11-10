@@ -188,6 +188,10 @@ def build_scan_cmd(d: dict) -> tuple:
         cmd.append('--xss')
         xtype = d.get('xss_type','all')
         if xtype != 'all': cmd += ['--xss-type', xtype]
+    # OSINT graph on the hosts found by the dorks (0=off, 1/2/3 intensity)
+    osint_lvl = str(d.get('osint', '0') or '0').strip()
+    if osint_lvl in ('1', '2', '3'):
+        cmd.append(f'--osint={osint_lvl}')
     if d.get('no_analyze'):     cmd.append('--no-analyze')
     if d.get('no_fingerprint'): cmd.append('--no-fingerprint')
 
@@ -714,6 +718,9 @@ input[type=number]{-moz-appearance:textfield}
     </div>
     <div class="fr"><div class="fg"><label>XSS type (--xss-type)</label>
       <select id="s-xst"><option value="all">all</option><option value="reflected">reflected</option><option value="stored">stored</option><option value="dom">dom</option></select>
+    </div>
+    <div class="fg"><label>OSINT (--osint)</label>
+      <select id="s-osint"><option value="0" selected>Off</option><option value="1">1 — basic</option><option value="2">2 — medium</option><option value="3">3 — full</option></select>
     </div></div>
   </div>
   <div class="fs">
@@ -1074,7 +1081,7 @@ function runScan(){
     crawl_per_dork:+qs('#s-crp').value||20,crawl_stealth:on('t-crs'),crawl_report:on('t-crr'),
     crawl_out:qs('#s-cro').value.trim(),dbscan:on('t-db'),
     dbscan_timeout:+qs('#s-dbt').value||2.5,dbscan_threads:+qs('#s-dbth').value||60,
-    dbscan_max_hosts:+qs('#s-dbmh').value||200};
+    dbscan_max_hosts:+qs('#s-dbmh').value||200,osint:qs('#s-osint').value};
   post('/api/run',p,d=>{
     if(d.job_id){attachJob(d.job_id,d.label);fb('scan-fb','Job '+d.job_id+' started!','ok');setTimeout(()=>{nav(qs('[data-s=jobs]'));refreshJobs();},250);}
     else fb('scan-fb',d.error||'Error launching job.','err');

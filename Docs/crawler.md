@@ -15,7 +15,7 @@ python dorkeye.py -d "site:example.com inurl:admin" --crawl -o crawl.json
 # With the Dork Generator
 python dorkeye.py --dg=sqli --crawl -o crawl.json
 
-# On a saved result file (v4.8)
+# On a saved result file
 python dorkeye.py -f Dump/results.json --crawl -o crawl.json
 ```
 
@@ -66,9 +66,9 @@ Each round follows the same 5-step cycle:
 | Django | `site:{domain} "DisallowedHost"`, `"DEBUG = True"` |
 | phpMyAdmin | `site:{domain} intitle:"phpMyAdmin" inurl:index.php` |
 
-### v4.8 integration
+### Integration with the Agents pipeline
 
-The crawler also receives CVE dorks from **TechFingerprintAgent** and `site:subdomain` dorks from **SubdomainHarvesterAgent** — both run during the Agents v3.0 pipeline. This means the crawler can be pre-seeded with precise, technology-aware targets on the very first round.
+The crawler also receives CVE dorks from **TechFingerprintAgent** and `site:subdomain` dorks from **SubdomainHarvesterAgent** — both run during the Agents v3.1 pipeline. This means the crawler can be pre-seeded with precise, technology-aware targets on the very first round.
 
 ---
 

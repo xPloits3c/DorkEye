@@ -403,12 +403,12 @@ In Termux, use the keyboard shortcut **Vol Down + C** as the Ctrl key equivalent
 
 For the full list of 38 flags, advanced combinations, and detailed module documentation:
 
-- [`Docs/cli.md`](cli.md) — complete CLI reference
-- [`Docs/xss.md`](xss.md) — XSS detection engine
-- [`Docs/sqli.md`](sqli.md) — SQL injection engine
-- [`Docs/dbscan.md`](dbscan.md) — DB port scanner
-- [`Docs/agents.md`](agents.md) — analysis pipeline
-- [`Docs/webconsole.md`](webconsole.md) — Web Console (`--ui`)
+- [`Docs/cli.md`](../cli.md) — complete CLI reference
+- [`Docs/xss.md`](../xss.md) — XSS detection engine
+- [`Docs/sqli.md`](../sqli.md) — SQL injection engine
+- [`Docs/dbscan.md`](../dbscan.md) — DB port scanner
+- [`Docs/agents.md`](../agents.md) — analysis pipeline
+- [`Docs/webconsole.md`](../webconsole.md) — Web Console (`--ui`)
 
 -----
 

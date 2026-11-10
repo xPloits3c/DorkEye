@@ -1,14 +1,15 @@
 """
-ddg_lite - DuckDuckGo backend without lxml, for DorkEye on iSH / Alpine.
+ddg_lite - DuckDuckGo backend without lxml, for DorkEye.
 
 Drop-in replacement for `ddgs.DDGS().text()`: same call signature and the
 same result keys ("title", "href", "body"). Uses only requests + bs4 with
 the stdlib "html.parser", so nothing needs to be compiled.
 
-Devices/iOS/install_ish.sh copies this file into the DorkEye root, where
-dorkeye.py picks it up automatically when `ddgs` is not installed.
+dorkeye.py loads it automatically from Devices/iOS/ whenever `ddgs` is not
+installed: Python 3.7 / 3.8 (ddgs needs 3.9+), iSH / Alpine (no lxml), or
+any system where ddgs can't be installed.
 
-Python 3.8+
+Python 3.7+
 """
 import time
 from urllib.parse import urlparse, parse_qs, unquote
