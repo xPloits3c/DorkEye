@@ -1666,7 +1666,7 @@ class ReportAgent(BaseAgent):
 
         lines = [
             "# DorkEye Analysis Report",
-            f"\n> {now}  |  Target: `{_md_code(target) or 'N/A'}`  |  DorkEye v4.8 + Agents v3.1\n",
+            f"\n> {now}  |  Target: `{_md_code(target) or 'N/A'}`  |  DorkEye v5.2 + Agents v3.1\n",
             "---\n",
             "## Summary\n",
             _md_text(analysis.get("summary", "_No LLM analysis available._")),
@@ -1763,7 +1763,7 @@ class ReportAgent(BaseAgent):
                 f"| {_md_cell(r.get('triage_score',0))} | {_md_cell(r.get('triage_label','?'))} "
                 f"| `{_md_code(str(r.get('url') or '')[:70])}` | {_md_cell(str(r.get('title','N/A'))[:50])} |"
             )
-        lines.append(f"\n\n---\n*DorkEye v4.8 + Agents v3.1 — {now}*")
+        lines.append(f"\n\n---\n*DorkEye v5.2 + Agents v3.1 — {now}*")
         return "\n".join(lines)
 
     def _html(self, results, analysis, secrets, counts, target, extra=None) -> str:
@@ -1910,7 +1910,7 @@ footer{{margin-top:36px;font-size:11px;color:#8b949e;text-align:center}}
             "meta": {
                 "generated_at": datetime.now().isoformat(),
                 "target":       target or "",
-                "engine":       "DorkEye v5.0 + Agents v3.1",
+                "engine":       "DorkEye v5.2 + Agents v3.1",
             },
             "metrics": {
                 "total":     len(results),

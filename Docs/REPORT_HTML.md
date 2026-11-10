@@ -526,4 +526,4 @@ time.time() - self.start_time   → EXECUTION TIME card
 
 ---
 
-*DorkEye v4.6 — For authorized security research only.*
+*DorkEye v5.2 — For authorized security research only.*

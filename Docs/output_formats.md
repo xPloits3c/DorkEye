@@ -71,7 +71,7 @@ The default and most feature-rich format. Opens in any browser — no server req
 - `WAF` — WAF name if detected
 - `Size` — formatted file size
 
-**ⓘ Detail popup (v4.8):** clicking the `ⓘ` button on any row opens a floating panel with:
+**ⓘ Detail popup:** clicking the `ⓘ` button on any row opens a floating panel with:
 
 | Field | Content |
 |-------|---------|
@@ -155,7 +155,7 @@ Use `--analyze` to skip the prompt and force yes.
 
 ```json
 {
-  "meta":       { "generated_at": "...", "target": "...", "engine": "DorkEye v4.8 + Agents v3.0" },
+  "meta":       { "generated_at": "...", "target": "...", "engine": "DorkEye v5.2 + Agents v3.1" },
   "metrics":    { "total": 42, "by_label": { "CRITICAL": 3, "HIGH": 8, "..." }, "secrets": 5, "pii": 2, "emails": 7, "subdomains": 4 },
   "secrets":    [{ "type": "AWS_KEY", "severity": "CRITICAL", "value": "AKIA…", "..." }],
   "pii":        [{ "type": "CF_IT", "value": "RSM***", "..." }],
@@ -232,7 +232,7 @@ Plain numbered list with per-result details:
 
 ## Analysis Report Formats (`--analyze-fmt`)
 
-The Agents v3.0 pipeline produces its own report separately from the main result file.
+The Agents v3.1 pipeline produces its own report separately from the main result file.
 
 ```bash
 --analyze-fmt html   # full dark-theme HTML with all agent sections (default)

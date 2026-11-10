@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DorkEye Project v5.1 | OSINT Dorking Tool
+DorkEye Project v5.2 | OSINT Dorking Tool
 Author: xPloits3c I.C.W.T| https://github.com/xPloits3c/DorkEye
 """
 
@@ -332,7 +332,7 @@ def print_banner():
 
     INFO = (
         "[bold red]OSINT[/bold red][bold white] DORKING TOOL[/bold white]\n"
-        "[bold green]v5.1[/bold green]  [dim]stable[/dim]\n"
+        "[bold green]v5.2[/bold green]  [dim]stable[/dim]\n"
         "\n"
         "[dim]▸ Author  │[/dim]  [yellow]xPloits3c I.C.W.T[/yellow]\n"
         "[dim]▸ GitHub  │[/dim]  [cyan]github.com/xPloits3c/DorkEye[/cyan]\n"
@@ -2154,7 +2154,7 @@ def main():
     greet_user()
 
     parser = argparse.ArgumentParser(
-        description="DorkEye v5.1 | OSINT Dorking Tool",
+        description="DorkEye v5.2 | OSINT Dorking Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   %(prog)s --ui                 # Web Console (8080)

@@ -34,7 +34,7 @@ This combination is much harder to fingerprint as a bot than a single static hea
 | Browser families | Chrome, Firefox, Safari, Edge, Opera, Samsung Internet, Brave |
 | OS / platform | Windows, macOS, Linux, Android, iOS |
 | Mobile support | Pixel 8 (Android), Samsung S928B, iPhone iOS 17–18, iPad |
-| Browser versions | 2025–2026 (updated from the 2024 set in v4.6) |
+| Browser versions | 2025–2026 |
 | Language profiles | 22 regional profiles |
 
 ---
@@ -60,7 +60,7 @@ user_agent_rotation: true   # fallback when fingerprinting is off
 
 ---
 
-## PageFetchAgent UA Pool (v4.8)
+## PageFetchAgent UA Pool
 
 When `--analyze-fetch` downloads page content, the `PageFetchAgent` uses its own 5-profile UA pool independently of the main fingerprint rotator:
 

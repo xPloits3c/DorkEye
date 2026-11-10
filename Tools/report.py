@@ -746,7 +746,7 @@ def build_dork_html(results, stats, start_time, report_base="report"):
         parts.append(f"""        </tbody>
     </table>
     </div>
-    <div class="footer">DorkEye v5.1 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
+    <div class="footer">DorkEye v5.2 &nbsp;|&nbsp; xploits3c &nbsp;|&nbsp; For authorized security research only</div>
 </div>
 
 <div id="toast"></div>
