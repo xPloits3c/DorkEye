@@ -17,7 +17,7 @@
 # DorkEye – инструмент OSINT-дорkинга
 
 <!-- ── Row 1: Project identity ── -->
-![Python](https://img.shields.io/badge/Python-3.7%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
+![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
 ![Search](https://img.shields.io/badge/Search-DuckDuckGo-FF6600?style=flat-square&logo=duckduckgo&logoColor=white)
@@ -68,7 +68,7 @@
 |---------|---------|
 | 🧙 Мастер | [Интерактивная пошаговая сессия — все опции](../../wizard.md) |
 | ⚙️ Генератор дорков | [Режимы YAML-шаблонов: `soft` / `medium` / `aggressive`](../../dork_generator.md) |
-| 📱 Все системы | [Android/Termux](../../devices/termux.md) · [iOS/iSH](../../devices/ish.md) · [macOS](../../INSTALL.md) · [Linux](../../INSTALL.md) · [Windows](../../devices/windows.md) — Python 3.7+ |
+| 📱 Все системы | [Android/Termux](../../devices/termux.md) · [iOS/iSH](../../devices/ish.md) · [macOS](../../INSTALL.md) · [Linux](../../INSTALL.md) · [Windows](../../devices/windows.md) — Python 3.9+ |
 | 🎯 SQLi-XSS | [Тестирование URL напрямую через `-u` и `-f`](../../sqli.md) |
 | 📂 Повторная обработка файлов | [Повторный запуск SQLi/XSS/анализа/краула по сохранённым файлам результатов через `-f`](../../cli.md) |
 | 💉 SQL-инъекции | [5 методов: 105 полезных нагрузок](../../sqli.md) |

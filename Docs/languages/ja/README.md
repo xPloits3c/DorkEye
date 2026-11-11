@@ -17,7 +17,7 @@
 # DorkEye – OSINT ドーキングツール
 
 <!-- ── Row 1: Project identity ── -->
-![Python](https://img.shields.io/badge/Python-3.7%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
+![Python](https://img.shields.io/badge/Python-3.9%2B-3670A0?style=flat-square&logo=python&logoColor=ffdd54)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=flat-square)
 ![Search](https://img.shields.io/badge/Search-DuckDuckGo-FF6600?style=flat-square&logo=duckduckgo&logoColor=white)
@@ -68,7 +68,7 @@
 |---------|---------|
 | 🧙 ウィザード | [対話型ガイドセッション — 全オプション対応](../../wizard.md) |
 | ⚙️ ドーク生成器 | [YAML テンプレートモード：`soft` / `medium` / `aggressive`](../../dork_generator.md) |
-| 📱 全システム対応 | [Android/Termux](../../devices/termux.md) · [iOS/iSH](../../devices/ish.md) · [macOS](../../INSTALL.md) · [Linux](../../INSTALL.md) · [Windows](../../devices/windows.md) — Python 3.7+ |
+| 📱 全システム対応 | [Android/Termux](../../devices/termux.md) · [iOS/iSH](../../devices/ish.md) · [macOS](../../INSTALL.md) · [Linux](../../INSTALL.md) · [Windows](../../devices/windows.md) — Python 3.9+ |
 | 🎯 SQLi-XSS | [`-u` と `-f` で URL を直接テスト](../../sqli.md) |
 | 📂 ファイル再処理 | [`-f` で保存済み結果ファイルに対し SQLi/XSS/分析/クロールを再実行](../../cli.md) |
 | 💉 SQL インジェクション | [5 手法：105 ペイロード](../../sqli.md) |

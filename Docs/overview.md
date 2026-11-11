@@ -9,7 +9,7 @@ all with built-in stealth controls.
 - **Repository:** https://github.com/xPloits3c/DorkEye
 - **Website / Docs:** https://xploits3c.github.io/DorkEye/
 - **License:** MIT
-- **Language:** Python 3.7+ (`ddgs` search backend on 3.9+; built-in lite DuckDuckGo client on 3.7 / 3.8)
+- **Language:** Python 3.9+ (`ddgs` search backend; built-in lite DuckDuckGo client on iSH / Alpine, where lxml is unavailable)
 - **Search backend:** DuckDuckGo (lxml-free lite mode available for iSH / iOS)
 
 ---
