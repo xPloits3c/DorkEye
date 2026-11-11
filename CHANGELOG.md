@@ -3,7 +3,7 @@
 All notable changes to DorkEye are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [5.1] - 2026-10-27
+## [5.2] - 2026-11-11
 
 ### Fixed
 - **XSS detection runs independently.** A scan with `--xss` is no longer skipped
