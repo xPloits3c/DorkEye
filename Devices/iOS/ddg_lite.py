@@ -6,10 +6,10 @@ same result keys ("title", "href", "body"). Uses only requests + bs4 with
 the stdlib "html.parser", so nothing needs to be compiled.
 
 dorkeye.py loads it automatically from Devices/iOS/ whenever `ddgs` is not
-installed: Python 3.7 / 3.8 (ddgs needs 3.9+), iSH / Alpine (no lxml), or
-any system where ddgs can't be installed.
+installed: iSH / Alpine (no lxml), or any system where ddgs can't be
+installed.
 
-Python 3.7+
+Python 3.9+
 """
 import time
 from urllib.parse import urlparse, parse_qs, unquote
