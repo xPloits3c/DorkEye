@@ -5,6 +5,12 @@
 
 ---
 
+<div align="center">
+
+**English** | [简体中文](Docs/languages/zh-CN/README.md) | [Español](Docs/languages/es/README.md) | [Português](Docs/languages/pt-BR/README.md) | [Русский](Docs/languages/ru/README.md) | [日本語](Docs/languages/ja/README.md) | [Italiano](Docs/languages/it/README.md)
+
+</div>
+
 # DorkEye – OSINT Dorking Tool
 
 <!-- ── Row 1: Project identity ── -->
