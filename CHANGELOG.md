@@ -5,6 +5,66 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [5.2] - 2026-11-11
 
+### Added
+- **OSINT graph (`--osint`).** Passive, keyless recon on the hosts found by the
+  dorks: Certificate Transparency (crt.sh), RDAP, DNS-over-HTTPS, Shodan
+  InternetDB, reverse DNS, ASN / geo and the Wayback Machine. Three levels:
+  `1` registry + subdomains + DNS, `2` (default) adds ports / CVEs / reverse DNS /
+  ASN for every IP, `3` adds archived URLs and one HTTP request per host.
+  Correlates shared-IP pivots, ASN clusters, IPs with known CVEs and telling
+  hostnames, and extracts emails and phone numbers. Custom JSON chains and a
+  standalone mode (`python Tools/osint.py --seed ...`).
+- **New flags:** `--osint`, `--osint-seed`, `--osint-db`, `--osint-threads`,
+  `--osint-max-nodes`, `--osint-export` (`csv`, `json`, `graphml`, `txt`).
+  OSINT is also available from the wizard and the Web Console.
+- **Unified tabbed report.** Dorks, Analyze, DBScan, Crawl and OSINT are collected
+  into one HTML file, one tab per phase. With `-o` set to `.json` / `.csv` /
+  `.txt`, that file keeps the results and the tabbed report is saved next to it
+  as `.html`.
+- **SQLite export** button in the HTML report (all results, every field).
+- **Python 3.7 → 3.13 support.** `requirements.txt` uses per-version markers;
+  on Python 3.7 / 3.8, where `ddgs` is not available, the dork search and the
+  crawler automatically use the built-in lite DuckDuckGo client
+  (`Devices/iOS/ddg_lite.py`).
+- **README in 7 languages:** English, 简体中文, Español, Português (BR), Русский,
+  日本語, Italiano (`Docs/languages/`).
+- `Docs/osint.md` and an OSINT section in the README; OSINT, `--dbscan*`, `--ui`
+  and `--port` added to the USAGE flag reference.
+
+### Changed
+- The HTML report engine moved from `dorkeye.py` to `Tools/report.py`
+  (`dorkeye.py` is ~560 lines lighter).
+- **Search Statistics** and **Results by Category** are printed as a single block
+  with square tables.
+- Removed the `Scanning results (files/SQLi/XSS)` line and the `SEARCH COMPLETE`
+  banner; one save line per output file.
+- MetaByte email / phone / IP / URL extractors are built into `dorkeye.py`.
+- Claude workflow prompts aligned with `requirements.txt` and Python 3.7; the
+  weekly audit also covers `report.py` and `osint.py`.
+- `.gitignore` excludes `Dump/` and OSINT outputs (`*.sqlite`, `*.graphml`,
+  `*_summary.txt`).
+
+### Fixed
+- `pip install -r requirements.txt` failed on Python 3.7 / 3.8.
+- Every secret finding (analyzer and `SecretsAgent`) was reported as `HIGH`
+  confidence. Each rule now has its own level: vendor-prefixed keys `HIGH`,
+  `key=value` patterns `MEDIUM`, generic hashes / IPs `LOW`.
+- The agents report header, footer and JSON `engine` field showed v4.8 / v5.0.
+- Broken links in the device guides, INSTALL and the USAGE navigation bar.
+
+### Security
+- **XSS in the dork HTML report:** the Details popup rendered titles, snippets and
+  dorks as HTML, a crafted URL could break out of the `data-ext` attribute, and
+  `javascript:` links were clickable. Values are now escaped and links are
+  limited to `http` / `https` / `ftp`.
+- **XSS in the analysis and agents reports** (`--analyze`): every value is escaped
+  in HTML and Markdown, links are limited to `http` / `https` with
+  `rel="noopener noreferrer"`, and the HTML reports carry a strict
+  Content-Security-Policy. Shared escaping helpers live in
+  `Tools/dorkeye_patterns.py`.
+
+## [5.1] - 2026-10-27
+
 ### Fixed
 - **XSS detection runs independently.** A scan with `--xss` is no longer skipped
   when file analysis and SQLi are disabled — the XSS tests always run when
