@@ -36,7 +36,7 @@ Or download the latest release:
 
 |Required Software|Check Command      |
 |-----------------|-------------------|
-|Python 3.7+      |`python3 --version`|
+|Python 3.9+      |`python3 --version`|
 |pip (latest)     |`pip3 --version`   |
 |git              |`git --version`    |
 
@@ -50,10 +50,10 @@ Or download the latest release:
 - 100 MB free disk space
 - Internet connection
 
-**Python versions:** the same `requirements.txt` works on every Python from 3.7 up — pip picks
-the right package versions automatically. On Python 3.9+ DorkEye searches through `ddgs`; on
-3.7 / 3.8 (where `ddgs` can't be installed) it automatically uses its built-in lxml-free
-DuckDuckGo client (`Devices/iOS/ddg_lite.py`).
+**Python versions:** DorkEye requires Python 3.9 or newer (3.10+ recommended). By default it
+searches through `ddgs`; on iSH (iOS) / Alpine, where `lxml` (and therefore `ddgs`) can't be
+installed, it automatically uses its built-in lxml-free DuckDuckGo client
+(`Devices/iOS/ddg_lite.py`) — nothing else to install.
 
 **Key Python Dependencies** (installed automatically via `pip install dorkeye` or `requirements.txt`):
 
@@ -211,8 +211,8 @@ pip uninstall duckduckgo-search -y
 pip install ddgs
 ```
 
-`ddgs` needs Python 3.9+. On Python 3.7 / 3.8 this error does not appear: DorkEye uses its
-built-in DuckDuckGo client automatically, nothing else to install.
+`ddgs` needs `lxml`. On iSH (iOS) / Alpine, where `lxml` can't be installed, this error does
+not appear: DorkEye uses its built-in DuckDuckGo client automatically, nothing else to install.
 
 ### `Externally Managed Environment` (Kali Linux / Debian 12+)
 
@@ -315,7 +315,7 @@ Please include:
 
 **Source install:**
 
-- ✔ Python 3.7+
+- ✔ Python 3.9+
 - ✔ Virtual environment active
 - ✔ Dependencies installed (`pip install -r requirements.txt`)
 - ✔ `python dorkeye.py -h` shows help

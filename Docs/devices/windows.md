@@ -7,7 +7,7 @@
 ## Requirements
 
 - Windows 10 or higher
-- [Python 3.7+](https://www.python.org/downloads/) (3.10+ recommended) — during setup, tick **"Add Python to PATH"**
+- [Python 3.9+](https://www.python.org/downloads/) (3.10+ recommended) — during setup, tick **"Add Python to PATH"**
 - [Git for Windows](https://git-scm.com/download/win) (optional; you can also download the ZIP)
 
 -----

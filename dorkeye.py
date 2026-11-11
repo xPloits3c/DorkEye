@@ -83,11 +83,11 @@ from rich import box
 from rich.panel import Panel
 from rich.markup import escape as _rich_escape
 # Search backend.
-#   ddgs      : needs Python >= 3.9 (>= 3.10 for recent releases) and lxml.
+#   ddgs      : default backend; needs lxml.
 #   ddg_lite  : lxml-free DuckDuckGo client (requests + bs4) shipped in
 #               Devices/iOS/. Used automatically when ddgs is not available:
-#               Python 3.7 / 3.8, iSH (iOS), or any system where lxml/ddgs
-#               can't be installed. Same call signature and result keys.
+#               iSH (iOS) / Alpine, or any system where lxml/ddgs can't be
+#               installed. Same call signature and result keys.
 try:
     from ddgs import DDGS
     SEARCH_BACKEND = "ddgs"
@@ -111,8 +111,8 @@ console = Console()
 def _md5(data: bytes):
     """MD5 for non-security hashing (dedup, IDs).
 
-    `usedforsecurity` exists only on Python 3.9+; it keeps MD5 usable on
-    FIPS-enabled systems. Fall back to plain md5 on Python 3.8.
+    `usedforsecurity` keeps MD5 usable on FIPS-enabled systems. The
+    try/except stays as a defensive fallback for exotic builds.
     """
     try:
         return hashlib.md5(data, usedforsecurity=False)
